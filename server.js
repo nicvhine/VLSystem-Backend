@@ -1,6 +1,7 @@
 const express = require('express');
 const cors = require('cors');
 const { MongoClient, ObjectId, ReturnDocument } = require('mongodb');
+const { configDotenv } = require('dotenv');
 const app = express();
 const PORT = 3001;
 
@@ -96,7 +97,7 @@ app.post("/login", async (req, res) => {
     return res.status(401).json({ error: "Invalid credentials" });
   }
 
-  res.json({ message: "Login successful", userId: user._id, username: user.username, name: user.name, role: user.role});
+  res.json({ message: "Login successful", userId: user.userId, username: user.username, name: user.name, role: user.role});
 });
 
 // GET ALL USERS
@@ -183,18 +184,55 @@ app.post("/users", async (req, res) => {
 
     // DELETE USER BY ID
     app.delete('/users/:id', async (req, res) => {
-      try {
-        const id = req.params.id;
-        const deleteResult = await users.deleteOne({ _id: new ObjectId(id) });
-        if (deleteResult.deletedCount === 0) {
-          return res.status(404).json({ message: 'User not found' });
-        }
-        res.status(204).send();
-      } catch (err) {
-        console.error('Failed to delete user:', err);
-        res.status(500).json({ message: 'Internal server error' });
-      }
-    });
+  try {
+    const id = req.params.id; 
+    const deleteResult = await users.deleteOne({ userId: id });  
+
+    if (deleteResult.deletedCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(204).send();
+  } catch (err) {
+    console.error('Failed to delete user:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+// CHANGE PASSWORD
+app.post('/change-password', async (req, res) => {
+  const { userId, oldPassword, newPassword, confirmPassword } = req.body;
+
+  if (!userId || !oldPassword || !newPassword || !confirmPassword) {
+    return res.status(400).json({ error: "All fields are required" });
+  }
+
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ error: "New password and confirmation do not match" });
+  }
+
+  try {
+    const user = await users.findOne({ userId });
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (user.password !== oldPassword) {
+      return res.status(401).json({ error: "Old password is incorrect" });
+    }
+
+    await users.updateOne(
+      { userId },
+      { $set: { password: newPassword } }
+    );
+
+    res.json({ message: "Password changed successfully" });
+  } catch (error) {
+    console.error("Error changing password:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
