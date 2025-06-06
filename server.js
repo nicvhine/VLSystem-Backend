@@ -233,6 +233,171 @@ function padId(num) {
     }
   });
 
+//ADD APPLICATION WITHOUT
+app.post("/loan-applications/basic", async (req, res) => {
+  try {
+    const loanApplications = db.collection("loan_applications");
+
+    const {
+      appName,
+      appDob,
+      appContact,
+      appEmail,
+      appMarital,
+      appChildren,
+      appSpouseName,
+      appSpouseOccupation,
+      appAddress,
+      appTypeBusiness,
+      appDateStarted,
+      appBusinessLoc,
+      appMonthlyIncome,
+      appOccupation,
+      appEmploymentStatus,
+      appCompanyName,
+      appLoanPurpose,
+      appLoanAmount,
+      appLoanTerms,
+      appInterest
+    } = req.body;
+
+    if (
+      !appName || !appDob || !appContact || !appEmail ||
+      !appAddress || !appEmploymentStatus || !appLoanPurpose ||
+      !appLoanAmount || !appLoanTerms
+    ) {
+      return res.status(400).json({ error: "All required fields must be provided." });
+    }
+
+    const applicationIdSeq = await getNextSequence(db, "applicationId");
+    const applicationId = `APP${applicationIdSeq.toString().padStart(5, "0")}`;
+
+    const newApplication = {
+      applicationId,
+      appName,
+      appDob,
+      appContact,
+      appEmail,
+      appMarital,
+      appChildren,
+      appSpouseName,
+      appSpouseOccupation,
+      appAddress,
+      appTypeBusiness,
+      appDateStarted,
+      appBusinessLoc,
+      appMonthlyIncome,
+      appOccupation,
+      appEmploymentStatus,
+      appCompanyName,
+      appLoanPurpose,
+      appLoanAmount,
+      appLoanTerms,
+      appInterest,
+      hasCollateral: false,
+      status: "Pending",
+      dateApplied: new Date()
+    };
+
+    await loanApplications.insertOne(newApplication);
+
+    res.status(201).json({
+      message: "Loan application (no collateral) submitted successfully",
+      application: newApplication
+    });
+  } catch (error) {
+    console.error("Error in /basic loan application:", error);
+    res.status(500).json({ error: "Failed to submit loan application." });
+  }
+});
+
+//ADD APPLICATION WITH
+app.post("/loan-applications/collateral", async (req, res) => {
+  try {
+    const loanApplications = db.collection("loan_applications");
+
+    const {
+      appName,
+      appDob,
+      appContact,
+      appEmail,
+      appMarital,
+      appChildren,
+      appSpouseName,
+      appSpouseOccupation,
+      appAddress,
+      appCollateral,
+      appEstCValue,
+      appCollateralDescription,
+      appOwnership,
+      appTypeBusiness,
+      appDateStarted,
+      appBusinessLoc,
+      appMonthlyIncome,
+      appOccupation,
+      appEmploymentStatus,
+      appCompanyName,
+      appLoanPurpose,
+      appLoanAmount,
+      appLoanTerms,
+      appInterest
+    } = req.body;
+
+    if (
+      !appName || !appDob || !appContact || !appEmail ||
+      !appAddress || !appEmploymentStatus || !appLoanPurpose ||
+      !appLoanAmount || !appLoanTerms ||
+      !appCollateral || !appEstCValue || !appCollateralDescription || !appOwnership
+    ) {
+      return res.status(400).json({ error: "All required fields must be provided for collateral application." });
+    }
+
+    const applicationIdSeq = await getNextSequence(db, "applicationId");
+    const applicationId = `APP${applicationIdSeq.toString().padStart(5, "0")}`;
+
+    const newApplication = {
+      applicationId,
+      appName,
+      appDob,
+      appContact,
+      appEmail,
+      appMarital,
+      appChildren,
+      appSpouseName,
+      appSpouseOccupation,
+      appAddress,
+      appCollateral,
+      appEstCValue,
+      appCollateralDescription,
+      appOwnership,
+      appTypeBusiness,
+      appDateStarted,
+      appBusinessLoc,
+      appMonthlyIncome,
+      appOccupation,
+      appEmploymentStatus,
+      appCompanyName,
+      appLoanPurpose,
+      appLoanAmount,
+      appLoanTerms,
+      appInterest,
+      hasCollateral: true,
+      status: "Pending",
+      dateApplied: new Date()
+    };
+
+    await loanApplications.insertOne(newApplication);
+
+    res.status(201).json({
+      message: "Loan application (with collateral) submitted successfully",
+      application: newApplication
+    });
+  } catch (error) {
+    console.error("Error in /collateral loan application:", error);
+    res.status(500).json({ error: "Failed to submit collateral loan application." });
+  }
+});
+
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
