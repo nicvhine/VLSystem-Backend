@@ -42,6 +42,7 @@ module.exports = (db, getNextSequence) => {
         appMonthlyIncome,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
         hasCollateral: false,
+        loanType: "Regular Loan Without Collateral",
         status: "Pending",
         dateApplied: new Date()
       };
@@ -121,6 +122,7 @@ module.exports = (db, getNextSequence) => {
         // Collateral information
         collateralType, collateralValue, collateralDescription, ownershipStatus,
         status: "Pending",
+        loanType: "Regular Loan With Collateral",
         dateApplied: new Date()
       };
 
@@ -194,12 +196,12 @@ module.exports = (db, getNextSequence) => {
         appMonthlyIncome,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
         hasCollateral: false,
-        loanType: "open-term",
+        loanType: "Open-Term Loan",
         // Open term specific fields
         repaymentSchedule,
         specialConditions,
         isCustomTerms: isCustomTerms || false,
-        status: "Pending - Review Required", // Different status for open term
+        status: "Pending", // Different status for open term
         dateApplied: new Date()
       };
 
@@ -228,6 +230,17 @@ module.exports = (db, getNextSequence) => {
       res.status(500).json({ error: "Failed to submit open-term loan application." });
     }
   });
+
+ router.get("/", async (req, res) => {
+  try {
+    const applications = await loanApplications.find().toArray();
+    res.status(200).json(applications);
+  } catch (error) {
+    console.error("Error in GET /loan-applications:", error);
+    res.status(500).json({ error: "Failed to fetch loan applications." });
+  }
+});
+
 
   return router;
 };
