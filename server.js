@@ -41,7 +41,7 @@ async function start() {
 
   const applications = db.collection('loan_applications');
   const maxApplicationAgg = await applications.aggregate([
-  { $addFields: { applicationIdNum: { $toInt: { $substr: ["$applicationId", 3, -1] } } } },
+  { $addFields: { applicationIdNum: { $toInt: "$applicationId" }}},
   { $sort: { applicationIdNum: -1 } },
   { $limit: 1 }
   ]).toArray();
