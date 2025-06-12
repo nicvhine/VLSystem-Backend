@@ -1,9 +1,28 @@
 const express = require('express');
 const router = express.Router();
 
-module.exports = (db, getNextSequence) => {
+function padId(num) {
+  return num.toString().padStart(5, '0');
+}
+
+module.exports = (db) => {
   const loanApplications = db.collection("loan_applications");
 
+  async function generateApplicationId() {
+    const maxApp = await loanApplications.aggregate([
+      { $addFields: { applicationIdNum: { $toInt: "$applicationId" } } },
+      { $sort: { applicationIdNum: -1 } },
+      { $limit: 1 }
+    ]).toArray();
+
+    let nextAppId = 1;
+    if (maxApp.length > 0 && !isNaN(maxApp[0].applicationIdNum)) {
+      nextAppId = maxApp[0].applicationIdNum + 1;
+    }
+    return padId(nextAppId);
+  }
+
+  // --- Route: Loan without collateral ---
   router.post("/without", async (req, res) => {
     try {
       const {
@@ -32,8 +51,7 @@ module.exports = (db, getNextSequence) => {
         return res.status(400).json({ error: "Invalid source of income." });
       }
 
-      const applicationIdSeq = await getNextSequence(db, "applicationId");
-      const applicationId = `APP${applicationIdSeq.toString().padStart(5, "0")}`;
+      const applicationId = await generateApplicationId();
 
       let newApplication = {
         applicationId,
@@ -42,6 +60,7 @@ module.exports = (db, getNextSequence) => {
         appMonthlyIncome,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
         hasCollateral: false,
+        loanType: "Regular Loan Without Collateral",
         status: "Pending",
         dateApplied: new Date()
       };
@@ -52,7 +71,7 @@ module.exports = (db, getNextSequence) => {
           sourceOfIncome,
           appTypeBusiness, appDateStarted, appBusinessLoc
         };
-      } else if (sourceOfIncome === "employed") {
+      } else {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
@@ -68,7 +87,7 @@ module.exports = (db, getNextSequence) => {
     }
   });
 
-
+  // --- Route: Loan with collateral ---
   router.post("/with", async (req, res) => {
     try {
       const {
@@ -79,21 +98,17 @@ module.exports = (db, getNextSequence) => {
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
-        // Collateral specific fields
         collateralType, collateralValue, collateralDescription, ownershipStatus
       } = req.body;
 
-      // Validate required fields
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
         return res.status(400).json({ error: "All required fields must be provided." });
       }
 
-      // Validate collateral fields
       if (!collateralType || !collateralValue || !collateralDescription || !ownershipStatus) {
         return res.status(400).json({ error: "All collateral fields are required for collateral loan applications." });
       }
 
-      // Validate income source specific fields
       if (sourceOfIncome === "business") {
         if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
           return res.status(400).json({ error: "Business fields are required for business income source." });
@@ -106,11 +121,8 @@ module.exports = (db, getNextSequence) => {
         return res.status(400).json({ error: "Invalid source of income." });
       }
 
-      // Generate unique application ID
-      const applicationIdSeq = await getNextSequence(db, "applicationId");
-      const applicationId = `APP${applicationIdSeq.toString().padStart(5, "0")}`;
+      const applicationId = await generateApplicationId();
 
-      // Base application object with collateral
       let newApplication = {
         applicationId,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -118,20 +130,19 @@ module.exports = (db, getNextSequence) => {
         appMonthlyIncome,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
         hasCollateral: true,
-        // Collateral information
         collateralType, collateralValue, collateralDescription, ownershipStatus,
+        loanType: "Regular Loan With Collateral",
         status: "Pending",
         dateApplied: new Date()
       };
 
-      // Add income source specific fields
       if (sourceOfIncome === "business") {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
           appTypeBusiness, appDateStarted, appBusinessLoc
         };
-      } else if (sourceOfIncome === "employed") {
+      } else {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
@@ -140,16 +151,14 @@ module.exports = (db, getNextSequence) => {
       }
 
       await loanApplications.insertOne(newApplication);
-      res.status(201).json({ 
-        message: "Loan application (with collateral) submitted successfully", 
-        application: newApplication 
-      });
+      res.status(201).json({ message: "Loan application (with collateral) submitted successfully", application: newApplication });
     } catch (error) {
       console.error("Error in /loan-applications/with:", error);
       res.status(500).json({ error: "Failed to submit loan application." });
     }
   });
 
+  // --- Route: Open-Term Loan ---
   router.post("/open-term", async (req, res) => {
     try {
       const {
@@ -160,16 +169,13 @@ module.exports = (db, getNextSequence) => {
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
-        // Open term specific fields
         repaymentSchedule, specialConditions, isCustomTerms
       } = req.body;
 
-      // Validate required fields
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
         return res.status(400).json({ error: "All required fields must be provided." });
       }
 
-      // Validate income source specific fields
       if (sourceOfIncome === "business") {
         if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
           return res.status(400).json({ error: "Business fields are required for business income source." });
@@ -182,11 +188,8 @@ module.exports = (db, getNextSequence) => {
         return res.status(400).json({ error: "Invalid source of income." });
       }
 
-      // Generate unique application ID
-      const applicationIdSeq = await getNextSequence(db, "applicationId");
-      const applicationId = `APP${applicationIdSeq.toString().padStart(5, "0")}`;
+      const applicationId = await generateApplicationId();
 
-      // Base application object for open term
       let newApplication = {
         applicationId,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -194,23 +197,21 @@ module.exports = (db, getNextSequence) => {
         appMonthlyIncome,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
         hasCollateral: false,
-        loanType: "open-term",
-        // Open term specific fields
+        loanType: "Open-Term Loan",
         repaymentSchedule,
         specialConditions,
         isCustomTerms: isCustomTerms || false,
-        status: "Pending - Review Required", // Different status for open term
+        status: "Pending",
         dateApplied: new Date()
       };
 
-      // Add income source specific fields
       if (sourceOfIncome === "business") {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
           appTypeBusiness, appDateStarted, appBusinessLoc
         };
-      } else if (sourceOfIncome === "employed") {
+      } else {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
@@ -219,13 +220,21 @@ module.exports = (db, getNextSequence) => {
       }
 
       await loanApplications.insertOne(newApplication);
-      res.status(201).json({ 
-        message: "Open-term loan application submitted successfully", 
-        application: newApplication 
-      });
+      res.status(201).json({ message: "Open-term loan application submitted successfully", application: newApplication });
     } catch (error) {
       console.error("Error in /loan-applications/open-term:", error);
       res.status(500).json({ error: "Failed to submit open-term loan application." });
+    }
+  });
+
+  // --- Route: Get all loan applications ---
+  router.get("/", async (req, res) => {
+    try {
+      const applications = await loanApplications.find().toArray();
+      res.status(200).json(applications);
+    } catch (error) {
+      console.error("Error in GET /loan-applications:", error);
+      res.status(500).json({ error: "Failed to fetch loan applications." });
     }
   });
 

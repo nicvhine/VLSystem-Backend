@@ -39,8 +39,22 @@ async function start() {
     let maxSeq = 0;
     if (maxUserAgg.length > 0) maxSeq = maxUserAgg[0].userIdNum;
 
+  const applications = db.collection('loan_applications');
+  const maxApplicationAgg = await applications.aggregate([
+  { $addFields: { applicationIdNum: { $toInt: "$applicationId" }}},
+  { $sort: { applicationIdNum: -1 } },
+  { $limit: 1 }
+  ]).toArray();
+
+    let maxApplicationSeq = 0;
+    if (maxApplicationAgg.length > 0) {
+      maxApplicationSeq = maxApplicationAgg[0].applicationIdNum;
+    }
+
     const counters = db.collection('counters');
     await counters.updateOne({ _id: 'userId' }, { $set: { seq: maxSeq } }, { upsert: true });
+    await counters.updateOne({ _id: 'applicationId' }, { $set: { seq: maxApplicationSeq } }, { upsert: true });
+
     console.log("Counter initialized to:", maxSeq);
 
     const userRoutes = require('./routes/userRoutes')(db);
