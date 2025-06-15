@@ -237,6 +237,32 @@ module.exports = (db) => {
       res.status(500).json({ error: "Failed to fetch loan applications." });
     }
   });
+  
+router.put("/:applicationId", async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    const updateData = req.body;
+
+    console.log("Received PUT request for:", applicationId);
+    console.log("Update data:", updateData);
+
+    const result = await loanApplications.updateOne(
+      { applicationId: applicationId },
+      { $set: updateData }
+    );
+
+    console.log("MongoDB update result:", result);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Loan application not found." });
+    }
+
+    res.status(200).json({ message: "Loan application updated successfully." });
+  } catch (error) {
+    console.error("Error in PUT /loan-applications/:applicationId:", error);
+    res.status(500).json({ error: "Failed to update loan application." });
+  }
+});
 
   return router;
 };
