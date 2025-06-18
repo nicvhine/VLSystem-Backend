@@ -51,6 +51,18 @@ async function start() {
       maxApplicationSeq = maxApplicationAgg[0].applicationIdNum;
     }
 
+  const borrowersAccount = db.collection('borrowers_account');
+  const maxBorrowersAccountagg = await borrowersAccount.aggregate([
+  { $addFields: { borrowersAccountIdNum: { $toInt: "$borrowersId" }}},
+  { $sort: { borrowersAccountIdNum: -1 } },
+  { $limit: 1 }
+  ]).toArray();
+
+    let maxBorrowersSeq = 0;
+    if (maxBorrowersAccountagg.length > 0) {
+      maxBorrowersSeq = maxApplicationAgg[0].applicationIdNum;
+    }
+
     const counters = db.collection('counters');
     await counters.updateOne({ _id: 'userId' }, { $set: { seq: maxSeq } }, { upsert: true });
     await counters.updateOne({ _id: 'applicationId' }, { $set: { seq: maxApplicationSeq } }, { upsert: true });
@@ -59,9 +71,11 @@ async function start() {
 
     const userRoutes = require('./routes/userRoutes')(db);
     const loanApplicationRoutes = require('./routes/loanApplicationRoutes')(db, getNextSequence);
+    const borrowersRoutes = require('./routes/borrowersRoutes')(db);
 
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);
+        app.use('/borrowers', borrowersRoutes);
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
