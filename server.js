@@ -53,29 +53,62 @@ async function start() {
 
   const borrowersAccount = db.collection('borrowers_account');
   const maxBorrowersAccountagg = await borrowersAccount.aggregate([
-  { $addFields: { borrowersAccountIdNum: { $toInt: "$borrowersId" }}},
-  { $sort: { borrowersAccountIdNum: -1 } },
-  { $limit: 1 }
+    {
+      $addFields: {
+        numericBorrowersId: {
+          $toInt: { $substr: ["$borrowersId", 1, -1] } 
+        }
+      }
+    },
+    { $sort: { numericBorrowersId: -1 } },
+    { $limit: 1 }
   ]).toArray();
 
-    let maxBorrowersSeq = 0;
-    if (maxBorrowersAccountagg.length > 0) {
-      maxBorrowersSeq = maxApplicationAgg[0].applicationIdNum;
-    }
+
+  let maxBorrowersSeq = 0;
+  if (maxBorrowersAccountagg.length > 0) {
+    maxBorrowersSeq = maxBorrowersAccountagg[0].numericBorrowersId; 
+  }
+
+  const loan = db.collection('loans');
+  const MaxLoanAgg = await loan.aggregate([
+    {
+      $addFields: {
+        numericLoanId: {
+          $toInt: { $substr: ["$loanId", 1, -1] } 
+        }
+      }
+    },
+    { $sort: { numericLoanId: -1 } },
+    { $limit: 1 }
+  ]).toArray();
+
+
+  let maxLoanSeq = 0;
+  if (MaxLoanAgg.length > 0) {
+    maxLoanSeq = MaxLoanAgg[0].numericLoanId; 
+  }
+
 
     const counters = db.collection('counters');
     await counters.updateOne({ _id: 'userId' }, { $set: { seq: maxSeq } }, { upsert: true });
     await counters.updateOne({ _id: 'applicationId' }, { $set: { seq: maxApplicationSeq } }, { upsert: true });
+    await counters.updateOne({ _id: 'borrowersId' }, { $set: { seq: maxBorrowersSeq } }, { upsert: true });
+    await counters.updateOne({ _id: 'loanId' }, { $set: { seq: maxLoanSeq } }, { upsert: true });
+
 
     console.log("Counter initialized to:", maxSeq);
 
     const userRoutes = require('./routes/userRoutes')(db);
     const loanApplicationRoutes = require('./routes/loanApplicationRoutes')(db, getNextSequence);
     const borrowersRoutes = require('./routes/borrowersRoutes')(db);
+    const loanRoutes = require('./routes/loanRoutes')(db);
+
 
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);
-        app.use('/borrowers', borrowersRoutes);
+    app.use('/borrowers', borrowersRoutes);
+    app.use('/loans', loanRoutes);
 
     app.listen(PORT, () => {
       console.log(`Server running on port ${PORT}`);
