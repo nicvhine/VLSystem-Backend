@@ -30,18 +30,44 @@ async function start() {
     await client.connect();
     const db = client.db('VLSystem');
 
+    //USERS
     const users = db.collection('users');
     const maxUserAgg = await users.aggregate([
-      { $addFields: { userIdNum: { $toInt: "$userId" } } },
+      {
+        $addFields: {
+          userIdNum: {
+            $convert: {
+              input: "$userId",
+              to: "int",
+              onError: 0,
+              onNull: 0
+            }
+          }
+        }
+      }, 
       { $sort: { userIdNum: -1 } },
       { $limit: 1 }
     ]).toArray();
+    
     let maxSeq = 0;
-    if (maxUserAgg.length > 0) maxSeq = maxUserAgg[0].userIdNum;
-
+    if (maxUserAgg.length > 0) {
+      maxSeq = maxUserAgg[0].userIdNum;
+    }
+    
+  //APPLICATIONS
   const applications = db.collection('loan_applications');
   const maxApplicationAgg = await applications.aggregate([
-  { $addFields: { applicationIdNum: { $toInt: "$applicationId" }}},
+    { $addFields: {
+      applicationIdNum: {
+        $convert: {
+          input: "$applicationId",
+          to: "int",
+          onError: 0,
+          onNull: 0
+        }
+      }
+    }
+  },  
   { $sort: { applicationIdNum: -1 } },
   { $limit: 1 }
   ]).toArray();
@@ -51,15 +77,21 @@ async function start() {
       maxApplicationSeq = maxApplicationAgg[0].applicationIdNum;
     }
 
+  //BORROWERS
   const borrowersAccount = db.collection('borrowers_account');
   const maxBorrowersAccountagg = await borrowersAccount.aggregate([
     {
       $addFields: {
         numericBorrowersId: {
-          $toInt: { $substr: ["$borrowersId", 1, -1] } 
+          $convert: {
+            input: { $substr: ["$borrowersId", 1, -1] },
+            to: "int",
+            onError: 0,
+            onNull: 0
+          }
         }
       }
-    },
+    },    
     { $sort: { numericBorrowersId: -1 } },
     { $limit: 1 }
   ]).toArray();
@@ -70,15 +102,21 @@ async function start() {
     maxBorrowersSeq = maxBorrowersAccountagg[0].numericBorrowersId; 
   }
 
+  //LOANS
   const loan = db.collection('loans');
   const MaxLoanAgg = await loan.aggregate([
     {
       $addFields: {
         numericLoanId: {
-          $toInt: { $substr: ["$loanId", 1, -1] } 
+          $convert: {
+            input: { $substr: ["$loanId", 1, -1] },
+            to: "int",
+            onError: 0,
+            onNull: 0
+          }
         }
       }
-    },
+    },    
     { $sort: { numericLoanId: -1 } },
     { $limit: 1 }
   ]).toArray();

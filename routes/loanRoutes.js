@@ -44,7 +44,12 @@ module.exports = (db) => {
         {
           $addFields: {
             loanIdNum: {
-              $toInt: { $substr: ["$loanId", 1, -1] }
+              $convert: {
+                input: { $substrBytes: ["$loanId", 1, { $subtract: [{ $strLenBytes: "$loanId" }, 1] }] },
+                to: "int",
+                onError: 0,
+                onNull: 0
+              }              
             }
           }
         },
@@ -56,7 +61,7 @@ module.exports = (db) => {
       if (maxLoan.length > 0 && !isNaN(maxLoan[0].loanIdNum)) {
         nextId = maxLoan[0].loanIdNum + 1;
       }
-      const loanId = 'L ' + padId(nextId);
+      const loanId = 'L' + padId(nextId);
 
 
       // Step 6: Compute totals
@@ -90,5 +95,25 @@ module.exports = (db) => {
     }
   });
 
+  router.get('/active-loan/:borrowersId', async (req, res) => {
+    const { borrowersId } = req.params;
+  
+    try {
+      const loan = await db.collection('loans').findOne({
+        borrowersId,
+        status: 'Active'
+      });
+  
+      if (!loan) {
+        return res.status(404).json({ error: 'No active loan found for this borrower.' });
+      }
+  
+      res.json(loan);
+    } catch (err) {
+      console.error('Error fetching loan by borrower ID:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
   return router;
 };

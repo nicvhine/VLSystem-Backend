@@ -30,10 +30,16 @@ module.exports = (db) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    res.json({ message: "Login successful", borrowerId: borrower.borrowerId, username: borrower.username, name: borrower.name, role: borrower.role});
+    return res.json({
+      message: "Login successful",
+      name: borrower.name,
+      username: borrower.username,
+      role: "borrower",
+      borrowersId: borrower.borrowersId, 
+    });
   });
 
-
+//ADD BORROWER
  router.post("/", async (req, res) => {
   try {
     const { name, role, applicationId } = req.body;
