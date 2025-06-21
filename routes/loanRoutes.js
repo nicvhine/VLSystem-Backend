@@ -74,6 +74,7 @@ module.exports = (db) => {
         loanId,
         applicationId,
         name: borrower.name,
+        dateOfBirth: application.appDob,
         borrowersId: borrower.borrowersId,
         borrowerUsername: borrower.username,
         principal: application.appLoanAmount,
@@ -125,6 +126,48 @@ module.exports = (db) => {
     res.status(500).json({ error: "Failed to fetch loans." });
   }
 });
+
+router.get('/:loanId', async (req, res) => {
+  const { loanId } = req.params;
+
+  try {
+    const loan = await db.collection('loans').findOne({ loanId });
+
+    if (!loan) {
+      return res.status(404).json({ error: 'Loan not found.' });
+    }
+
+    const borrower = await db.collection('borrowers_account').findOne({ borrowersId: loan.borrowersId });
+
+    res.json({
+      ...loan,
+      ...borrower && {
+        contactNumber: borrower.contactNumber,
+        emailAddress: borrower.emailAddress,
+        address: borrower.address,
+        barangay: borrower.barangay,
+        municipality: borrower.municipality,
+        province: borrower.province,
+        houseStatus: borrower.houseStatus,
+        sourceOfIncome: borrower.sourceOfIncome,
+        occupation: borrower.occupation,
+        monthlyIncome: borrower.monthlyIncome,
+        dateOfBirth: borrower.dateOfBirth,
+        maritalStatus: borrower.maritalStatus,
+        numberOfChildren: borrower.numberOfChildren,
+        characterReferences: borrower.characterReferences || [],
+        score: borrower.score || 0,
+        imageUrl: borrower.imageUrl || null,
+        activeLoan: 'Yes',
+        numberOfLoans: borrower.numberOfLoans || 1
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching loan by loanId:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
   return router;
 };
