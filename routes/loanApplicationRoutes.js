@@ -270,7 +270,7 @@ router.get("/loan-stats", async (req, res) => {
 
     const [approved, denied, pending, onHold] = await Promise.all([
       collection.countDocuments({ status: "Accepted" }),
-      collection.countDocuments({ status: "Denied" }),
+      collection.countDocuments({ status: "Denied by LO" }),
       collection.countDocuments({ status: "Pending" }),
       collection.countDocuments({ status: "On Hold" }),
     ]);
@@ -287,7 +287,6 @@ router.get("/loan-stats", async (req, res) => {
   }
 });
 
-// === Monthly Loan Stats Chart Data ===
 router.get("/monthly-loan-stats", async (req, res) => {
   try {
     const pipeline = [
@@ -357,7 +356,7 @@ router.get("/monthly-loan-stats", async (req, res) => {
                   $filter: {
                     input: "$stats",
                     as: "item",
-                    cond: { $eq: ["$$item.status", "Denied"] },
+                    cond: { $eq: ["$$item.status", "Denied by LO"] },
                   },
                 },
               },
@@ -401,6 +400,33 @@ router.get("/monthly-loan-stats", async (req, res) => {
   } catch (error) {
     console.error("Error fetching monthly loan stats:", error);
     res.status(500).json({ error: "Failed to fetch monthly statistics" });
+  }
+});
+
+router.get("/loan-type-stats", async (req, res) => {
+  try {
+    const collection = db.collection("loan_applications");
+
+    const types = await collection.aggregate([
+      {
+        $group: {
+          _id: "$loanType",
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          loanType: "$_id",
+          count: 1
+        }
+      }
+    ]).toArray();
+
+    res.status(200).json(types);
+  } catch (error) {
+    console.error("Error fetching loan type stats:", error);
+    res.status(500).json({ error: "Failed to fetch loan type statistics" });
   }
 });
 
