@@ -264,5 +264,146 @@ router.put("/:applicationId", async (req, res) => {
   }
 });
 
+router.get("/loan-stats", async (req, res) => {
+  try {
+    const collection = db.collection("loan_applications");
+
+    const [approved, denied, pending, onHold] = await Promise.all([
+      collection.countDocuments({ status: "Accepted" }),
+      collection.countDocuments({ status: "Denied" }),
+      collection.countDocuments({ status: "Pending" }),
+      collection.countDocuments({ status: "On Hold" }),
+    ]);
+
+    res.json({
+      approved,
+      denied,
+      pending,
+      onHold,
+    });
+  } catch (error) {
+    console.error("Error fetching loan stats:", error);
+    res.status(500).json({ error: "Failed to fetch statistics" });
+  }
+});
+
+// === Monthly Loan Stats Chart Data ===
+router.get("/monthly-loan-stats", async (req, res) => {
+  try {
+    const pipeline = [
+      {
+        $addFields: {
+          month: { $month: "$dateApplied" },
+        },
+      },
+      {
+        $group: {
+          _id: {
+            month: "$month",
+            status: "$status",
+          },
+          count: { $sum: 1 },
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.month",
+          stats: {
+            $push: {
+              status: "$_id.status",
+              count: "$count",
+            },
+          },
+        },
+      },
+      {
+        $addFields: {
+          monthName: {
+            $arrayElemAt: [
+              [
+                "", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+              ],
+              "$_id",
+            ],
+          },
+        },
+      },
+      {
+        $sort: { _id: 1 },
+      },
+      {
+        $project: {
+          _id: 0,
+          month: "$monthName",
+          approved: {
+            $let: {
+              vars: {
+                matched: {
+                  $filter: {
+                    input: "$stats",
+                    as: "item",
+                    cond: { $eq: ["$$item.status", "Accepted"] },
+                  },
+                },
+              },
+              in: { $ifNull: [{ $arrayElemAt: ["$$matched.count", 0] }, 0] },
+            },
+          },
+          denied: {
+            $let: {
+              vars: {
+                matched: {
+                  $filter: {
+                    input: "$stats",
+                    as: "item",
+                    cond: { $eq: ["$$item.status", "Denied"] },
+                  },
+                },
+              },
+              in: { $ifNull: [{ $arrayElemAt: ["$$matched.count", 0] }, 0] },
+            },
+          },
+          pending: {
+            $let: {
+              vars: {
+                matched: {
+                  $filter: {
+                    input: "$stats",
+                    as: "item",
+                    cond: { $eq: ["$$item.status", "Pending"] },
+                  },
+                },
+              },
+              in: { $ifNull: [{ $arrayElemAt: ["$$matched.count", 0] }, 0] },
+            },
+          },
+          onHold: {
+            $let: {
+              vars: {
+                matched: {
+                  $filter: {
+                    input: "$stats",
+                    as: "item",
+                    cond: { $eq: ["$$item.status", "On Hold"] },
+                  },
+                },
+              },
+              in: { $ifNull: [{ $arrayElemAt: ["$$matched.count", 0] }, 0] },
+            },
+          },
+        },
+      },
+    ];
+
+    const results = await db.collection("loan_applications").aggregate(pipeline).toArray();
+    res.json(results);
+  } catch (error) {
+    console.error("Error fetching monthly loan stats:", error);
+    res.status(500).json({ error: "Failed to fetch monthly statistics" });
+  }
+});
+
+
   return router;
 };

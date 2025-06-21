@@ -73,6 +73,7 @@ module.exports = (db) => {
       const loan = {
         loanId,
         applicationId,
+        name: borrower.name,
         borrowersId: borrower.borrowersId,
         borrowerUsername: borrower.username,
         principal: application.appLoanAmount,
@@ -115,5 +116,15 @@ module.exports = (db) => {
     }
   });
   
+  router.get("/", async (req, res) => {
+  try {
+    const allLoans = await db.collection("loans").find().toArray();
+    res.status(200).json(allLoans);
+  } catch (error) {
+    console.error("Error in GET /loans:", error);
+    res.status(500).json({ error: "Failed to fetch loans." });
+  }
+});
+
   return router;
 };
