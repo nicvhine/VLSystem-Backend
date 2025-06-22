@@ -52,6 +52,13 @@ module.exports = (db) => {
       return res.status(400).json({ error: "Please provide full name (first and last)" });
     }
 
+    // Fetch the related loan application
+    const application = await db.collection("loan_applications").findOne({ applicationId });
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
     const username = generateUsername(name);
     if (!username) {
       return res.status(400).json({ error: "Invalid full name" });
@@ -84,22 +91,39 @@ module.exports = (db) => {
       role,
       username,
       password: defaultPassword,
+      dateOfBirth: application.appDob,
+      maritalStatus: application.appMarital,
+      numberOfChildren: application.appChildren,
+      contactNumber: application.appContact,
+      emailAddress: application.appEmail,
+      address: application.appAdress,
+      barangay: application.appBarangay,
+      municipality: application.appMunicipality,
+      province: application.appProvince,
+      houseStatus: application.appHouseStatus,
+      sourceOfIncome: application.sourceOfIncome,
+      occupation: application.appOccupation,
+      monthlyIncome: application.appMonthlyIncome,
+      characterReferences: application.appReferences || [],
+      score: application.score || 0,
+      imageUrl: application.imageUrl || null,
     };
 
     await borrowers.insertOne(borrower);
 
-    // Update the related loan application with this borrower ID
+    // Update the related loan application
     await db.collection("loan_applications").updateOne(
       { applicationId },
       { $set: { borrowersId, username } }
     );
 
-    res.status(201).json({ message: "Borrower created", borrower: { borrowersId, name, role, username } });
+    res.status(201).json({ message: "Borrower created", borrower });
   } catch (error) {
     console.error("Error adding borrower:", error);
     res.status(500).json({ error: "Failed to add borrower" });
   }
 });
+
 
   return router;
 };
