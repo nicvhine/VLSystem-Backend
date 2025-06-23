@@ -31,12 +31,14 @@ module.exports = (db) => {
     }
 
     return res.json({
-      message: "Login successful",
-      name: borrower.name,
-      username: borrower.username,
-      role: "borrower",
-      borrowersId: borrower.borrowersId, 
-    });
+    message: "Login successful",
+    name: borrower.name,
+    username: borrower.username,
+    role: "borrower",
+    borrowersId: borrower.borrowersId,
+    isFirstLogin: borrower.isFirstLogin !== false, 
+  });
+
   });
 
 //ADD BORROWER
@@ -91,6 +93,7 @@ module.exports = (db) => {
       role,
       username,
       password: defaultPassword,
+      isFirstLogin: true,
       dateOfBirth: application.appDob,
       maritalStatus: application.appMarital,
       numberOfChildren: application.appChildren,
@@ -111,7 +114,6 @@ module.exports = (db) => {
 
     await borrowers.insertOne(borrower);
 
-    // Update the related loan application
     await db.collection("loan_applications").updateOne(
       { applicationId },
       { $set: { borrowersId, username } }
@@ -121,6 +123,25 @@ module.exports = (db) => {
   } catch (error) {
     console.error("Error adding borrower:", error);
     res.status(500).json({ error: "Failed to add borrower" });
+  }
+});
+
+router.put('/:id/change-password', async (req, res) => {
+  const { id } = req.params;
+  const { newPassword } = req.body;
+
+  if (!newPassword || newPassword.length < 6) {
+    return res.status(400).json({ message: 'Invalid password' });
+  }
+
+  try {
+    await db.collection('borrowers_account').updateOne(
+      { borrowersId: id },
+      { $set: { password: newPassword, isFirstLogin: false } }
+    );
+    res.status(200).json({ message: 'Password updated' });
+  } catch (err) {
+    res.status(500).json({ message: 'Server error' });
   }
 });
 
