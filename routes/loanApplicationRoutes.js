@@ -238,7 +238,7 @@ module.exports = (db) => {
     }
   });
 
-  // --- Route: Get all loan applications ---
+  //  Get all loan applications 
   router.get("/", async (req, res) => {
     try {
       const applications = await loanApplications.find().toArray();
@@ -248,6 +248,25 @@ module.exports = (db) => {
       res.status(500).json({ error: "Failed to fetch loan applications." });
     }
   });
+
+  // GET: Fetch a single application 
+router.get("/:applicationId", async (req, res) => {
+  const { applicationId } = req.params;
+
+  try {
+    const application = await db.collection("loan_applications").findOne({ applicationId });
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    res.status(200).json(application);
+  } catch (error) {
+    console.error("Error fetching application by ID:", error);
+    res.status(500).json({ error: "Failed to fetch application." });
+  }
+});
+
   
 router.put("/:applicationId", async (req, res) => {
   try {
