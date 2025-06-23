@@ -18,7 +18,7 @@ module.exports = (db) => {
       }
 
       if (application.status !== "Accepted") {
-        return res.status(400).json({ error: "Loan can only be generated for accepted applications" });
+        return res.status(400).json({ error: "Loan can only be generated for disbursed applications" });
       }
 
       // Step 2: Check if the loan already exists
@@ -67,8 +67,11 @@ module.exports = (db) => {
       // Step 6: Compute totals
       const termYears = application.appLoanTerms / 12;
       const totalPayable =
-        application.appLoanAmount +
-        (application.appLoanAmount * (application.appInterest / 100) * termYears);
+      application.appLoanAmount +
+      (application.appLoanAmount * (application.appInterest / 100) * application.appLoanTerms);
+
+      
+
 
       const loan = {
         loanId,
@@ -88,10 +91,12 @@ module.exports = (db) => {
         principal: application.appLoanAmount,
         interestRate: application.appInterest,
         termsInMonths: application.appLoanTerms,
+        loanType: application.loanType,
         totalPayable,
         balance: totalPayable,
         status: "Active",
         dateReleased: new Date(),
+        dateDisbursed: application.dateDisbursed,
       };
 
       // Step 7: Insert into 'loans' collection
@@ -148,28 +153,41 @@ router.get('/:loanId', async (req, res) => {
     const borrower = await db.collection('borrowers_account').findOne({ borrowersId: loan.borrowersId });
 
     res.json({
-      ...loan,
-      ...borrower && {
-        contactNumber: borrower.contactNumber,
-        emailAddress: borrower.emailAddress,
-        address: borrower.address,
-        barangay: borrower.barangay,
-        municipality: borrower.municipality,
-        province: borrower.province,
-        houseStatus: borrower.houseStatus,
-        sourceOfIncome: borrower.sourceOfIncome,
-        occupation: borrower.occupation,
-        monthlyIncome: borrower.monthlyIncome,
-        dateOfBirth: borrower.dateOfBirth,
-        maritalStatus: borrower.maritalStatus,
-        numberOfChildren: borrower.numberOfChildren,
-        characterReferences: borrower.characterReferences || [],
-        score: borrower.score || 0,
-        imageUrl: borrower.imageUrl || null,
-        activeLoan: 'Yes',
-        numberOfLoans: borrower.numberOfLoans || 1
-      }
-    });
+  ...loan,
+  ...borrower && {
+    contactNumber: borrower.contactNumber,
+    emailAddress: borrower.emailAddress,
+    address: borrower.address,
+    barangay: borrower.barangay,
+    municipality: borrower.municipality,
+    province: borrower.province,
+    houseStatus: borrower.houseStatus,
+    sourceOfIncome: borrower.sourceOfIncome,
+    occupation: borrower.occupation,
+    monthlyIncome: borrower.monthlyIncome,
+    dateOfBirth: borrower.dateOfBirth,
+    maritalStatus: borrower.maritalStatus,
+    numberOfChildren: borrower.numberOfChildren,
+    characterReferences: borrower.characterReferences || [],
+    score: borrower.score || 0,
+    imageUrl: borrower.imageUrl || null,
+    activeLoan: 'Yes',
+    numberOfLoans: borrower.numberOfLoans || 1,
+    currentLoan: {
+      totalPayable: loan.totalPayable,
+      type: loan.loanType ,
+      amount: loan.principal,
+      terms: loan.termsInMonths,
+      interestRate: loan.interestRate,
+      paymentSchedule: loan.paymentSchedule,
+      startDate: loan.dateReleased?.toISOString().split('T')[0],
+      maturityDate: loan.maturityDate || 'Auto-calculate this',
+      remainingBalance: loan.balance,
+      dateDisbursed: loan.dateDisbursed,
+    }
+  }
+});
+
   } catch (error) {
     console.error('Error fetching loan by loanId:', error);
     res.status(500).json({ error: 'Internal server error' });

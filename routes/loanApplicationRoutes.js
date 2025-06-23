@@ -65,6 +65,10 @@ module.exports = (db) => {
         dateApplied: new Date()
       };
 
+      if (newApplication.status === "Disbursed") {
+        newApplication.dateDisbursed = new Date();
+      }
+
       if (sourceOfIncome === "business") {
         newApplication = {
           ...newApplication,
@@ -136,6 +140,10 @@ module.exports = (db) => {
         dateApplied: new Date()
       };
 
+      if (newApplication.status === "Disbursed") {
+  newApplication.dateDisbursed = new Date();
+}
+
       if (sourceOfIncome === "business") {
         newApplication = {
           ...newApplication,
@@ -205,6 +213,9 @@ module.exports = (db) => {
         dateApplied: new Date()
       };
 
+      if (newApplication.status === "Disbursed") {
+  newApplication.dateDisbursed = new Date();
+}
       if (sourceOfIncome === "business") {
         newApplication = {
           ...newApplication,
@@ -246,6 +257,10 @@ router.put("/:applicationId", async (req, res) => {
     console.log("Received PUT request for:", applicationId);
     console.log("Update data:", updateData);
 
+    if (updateData.status === "Disbursed") {
+      updateData.dateDisbursed = new Date();
+    }
+
     const result = await loanApplications.updateOne(
       { applicationId: applicationId },
       { $set: updateData }
@@ -257,12 +272,15 @@ router.put("/:applicationId", async (req, res) => {
       return res.status(404).json({ error: "Loan application not found." });
     }
 
-    res.status(200).json({ message: "Loan application updated successfully." });
+    const updatedDoc = await loanApplications.findOne({ applicationId });
+
+    res.status(200).json(updatedDoc);
   } catch (error) {
     console.error("Error in PUT /loan-applications/:applicationId:", error);
     res.status(500).json({ error: "Failed to update loan application." });
   }
 });
+
 
 router.get("/loan-stats", async (req, res) => {
   try {
