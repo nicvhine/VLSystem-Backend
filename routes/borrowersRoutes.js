@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { generateToken, authenticateToken } = require('../auth');
-const bcrypt = require('bcrypt'); // Add this at the top
+const bcrypt = require('bcrypt');
+
+
 
 function generateUsername(fullName) {
   const parts = fullName.trim().toLowerCase().split(" ");
@@ -18,86 +19,161 @@ function padId(num) {
 
 module.exports = (db) => {
   const borrowers = db.collection("borrowers_account");
+  const { generateToken } = require('../auth');
 
-  // LOGIN (no JWT required)
+  const { authenticateToken } = require('../auth');
+
+
+  // LOGIN
   router.post("/login", async (req, res) => {
-    try {
-      const { username, password } = req.body;
-      const borrower = await borrowers.findOne({ username });
-      if (!borrower) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
+    const { username, password } = req.body;
 
-      let isMatch = false;
-      // Check if password is hashed (bcrypt hashes start with $2)
-      if (borrower.password && borrower.password.startsWith('$2')) {
-        isMatch = await bcrypt.compare(password, borrower.password);
-      } else {
-        isMatch = password === borrower.password;
-      }
-
-      if (!isMatch) {
-        return res.status(401).json({ error: "Invalid credentials" });
-      }
-
-      const token = generateToken({ borrowersId: borrower.borrowersId, role: borrower.role });
-      res.json({
-        message: "Login successful",
-        borrowersId: borrower.borrowersId,
-        username: borrower.username,
-        name: borrower.name,
-        role: borrower.role,
-        token
-      });
-    } catch (error) {
-      console.error("Error in borrower login:", error);
-      res.status(500).json({ error: "Internal server error" });
+    if (!username || !password) {
+      return res.status(400).json({ error: "Username and password are required" });
     }
+
+    const borrower = await borrowers.findOne({ username });
+    if (!borrower) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const isMatch = await bcrypt.compare(password, borrower.password);
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = generateToken({ borrowersId: borrower.borrowersId, role: "borrower"});
+    return res.json({
+    message: "Login successful",
+    name: borrower.name,
+    username: borrower.username,
+    role: "borrower",
+    borrowersId: borrower.borrowersId,
+    isFirstLogin: borrower.isFirstLogin !== false, 
+    token
   });
 
-  // Protect all routes below with JWT
-  router.use(authenticateToken);
-
-  // ADD BORROWER (no password hashing)
-  router.post("/", async (req, res) => {
-    try {
-      const { username, name, role, password } = req.body;
-      const borrowersId = await generateBorrowersId(); // or your own logic
-
-      // Store password as plain text (NOT SECURE)
-      const borrower = {
-        borrowersId,
-        username,
-        name,
-        role,
-        password,
-      };
-
-      await borrowers.insertOne(borrower);
-      res.status(201).json({ message: "Borrower created", borrowersId });
-    } catch (error) {
-      console.error("Error creating borrower:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
   });
 
-  // Change password (with hashing)
-  router.put('/:id/change-password', async (req, res) => {
-    try {
-      const { newPassword } = req.body;
-      // Hash the new password before saving
-      const hashedPassword = await bcrypt.hash(newPassword, 10);
+//ADD BORROWER
+ router.post("/", async (req, res) => {
+  try {
+    const { name, role, applicationId } = req.body;
 
-      await borrowers.updateOne(
-        { borrowersId: req.params.id },
-        { $set: { password: hashedPassword } }
-      );
-      res.json({ message: "Password updated" });
-    } catch (error) {
-      console.error("Error changing password:", error);
-      res.status(500).json({ error: "Internal server error" });
+    if (!name || !role || !applicationId) {
+      return res.status(400).json({ error: "Name, role, and applicationId are required" });
     }
-  });
+
+    if (!name.trim().includes(" ")) {
+      return res.status(400).json({ error: "Please provide full name (first and last)" });
+    }
+
+    // Fetch the related loan application
+    const application = await db.collection("loan_applications").findOne({ applicationId });
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    const username = generateUsername(name);
+    if (!username) {
+      return res.status(400).json({ error: "Invalid full name" });
+    }
+
+    // Generate next borrower ID
+    const maxBorrower = await borrowers.aggregate([
+      {
+        $addFields: {
+          borrowerIdNum: {
+            $toInt: { $substr: ["$borrowersId", 1, -1] }
+          }
+        }
+      },
+      { $sort: { borrowerIdNum: -1 } },
+      { $limit: 1 }
+    ]).toArray();
+
+    let nextId = 1;
+    if (maxBorrower.length > 0 && !isNaN(maxBorrower[0].borrowerIdNum)) {
+      nextId = maxBorrower[0].borrowerIdNum + 1;
+    }
+
+    const borrowersId = 'B' + padId(nextId);
+
+    const lastName = name.trim().split(" ").slice(-1)[0].toLowerCase();
+    const birthDate = new Date(application.appDob);
+    const formattedDate = `${birthDate.getFullYear()}${(birthDate.getMonth() + 1).toString().padStart(2, '0')}${birthDate.getDate().toString().padStart(2, '0')}`;
+
+    const defaultPassword = `${lastName}${formattedDate}`;
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    const borrower = {
+      borrowersId,
+      name,
+      role,
+      username,
+      password: hashedPassword,
+      isFirstLogin: true,
+      dateOfBirth: application.appDob,
+      maritalStatus: application.appMarital,
+      numberOfChildren: application.appChildren,
+      contactNumber: application.appContact,
+      emailAddress: application.appEmail,
+      address: application.appAdress,
+      barangay: application.appBarangay,
+      municipality: application.appMunicipality,
+      province: application.appProvince,
+      houseStatus: application.appHouseStatus,
+      sourceOfIncome: application.sourceOfIncome,
+      occupation: application.appOccupation,
+      monthlyIncome: application.appMonthlyIncome,
+      characterReferences: application.appReferences || [],
+      score: application.score || 0,
+      imageUrl: application.imageUrl || null,
+    };
+
+    await borrowers.insertOne(borrower);
+
+    await db.collection("loan_applications").updateOne(
+      { applicationId },
+      { $set: { borrowersId, username } }
+    );
+
+    res.status(201).json({ message: "Borrower created", borrower });
+  } catch (error) {
+    console.error("Error adding borrower:", error);
+    res.status(500).json({ error: "Failed to add borrower" });
+  }
+});
+
+router.put('/:id/change-password', async (req, res) => {
+  const { id } = req.params;
+  const { newPassword } = req.body;
+
+  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+
+  if (!newPassword || !passwordRegex.test(newPassword)) {
+    return res.status(400).json({
+      message: 'Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.'
+    });
+  }
+
+  try {
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await db.collection('borrowers_account').updateOne(
+      { borrowersId: id },
+      { $set: { password: hashedPassword, isFirstLogin: false } }
+    );
+
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (err) {
+    console.error("Password update error:", err);
+    res.status(500).json({ message: 'Server error while updating password' });
+  }
+});
+
+
 
   return router;
 };

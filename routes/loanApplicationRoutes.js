@@ -1,5 +1,4 @@
 const express = require('express');
-const { authenticateToken } = require('../auth');
 const router = express.Router();
 
 function padId(num) {
@@ -8,9 +7,6 @@ function padId(num) {
 
 module.exports = (db) => {
   const loanApplications = db.collection("loan_applications");
-
-  // Protect all routes with JWT
-  router.use(authenticateToken);
 
   async function generateApplicationId() {
     const maxApp = await loanApplications.aggregate([
