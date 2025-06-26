@@ -249,56 +249,6 @@ module.exports = (db) => {
     }
   });
 
-  // GET: Fetch a single application 
-router.get("/:applicationId", async (req, res) => {
-  const { applicationId } = req.params;
-
-  try {
-    const application = await db.collection("loan_applications").findOne({ applicationId });
-
-    if (!application) {
-      return res.status(404).json({ error: "Application not found" });
-    }
-
-    res.status(200).json(application);
-  } catch (error) {
-    console.error("Error fetching application by ID:", error);
-    res.status(500).json({ error: "Failed to fetch application." });
-  }
-});
-
-  
-router.put("/:applicationId", async (req, res) => {
-  try {
-    const { applicationId } = req.params;
-    const updateData = req.body;
-
-    console.log("Received PUT request for:", applicationId);
-    console.log("Update data:", updateData);
-
-    if (updateData.status === "Disbursed") {
-      updateData.dateDisbursed = new Date();
-    }
-
-    const result = await loanApplications.updateOne(
-      { applicationId: applicationId },
-      { $set: updateData }
-    );
-
-    console.log("MongoDB update result:", result);
-
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "Loan application not found." });
-    }
-
-    const updatedDoc = await loanApplications.findOne({ applicationId });
-
-    res.status(200).json(updatedDoc);
-  } catch (error) {
-    console.error("Error in PUT /loan-applications/:applicationId:", error);
-    res.status(500).json({ error: "Failed to update loan application." });
-  }
-});
 
 
 router.get("/loan-stats", async (req, res) => {
@@ -323,6 +273,8 @@ router.get("/loan-stats", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch statistics" });
   }
 });
+  
+
 
 router.get("/monthly-loan-stats", async (req, res) => {
   try {
@@ -466,6 +418,58 @@ router.get("/loan-type-stats", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch loan type statistics" });
   }
 });
+  // GET: Fetch a single application 
+router.get("/:applicationId", async (req, res) => {
+  const { applicationId } = req.params;
+
+  try {
+    const application = await db.collection("loan_applications").findOne({ applicationId });
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    res.status(200).json(application);
+  } catch (error) {
+    console.error("Error fetching application by ID:", error);
+    res.status(500).json({ error: "Failed to fetch application." });
+  }
+});
+
+router.put("/:applicationId", async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    const updateData = req.body;
+
+    console.log("Received PUT request for:", applicationId);
+    console.log("Update data:", updateData);
+
+    if (updateData.status === "Disbursed") {
+      updateData.dateDisbursed = new Date();
+    }
+
+    const result = await loanApplications.updateOne(
+      { applicationId: applicationId },
+      { $set: updateData }
+    );
+
+    console.log("MongoDB update result:", result);
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Loan application not found." });
+    }
+
+    const updatedDoc = await loanApplications.findOne({ applicationId });
+
+    res.status(200).json(updatedDoc);
+  } catch (error) {
+    console.error("Error in PUT /loan-applications/:applicationId:", error);
+    res.status(500).json({ error: "Failed to update loan application." });
+  }
+});
+
+
+
 
 
   return router;
