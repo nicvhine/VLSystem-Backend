@@ -1,15 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const { authenticateToken } = require('../auth');
 
 function padId(num) {
   return num.toString().padStart(5, '0');
 }
 
 module.exports = (db) => {
-  // Protect all routes with JWT
-  router.use(authenticateToken);
-
   router.post('/generate-loan/:applicationId', async (req, res) => {
     const { applicationId } = req.params;
 
@@ -106,6 +102,36 @@ module.exports = (db) => {
       // Step 7: Insert into 'loans' collection
       await db.collection("loans").insertOne(loan);
 
+          // Generate collections
+      const collections = [];
+      const monthlyDue = totalPayable / application.appLoanTerms;
+      const disbursedDate = new Date(application.dateDisbursed);
+
+      for (let i = 0; i < application.appLoanTerms; i++) {
+        const dueDate = new Date(disbursedDate);
+        dueDate.setMonth(dueDate.getMonth() + i);
+        // Adjust for month overflow (e.g., Jan 31 + 1 month = Mar 3), snap to end of month
+        if (dueDate.getDate() !== disbursedDate.getDate()) {
+          dueDate.setDate(0); // last day of previous month
+        }
+
+        collections.push({
+          loanId,
+          borrowersId: borrower.borrowersId,
+          name: borrower.name,
+          collectionNumber: i + 1,
+          dueDate,
+          periodAmount: monthlyDue,
+          paidAmount: 0,
+          balance: monthlyDue,
+          status: 'Unpaid',
+          collector: borrower.assignedCollector || 'Unassigned',
+          note: '',
+          createdAt: new Date(),
+        });
+      }
+
+      await db.collection("collections").insertMany(collections);
       res.status(201).json({ message: "Loan created successfully", loan });
 
     } catch (error) {
@@ -198,6 +224,17 @@ router.get('/:loanId', async (req, res) => {
   }
 });
 
+router.get('/collections', async (req, res) => {
+  try {
+    const collections = await db.collection('collections').find().toArray();
+    res.status(200).json(collections);
+  } catch (err) {
+    console.error("Error fetching collections:", err);
+    res.status(500).json({ error: "Failed to fetch collections" });
+  }
+});
+
 
   return router;
 };
+
