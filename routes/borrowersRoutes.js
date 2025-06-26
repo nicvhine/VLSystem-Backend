@@ -23,7 +23,6 @@ module.exports = (db) => {
 
   const { authenticateToken } = require('../auth');
 
-
   // LOGIN
   router.post("/login", async (req, res) => {
     const { username, password } = req.body;
