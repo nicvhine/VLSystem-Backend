@@ -1,11 +1,15 @@
 const express = require('express');
 const router = express.Router();
+const { authenticateToken } = require('../auth');
 
 function padId(num) {
   return num.toString().padStart(5, '0');
 }
 
 module.exports = (db) => {
+  // Protect all routes with JWT
+  router.use(authenticateToken);
+
   router.post('/generate-loan/:applicationId', async (req, res) => {
     const { applicationId } = req.params;
 

@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const { generateToken, authenticateToken } = require('../auth');
+const bcrypt = require('bcrypt');
 
 function generateUsername(fullName) {
   const parts = fullName.trim().toLowerCase().split(" ");
@@ -17,21 +19,54 @@ function padId(num) {
 module.exports = (db) => {
   const users = db.collection('users');
 
-  // LOGIN
+  // LOGIN (no JWT required)
   router.post("/login", async (req, res) => {
     const { username, password } = req.body;
 
+    console.log("Login attempt:", { username, password });
+
     if (!username || !password) {
+      console.log("Missing username or password");
       return res.status(400).json({ error: "Username and password are required" });
     }
 
     const user = await users.findOne({ username });
-    if (!user || user.password !== password) {
+    console.log("User found in DB:", user);
+
+    if (!user) {
+      console.log("User not found");
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    res.json({ message: "Login successful", userId: user.userId, username: user.username, name: user.name, role: user.role});
+    let isMatch = false;
+    // Allow plain text password only for manager role
+    if (user.role === "manager" && !user.password.startsWith('$2')) {
+      isMatch = password === user.password;
+      console.log("Plain text password check for manager:", isMatch);
+    } else {
+      isMatch = await bcrypt.compare(password, user.password);
+      console.log("Bcrypt password check:", isMatch);
+    }
+
+    if (!isMatch) {
+      console.log("Password did not match");
+      return res.status(401).json({ error: "Invalid credentials" });
+    }
+
+    const token = generateToken({ userId: user.userId, role: user.role });
+    console.log("Login successful for:", user.username);
+    res.json({
+      message: "Login successful",
+      userId: user.userId,
+      username: user.username,
+      name: user.name,
+      role: user.role,
+      token
+    });
   });
+
+  // Protect all routes below with JWT
+  router.use(authenticateToken);
 
   // GET ALL USERS
   router.get('/', async (req, res) => {
@@ -80,13 +115,14 @@ module.exports = (db) => {
 
       const userId = padId(nextId);
       const defaultPassword = "123456";
+      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
       const user = {
         userId,
         name,
         role,
         username,
-        password: defaultPassword,
+        password: hashedPassword,
       };
 
       await users.insertOne(user);
@@ -118,19 +154,40 @@ module.exports = (db) => {
   router.post('/change-password', async (req, res) => {
     const { userId, oldPassword, newPassword, confirmPassword } = req.body;
 
+    console.log("Change password attempt:", { userId, oldPassword, newPassword, confirmPassword });
+
     if (!userId || !oldPassword || !newPassword || !confirmPassword) {
+      console.log("Missing fields in change password");
       return res.status(400).json({ error: "All fields are required" });
     }
     if (newPassword !== confirmPassword) {
+      console.log("New password and confirmation do not match");
       return res.status(400).json({ error: "New password and confirmation do not match" });
     }
 
     try {
       const user = await users.findOne({ userId });
-      if (!user) return res.status(404).json({ error: "User not found" });
-      if (user.password !== oldPassword) return res.status(401).json({ error: "Old password is incorrect" });
+      console.log("User found for password change:", user);
 
-      await users.updateOne({ userId }, { $set: { password: newPassword } });
+      if (!user) return res.status(404).json({ error: "User not found" });
+
+      let isMatch = false;
+      // Allow plain text password only for manager role (if not hashed)
+      if (user.role === "manager" && !user.password.startsWith('$2')) {
+        isMatch = oldPassword === user.password;
+        console.log("Plain text old password check for manager:", isMatch);
+      } else {
+        isMatch = await bcrypt.compare(oldPassword, user.password);
+        console.log("Bcrypt old password check:", isMatch);
+      }
+      if (!isMatch) {
+        console.log("Old password did not match");
+        return res.status(401).json({ error: "Old password is incorrect" });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await users.updateOne({ userId }, { $set: { password: hashedPassword } });
+      console.log("Password changed successfully for:", user.username);
       res.json({ message: "Password changed successfully" });
     } catch (error) {
       console.error("Error changing password:", error);
