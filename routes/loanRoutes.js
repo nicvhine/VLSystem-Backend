@@ -109,9 +109,11 @@ module.exports = (db) => {
 
       for (let i = 0; i < application.appLoanTerms; i++) {
         const dueDate = new Date(disbursedDate);
-        dueDate.setMonth(dueDate.getMonth() + i);
+        dueDate.setMonth(dueDate.getMonth() + i + 1);
+
+        // Adjust for edge case when month rolls over
         if (dueDate.getDate() !== disbursedDate.getDate()) {
-          dueDate.setDate(0); 
+          dueDate.setDate(0);
         }
 
         collections.push({
@@ -129,6 +131,7 @@ module.exports = (db) => {
           createdAt: new Date(),
         });
       }
+
 
       await db.collection("collections").insertMany(collections);
       res.status(201).json({ message: "Loan created successfully", loan });
