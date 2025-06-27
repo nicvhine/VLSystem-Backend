@@ -110,9 +110,8 @@ module.exports = (db) => {
       for (let i = 0; i < application.appLoanTerms; i++) {
         const dueDate = new Date(disbursedDate);
         dueDate.setMonth(dueDate.getMonth() + i);
-        // Adjust for month overflow (e.g., Jan 31 + 1 month = Mar 3), snap to end of month
         if (dueDate.getDate() !== disbursedDate.getDate()) {
-          dueDate.setDate(0); // last day of previous month
+          dueDate.setDate(0); 
         }
 
         collections.push({
@@ -125,7 +124,7 @@ module.exports = (db) => {
           paidAmount: 0,
           balance: monthlyDue,
           status: 'Unpaid',
-          collector: borrower.assignedCollector || 'Unassigned',
+          collector: borrower.assignedCollector,
           note: '',
           createdAt: new Date(),
         });
@@ -139,6 +138,16 @@ module.exports = (db) => {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+
+  router.get('/collections', async (req, res) => {
+  try {
+    const collections = await db.collection('collections').find().toArray();
+    res.status(200).json(collections);
+  } catch (err) {
+    console.error("Error fetching collections:", err);
+    res.status(500).json({ error: "Failed to fetch collections" });
+  }
+});
 
   router.get('/active-loan/:borrowersId', async (req, res) => {
     const { borrowersId } = req.params;
@@ -224,15 +233,7 @@ router.get('/:loanId', async (req, res) => {
   }
 });
 
-router.get('/collections', async (req, res) => {
-  try {
-    const collections = await db.collection('collections').find().toArray();
-    res.status(200).json(collections);
-  } catch (err) {
-    console.error("Error fetching collections:", err);
-    res.status(500).json({ error: "Failed to fetch collections" });
-  }
-});
+
 
 
   return router;
