@@ -2,24 +2,40 @@ const express = require('express');
 const router = express.Router();
 
 module.exports = (db) => {
-  // GET COLLECTIONS
-  router.get('/', async (req, res) => {
+// GET COLLECTIONS
+router.get('/', async (req, res) => {
   const collectorName = req.query.collector;
-
   const query = collectorName ? { collector: collectorName } : {};
-  const filteredCollections = await db.collection('collections').find(query).toArray();
 
-  const withTotalPayment = filteredCollections.map(col => ({
-    ...col,
-    totalPayment: (col.paidAmount || 0) + (col.balance || 0),
-  }));
+  try {
+    const collections = await db.collection('collections').find(query).toArray();
 
-  console.log(`Filtered collections for: ${collectorName}`, withTotalPayment); 
-  res.json(withTotalPayment);
+    const loanIds = [...new Set(collections.map(c => c.loanId))];
+    const loans = await db.collection('loans')
+      .find({ loanId: { $in: loanIds } })
+      .project({ loanId: 1, balance: 1 })
+      .toArray();
+
+    const loanBalanceMap = {};
+    loans.forEach(loan => {
+      loanBalanceMap[loan.loanId] = loan.balance;
+    });
+
+    const withLoanBalance = collections.map(c => ({
+      ...c,
+      loanBalance: loanBalanceMap[c.loanId] ?? null,
+      totalPayment: (c.paidAmount || 0) + (c.balance || 0),
+    }));
+
+    res.json(withLoanBalance);
+  } catch (err) {
+    console.error("Error loading collections with loan balance:", err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 
-// MAKE PAYMENT
+
 router.post('/:referenceNumber/pay', async (req, res) => {
   const { referenceNumber } = req.params;
   const { amount } = req.body;
@@ -36,39 +52,59 @@ router.post('/:referenceNumber/pay', async (req, res) => {
     }
 
     const updatedPaidAmount = (current.paidAmount || 0) + amount;
+    const balanceRemaining = Math.max(current.periodAmount - updatedPaidAmount, 0);
     const isPaid = updatedPaidAmount >= current.periodAmount;
     const newStatus = isPaid ? 'Paid' : 'Partial';
 
-    // 1. Update the current collection document
+    const overpayment = updatedPaidAmount - current.periodAmount;
+
+    // 1. Update current collection document
     await db.collection("collections").updateOne(
       { referenceNumber },
       {
         $set: {
           paidAmount: updatedPaidAmount,
+          balance: balanceRemaining,
           status: newStatus,
           note: isPaid ? '' : (current.note || ''),
         }
       }
     );
 
-    // 2. If Paid, update balance of the next collection
-    if (isPaid) {
+    // 2. Apply overpayment to next collection(s)
+    let remainingOverpayment = overpayment;
+
+    let nextCollectionNumber = current.collectionNumber + 1;
+
+    while (remainingOverpayment > 0) {
       const nextCollection = await db.collection("collections").findOne({
         loanId: current.loanId,
-        collectionNumber: current.collectionNumber + 1
+        collectionNumber: nextCollectionNumber,
       });
 
-      if (nextCollection) {
-        const newBalance = (nextCollection.balance || 0) - current.periodAmount;
+      if (!nextCollection) break;
 
-        await db.collection("collections").updateOne(
-          { referenceNumber: nextCollection.referenceNumber },
-          { $set: { balance: newBalance } }
-        );
-      }
+      const nextBalance = nextCollection.balance || nextCollection.periodAmount;
+      const paymentToApply = Math.min(remainingOverpayment, nextBalance);
+      const newPaid = (nextCollection.paidAmount || 0) + paymentToApply;
+      const newBal = nextBalance - paymentToApply;
+
+      await db.collection("collections").updateOne(
+        { referenceNumber: nextCollection.referenceNumber },
+        {
+          $set: {
+            paidAmount: newPaid,
+            balance: newBal,
+            status: newBal === 0 ? 'Paid' : 'Partial',
+          }
+        }
+      );
+
+      remainingOverpayment -= paymentToApply;
+      nextCollectionNumber++;
     }
 
-    // 3. Update loan's total paidAmount and balance
+    // 3. Update loan's paidAmount and balance
     await db.collection("loans").updateOne(
       { loanId: current.loanId },
       {
@@ -83,6 +119,8 @@ router.post('/:referenceNumber/pay', async (req, res) => {
       message: "Payment recorded successfully",
       status: newStatus,
       paidAmount: updatedPaidAmount,
+      overpaymentUsed: overpayment - remainingOverpayment,
+      remainingOverpayment
     });
 
   } catch (error) {
@@ -90,6 +128,7 @@ router.post('/:referenceNumber/pay', async (req, res) => {
     res.status(500).json({ error: "Internal server error" });
   }
 });
+
 
   // GET COLLECTORS
   router.get('/collectors', async (req, res) => {
