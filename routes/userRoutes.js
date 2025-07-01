@@ -157,5 +157,17 @@ module.exports = (db) => {
       }
     });
 
+    router.get('/collectors', async (req, res) => {
+  try {
+    const collectors = await db.collection('users').find({ role: 'Collector' }).toArray();
+    const names = collectors.map(c => c.name);
+    res.json(names);
+  } catch (err) {
+    console.error('Failed to fetch collectors:', err);
+    res.status(500).json({ error: 'Failed to load collectors' });
+  }
+});
+
+
   return router;
 };

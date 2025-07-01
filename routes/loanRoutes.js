@@ -65,13 +65,17 @@ module.exports = (db) => {
 
 
       // Step 6: Compute totals
-      const termYears = application.appLoanTerms / 12;
-      const totalPayable =
-      application.appLoanAmount +
-      (application.appLoanAmount * (application.appInterest / 100) * application.appLoanTerms);
+      const termsInMonths = application.appLoanTerms;
+      const principal = application.appLoanAmount;
+      const interestRate = application.appInterest; 
 
-      
+      const totalInterest = principal * (interestRate / 100) * termsInMonths;
 
+      const totalPayable = principal + totalInterest;
+
+      const monthlyDue = totalPayable / termsInMonths;
+
+      const balance = totalPayable;
 
       const loan = {
         loanId,
@@ -93,7 +97,8 @@ module.exports = (db) => {
         termsInMonths: application.appLoanTerms,
         loanType: application.loanType,
         totalPayable,
-        balance: totalPayable,
+        monthlyDue,
+        balance,
         status: "Active",
         dateReleased: new Date(),
         dateDisbursed: application.dateDisbursed,
@@ -104,14 +109,16 @@ module.exports = (db) => {
 
           // Generate collections
       const collections = [];
-      const monthlyDue = totalPayable / application.appLoanTerms;
       const disbursedDate = new Date(application.dateDisbursed);
 
-      for (let i = 0; i < application.appLoanTerms; i++) {
+        for (let i = 0; i < application.appLoanTerms; i++) {
         const dueDate = new Date(disbursedDate);
-        dueDate.setMonth(dueDate.getMonth() + i);
+        dueDate.setMonth(dueDate.getMonth() + i + 1);
+
+        // Adjust for edge case when month rolls over
         if (dueDate.getDate() !== disbursedDate.getDate()) {
           dueDate.setDate(0); 
+          dueDate.setDate(0);
         }
 
         collections.push({
@@ -122,7 +129,7 @@ module.exports = (db) => {
           dueDate,
           periodAmount: monthlyDue,
           paidAmount: 0,
-          balance: monthlyDue,
+          balance,
           status: 'Unpaid',
           collector: borrower.assignedCollector,
           note: '',
@@ -139,13 +146,26 @@ module.exports = (db) => {
     }
   });
 
-  router.get('/collections', async (req, res) => {
+router.get('/collections', async (req, res) => {
+  const collectorName = req.query.collector;
+
+  const query = collectorName ? { collector: collectorName } : {};
+  const filteredCollections = await db.collection('collections').find(query).toArray();
+
+  console.log(`Filtered collections for: ${collectorName}`, filteredCollections); 
+
+  res.json(filteredCollections);
+});
+
+
+router.get('/collectors', async (req, res) => {
   try {
-    const collections = await db.collection('collections').find().toArray();
-    res.status(200).json(collections);
+    const collectors = await db.collection('users').find({ role: 'collector' }).toArray();
+    const names = collectors.map(c => c.name);
+    res.json(names);
   } catch (err) {
-    console.error("Error fetching collections:", err);
-    res.status(500).json({ error: "Failed to fetch collections" });
+    console.error('Failed to fetch collectors:', err);
+    res.status(500).json({ error: 'Failed to load collectors' });
   }
 });
 
