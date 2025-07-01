@@ -127,6 +127,7 @@ module.exports = (db) => {
         collectionNumber: i + 1,
         dueDate,
         periodAmount: monthlyDue,
+        totalPaidAmount: loan.paidAmount,
         paidAmount,
         balance,
         status: 'Unpaid',
