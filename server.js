@@ -151,12 +151,14 @@
       const borrowersRoutes = require('./routes/borrowersRoutes')(db);
       const loanRoutes = require('./routes/loanRoutes')(db);
       const collectionRoutes = require('./routes/collectionRoutes')(db);
+      const paymentRoutes = require('./routes/paymentRoutes')(db);
 
       app.use('/users', userRoutes);
       app.use('/loan-applications', loanApplicationRoutes);
       app.use('/borrowers', borrowersRoutes);
       app.use('/loans', loanRoutes);
       app.use('/collections', collectionRoutes);
+      app.use('/payments', paymentRoutes);
 
       app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
