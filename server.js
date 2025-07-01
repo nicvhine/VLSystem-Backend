@@ -135,6 +135,7 @@
       maxLoanSeq = MaxLoanAgg[0].numericLoanId; 
     }
 
+    //COLLECTIONS
 
       const counters = db.collection('counters');
       await counters.updateOne({ _id: 'userId' }, { $set: { seq: maxSeq } }, { upsert: true });
@@ -149,12 +150,13 @@
       const loanApplicationRoutes = require('./routes/loanApplicationRoutes')(db, getNextSequence);
       const borrowersRoutes = require('./routes/borrowersRoutes')(db);
       const loanRoutes = require('./routes/loanRoutes')(db);
-
+      const collectionRoutes = require('./routes/collectionRoutes')(db);
 
       app.use('/users', userRoutes);
       app.use('/loan-applications', loanApplicationRoutes);
       app.use('/borrowers', borrowersRoutes);
       app.use('/loans', loanRoutes);
+      app.use('/collections', collectionRoutes);
 
       app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);

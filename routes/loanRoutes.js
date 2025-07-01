@@ -68,14 +68,11 @@ module.exports = (db) => {
       const termsInMonths = application.appLoanTerms;
       const principal = application.appLoanAmount;
       const interestRate = application.appInterest; 
-
       const totalInterest = principal * (interestRate / 100) * termsInMonths;
-
       const totalPayable = principal + totalInterest;
-
       const monthlyDue = totalPayable / termsInMonths;
-
       const balance = totalPayable;
+      const paidAmount = 0;
 
       const loan = {
         loanId,
@@ -98,6 +95,7 @@ module.exports = (db) => {
         loanType: application.loanType,
         totalPayable,
         monthlyDue,
+        paidAmount,
         balance,
         status: "Active",
         dateReleased: new Date(),
@@ -121,20 +119,22 @@ module.exports = (db) => {
           dueDate.setDate(0);
         }
 
-        collections.push({
-          loanId,
-          borrowersId: borrower.borrowersId,
-          name: borrower.name,
-          collectionNumber: i + 1,
-          dueDate,
-          periodAmount: monthlyDue,
-          paidAmount: 0,
-          balance,
-          status: 'Unpaid',
-          collector: borrower.assignedCollector,
-          note: '',
-          createdAt: new Date(),
-        });
+      collections.push({
+        referenceNumber: `${loanId}-C${i + 1}`, 
+        loanId,
+        borrowersId: borrower.borrowersId,
+        name: borrower.name,
+        collectionNumber: i + 1,
+        dueDate,
+        periodAmount: monthlyDue,
+        paidAmount,
+        balance,
+        status: 'Unpaid',
+        collector: borrower.assignedCollector,
+        note: '',
+        createdAt: new Date(),
+      });
+
       }
 
       await db.collection("collections").insertMany(collections);
@@ -146,28 +146,8 @@ module.exports = (db) => {
     }
   });
 
-router.get('/collections', async (req, res) => {
-  const collectorName = req.query.collector;
-
-  const query = collectorName ? { collector: collectorName } : {};
-  const filteredCollections = await db.collection('collections').find(query).toArray();
-
-  console.log(`Filtered collections for: ${collectorName}`, filteredCollections); 
-
-  res.json(filteredCollections);
-});
 
 
-router.get('/collectors', async (req, res) => {
-  try {
-    const collectors = await db.collection('users').find({ role: 'collector' }).toArray();
-    const names = collectors.map(c => c.name);
-    res.json(names);
-  } catch (err) {
-    console.error('Failed to fetch collectors:', err);
-    res.status(500).json({ error: 'Failed to load collectors' });
-  }
-});
 
   router.get('/active-loan/:borrowersId', async (req, res) => {
     const { borrowersId } = req.params;
