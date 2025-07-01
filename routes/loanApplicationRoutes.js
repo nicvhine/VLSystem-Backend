@@ -53,12 +53,18 @@ module.exports = (db) => {
 
       const applicationId = await generateApplicationId();
 
+      //total payable calculation
+
+      const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
+
+      const totalPayable = appLoanAmount + totalInterest;
+      
       let newApplication = {
         applicationId,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
         appSpouseName, appSpouseOccupation, appAddress,
         appMonthlyIncome,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable,
         hasCollateral: false,
         loanType: "Regular Loan Without Collateral",
         status: "Pending",
@@ -127,12 +133,18 @@ module.exports = (db) => {
 
       const applicationId = await generateApplicationId();
 
+      //total payable calculation
+
+      const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
+
+      const totalPayable = appLoanAmount + totalInterest;
+
       let newApplication = {
         applicationId,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
         appSpouseName, appSpouseOccupation, appAddress,
         appMonthlyIncome,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable,
         hasCollateral: true,
         collateralType, collateralValue, collateralDescription, ownershipStatus,
         loanType: "Regular Loan With Collateral",
@@ -198,12 +210,18 @@ module.exports = (db) => {
 
       const applicationId = await generateApplicationId();
 
+      //total payable calculation
+
+      const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
+
+      const totalPayable = appLoanAmount + totalInterest;
+
       let newApplication = {
         applicationId,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
         appSpouseName, appSpouseOccupation, appAddress,
         appMonthlyIncome,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable,
         hasCollateral: false,
         loanType: "Open-Term Loan",
         repaymentSchedule,

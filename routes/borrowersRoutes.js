@@ -57,7 +57,7 @@ module.exports = (db) => {
 //ADD BORROWER
  router.post("/", async (req, res) => {
   try {
-    const { name, role, applicationId } = req.body;
+    const { name, role, applicationId, assignedCollector } = req.body;
 
     if (!name || !role || !applicationId) {
       return res.status(400).json({ error: "Name, role, and applicationId are required" });
@@ -113,6 +113,7 @@ module.exports = (db) => {
       username,
       password: hashedPassword,
       isFirstLogin: true,
+      assignedCollector,
       dateOfBirth: application.appDob,
       maritalStatus: application.appMarital,
       numberOfChildren: application.appChildren,
