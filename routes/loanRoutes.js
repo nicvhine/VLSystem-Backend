@@ -167,7 +167,7 @@ module.exports = (db) => {
       ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
       : 0;
 
-      res.json(loan, paymentProgress);
+      res.json({ ...loan, paymentProgress });
     } catch (err) {
       console.error('Error fetching loan by borrower ID:', err);
       res.status(500).json({ error: 'Internal server error' });
