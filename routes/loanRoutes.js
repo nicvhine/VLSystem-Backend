@@ -163,7 +163,11 @@ module.exports = (db) => {
         return res.status(404).json({ error: 'No active loan found for this borrower.' });
       }
   
-      res.json(loan);
+       const paymentProgress = loan.totalPayable > 0
+      ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
+      : 0;
+
+      res.json({ ...loan, paymentProgress });
     } catch (err) {
       console.error('Error fetching loan by borrower ID:', err);
       res.status(500).json({ error: 'Internal server error' });
