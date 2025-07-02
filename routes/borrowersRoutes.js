@@ -2,8 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 
-
-
+//GENERATE USERNAME
 function generateUsername(fullName) {
   const parts = fullName.trim().toLowerCase().split(" ");
   if (parts.length < 2) return null;
@@ -13,6 +12,7 @@ function generateUsername(fullName) {
   return firstName.slice(0, 3) + lastName;
 }
 
+//GENERATE ID
 function padId(num) {
   return num.toString().padStart(5, '0');
 }
@@ -23,33 +23,33 @@ module.exports = (db) => {
 
   const { authenticateToken } = require('../auth');
 
-  // LOGIN
-  router.post("/login", async (req, res) => {
-    const { username, password } = req.body;
+// LOGIN
+router.post("/login", async (req, res) => {
+  const { username, password } = req.body;
 
-    if (!username || !password) {
-      return res.status(400).json({ error: "Username and password are required" });
-    }
+  if (!username || !password) {
+    return res.status(400).json({ error: "Username and password are required" });
+  }
 
-    const borrower = await borrowers.findOne({ username });
-    if (!borrower) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+  const borrower = await borrowers.findOne({ username });
+  if (!borrower) {
+    return res.status(401).json({ error: "Invalid credentials" });
+  }
 
-    const isMatch = await bcrypt.compare(password, borrower.password);
-    if (!isMatch) {
-      return res.status(401).json({ error: "Invalid credentials" });
-    }
+const isMatch = await bcrypt.compare(password, borrower.password);
+  if (!isMatch) {
+  return res.status(401).json({ error: "Invalid credentials" });
+  }
 
-    const token = generateToken({ borrowersId: borrower.borrowersId, role: "borrower"});
-    return res.json({
-    message: "Login successful",
-    name: borrower.name,
-    username: borrower.username,
-    role: "borrower",
-    borrowersId: borrower.borrowersId,
-    isFirstLogin: borrower.isFirstLogin !== false, 
-    token
+  const token = generateToken({ borrowersId: borrower.borrowersId, role: "borrower"});
+  return res.json({
+  message: "Login successful",
+  name: borrower.name,
+  username: borrower.username,
+  role: "borrower",
+  borrowersId: borrower.borrowersId,
+  isFirstLogin: borrower.isFirstLogin !== false, 
+  token
   });
 
   });
@@ -67,7 +67,6 @@ module.exports = (db) => {
       return res.status(400).json({ error: "Please provide full name (first and last)" });
     }
 
-    // Fetch the related loan application
     const application = await db.collection("loan_applications").findOne({ applicationId });
 
     if (!application) {
@@ -79,7 +78,6 @@ module.exports = (db) => {
       return res.status(400).json({ error: "Invalid full name" });
     }
 
-    // Generate next borrower ID
     const maxBorrower = await borrowers.aggregate([
       {
         $addFields: {
@@ -146,6 +144,7 @@ module.exports = (db) => {
   }
 });
 
+//CHANGE PASSWORD
 router.put('/:id/change-password', async (req, res) => {
   const { id } = req.params;
   const { newPassword } = req.body;
@@ -172,8 +171,6 @@ router.put('/:id/change-password', async (req, res) => {
     res.status(500).json({ message: 'Server error while updating password' });
   }
 });
-
-
 
   return router;
 };

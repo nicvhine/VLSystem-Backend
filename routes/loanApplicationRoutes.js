@@ -22,7 +22,7 @@ module.exports = (db) => {
     return padId(nextAppId);
   }
 
-  // --- Route: Loan without collateral ---
+  // LOAN WITHOUT COLLATERAL
   router.post("/without", async (req, res) => {
     try {
       const {
@@ -52,8 +52,6 @@ module.exports = (db) => {
       }
 
       const applicationId = await generateApplicationId();
-
-      //total payable calculation
 
       const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
 
@@ -97,7 +95,7 @@ module.exports = (db) => {
     }
   });
 
-  // --- Route: Loan with collateral ---
+  //LOAN WITH COLLATERAL
   router.post("/with", async (req, res) => {
     try {
       const {
@@ -132,8 +130,6 @@ module.exports = (db) => {
       }
 
       const applicationId = await generateApplicationId();
-
-      //total payable calculation
 
       const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
 
@@ -178,7 +174,7 @@ module.exports = (db) => {
     }
   });
 
-  // --- Route: Open-Term Loan ---
+//OPEN-TERM LOAN
   router.post("/open-term", async (req, res) => {
     try {
       const {
@@ -209,8 +205,6 @@ module.exports = (db) => {
       }
 
       const applicationId = await generateApplicationId();
-
-      //total payable calculation
 
       const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
 

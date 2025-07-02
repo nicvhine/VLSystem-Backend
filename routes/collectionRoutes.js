@@ -2,159 +2,200 @@ const express = require('express');
 const router = express.Router();
 
 module.exports = (db) => {
-// GET COLLECTIONS
-router.get('/', async (req, res) => {
-  const collectorName = req.query.collector;
-  const query = collectorName ? { collector: collectorName } : {};
 
-  try {
-    const collections = await db.collection('collections')
-      .find(query)
-      .sort({ collectionNumber: 1 })
-      .toArray();
+  // GET COLLECTIONS
+  router.get('/', async (req, res) => {
+    try {
+      // due date notifications (within 3 days)
+      const now = new Date();
+      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const threeDaysLater = new Date(today);
+      threeDaysLater.setDate(today.getDate() + 3);
 
-    const loanIds = [...new Set(collections.map(c => c.loanId))];
-    const loans = await db.collection('loans')
-      .find({ loanId: { $in: loanIds } })
-      .toArray();
+      const collectionsCol = db.collection('collections');
+      const notificationsCol = db.collection('notifications');
 
-    const loanMap = {};
-    loans.forEach(loan => {
-      loanMap[loan.loanId] = loan;
-    });
+      const upcoming = await collectionsCol.find({
+        status: 'Unpaid',
+        dueDate: { $gte: today, $lte: threeDaysLater }
+      }).toArray();
 
-    const groupedByLoan = {};
-    collections.forEach(c => {
-      if (!groupedByLoan[c.loanId]) {
-        groupedByLoan[c.loanId] = [];
+      const existingDueRefs = (
+        await notificationsCol.find({ type: 'due' }).toArray()
+      ).map(n => n.referenceNumber);
+
+      const newNotifs = upcoming
+        .filter(c => !existingDueRefs.includes(c.referenceNumber))
+        .map(c => ({
+          id: `due-${c.referenceNumber}`,
+          message: `📅 Payment due for Collection ${c.collectionNumber}`,
+          referenceNumber: c.referenceNumber,
+          borrowersId: c.borrowersId,
+          date: c.dueDate,
+          viewed: false,
+          type: 'due',
+          createdAt: new Date()
+        }));
+
+      if (newNotifs.length > 0) {
+        await notificationsCol.insertMany(newNotifs);
       }
-      groupedByLoan[c.loanId].push(c);
-    });
 
-    const enriched = [];
+      const collectorName = req.query.collector;
+      const query = collectorName ? { collector: collectorName } : {};
 
-    for (const loanId in groupedByLoan) {
-      const loanCollections = groupedByLoan[loanId];
-      const loan = loanMap[loanId];
+      const collections = await collectionsCol.find(query).sort({ collectionNumber: 1 }).toArray();
 
-      let runningTotal = 0;
+      const loanIds = [...new Set(collections.map(c => c.loanId))];
+      const loans = await db.collection('loans').find({ loanId: { $in: loanIds } }).toArray();
 
-      loanCollections.forEach((col, index) => {
-        const enrichedCol = {
-          ...col,
-          totalPayment: index === 0 ? 0 : runningTotal,
-          balance: loan.totalPayable - runningTotal,
-          loanBalance: loan.totalPayable - runningTotal, 
-        };
-
-        runningTotal += col.paidAmount || 0;
-        enriched.push(enrichedCol);
-      });
-    }
-
-    res.json(enriched);
-  } catch (err) {
-    console.error("Error loading collections:", err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
-router.post('/:referenceNumber/pay', async (req, res) => {
-  const { referenceNumber } = req.params;
-  const { amount } = req.body;
-
-  if (!amount || isNaN(amount) || amount <= 0) {
-    return res.status(400).json({ error: "Invalid payment amount." });
-  }
-
-  try {
-    const now = new Date();
-
-    const current = await db.collection("collections").findOne({ referenceNumber });
-
-    if (!current) {
-      return res.status(404).json({ error: "Collection not found." });
-    }
-
-    let remainingAmount = amount;
-    let collectionNumber = current.collectionNumber;
-    const paymentLogs = [];
-
-    while (remainingAmount > 0) {
-      const collection = await db.collection("collections").findOne({
-        loanId: current.loanId,
-        collectionNumber
+      const loanMap = {};
+      loans.forEach(loan => {
+        loanMap[loan.loanId] = loan;
       });
 
-      if (!collection) break;
+      const groupedByLoan = {};
+      collections.forEach(c => {
+        if (!groupedByLoan[c.loanId]) {
+          groupedByLoan[c.loanId] = [];
+        }
+        groupedByLoan[c.loanId].push(c);
+      });
 
-      const alreadyPaid = collection.paidAmount || 0;
-      const due = collection.periodAmount;
-      const remainingBalance = Math.max(due - alreadyPaid, 0);
-      const paymentToApply = Math.min(remainingAmount, remainingBalance);
-      const newPaid = alreadyPaid + paymentToApply;
-      const newBalance = Math.max(due - newPaid, 0);
-      const newStatus = newBalance === 0 ? 'Paid' : 'Partial';
+      const enriched = [];
 
-      // Update collection
-      await db.collection("collections").updateOne(
-        { referenceNumber: collection.referenceNumber },
+      for (const loanId in groupedByLoan) {
+        const loanCollections = groupedByLoan[loanId];
+        const loan = loanMap[loanId];
+        let runningTotal = 0;
+
+        loanCollections.forEach((col, index) => {
+          const enrichedCol = {
+            ...col,
+            totalPayment: index === 0 ? 0 : runningTotal,
+            balance: loan.totalPayable - runningTotal,
+            loanBalance: loan.totalPayable - runningTotal,
+          };
+          runningTotal += col.paidAmount || 0;
+          enriched.push(enrichedCol);
+        });
+      }
+
+      res.json(enriched);
+    } catch (err) {
+      console.error("Error loading collections:", err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // MAKE PAYMENT
+  router.post('/:referenceNumber/pay', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { amount } = req.body;
+
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ error: "Invalid payment amount." });
+    }
+
+    try {
+      const now = new Date();
+      const current = await db.collection("collections").findOne({ referenceNumber });
+
+      if (!current) {
+        return res.status(404).json({ error: "Collection not found." });
+      }
+
+      let remainingAmount = amount;
+      let collectionNumber = current.collectionNumber;
+      const paymentLogs = [];
+
+      while (remainingAmount > 0) {
+        const collection = await db.collection("collections").findOne({
+          loanId: current.loanId,
+          collectionNumber
+        });
+
+        if (!collection) break;
+
+        const alreadyPaid = collection.paidAmount || 0;
+        const due = collection.periodAmount;
+        const remainingBalance = Math.max(due - alreadyPaid, 0);
+        const paymentToApply = Math.min(remainingAmount, remainingBalance);
+        const newPaid = alreadyPaid + paymentToApply;
+        const newBalance = Math.max(due - newPaid, 0);
+        const newStatus = newBalance === 0 ? 'Paid' : 'Partial';
+
+        // Update collection
+        await db.collection("collections").updateOne(
+          { referenceNumber: collection.referenceNumber },
+          {
+            $set: {
+              paidAmount: newPaid,
+              balance: newBalance,
+              status: newStatus,
+              note: newStatus === 'Paid' ? '' : (collection.note || '')
+            }
+          }
+        );
+
+        // Log payment
+        paymentLogs.push({
+          loanId: current.loanId,
+          referenceNumber: collection.referenceNumber,
+          borrowersId: current.borrowersId,
+          collector: current.collector || null,
+          amount: paymentToApply,
+          balance: newBalance,
+          paidToCollection: collection.collectionNumber,
+          datePaid: now,
+          createdAt: now
+        });
+
+        remainingAmount -= paymentToApply;
+        collectionNumber++;
+      }
+
+      // Update loan
+      await db.collection("loans").updateOne(
+        { loanId: current.loanId },
         {
-          $set: {
-            paidAmount: newPaid,
-            balance: newBalance,
-            status: newStatus,
-            note: newStatus === 'Paid' ? '' : (collection.note || '')
+          $inc: {
+            paidAmount: amount,
+            balance: -amount
           }
         }
       );
 
-      // Log payment
-      paymentLogs.push({
-        loanId: current.loanId,
-        referenceNumber: collection.referenceNumber,
-        borrowersId: current.borrowersId,
-        collector: current.collector || null,
-        amount: paymentToApply,
-        balance: newBalance,
-        paidToCollection: collection.collectionNumber,
-        datePaid: now,
-        createdAt: now
+      // Save logs
+      await db.collection("payments").insertMany(paymentLogs);
+
+      // Save notification
+      if (paymentLogs.length > 0) {
+        const successNote = {
+          id: `success-${paymentLogs[0].referenceNumber}-${Date.now()}`,
+          message: `✅ Payment of ₱${amount.toFixed(2)} was successfully recorded.`,
+          referenceNumber: paymentLogs[0].referenceNumber,
+          borrowersId: paymentLogs[0].borrowersId,
+          date: new Date(),
+          viewed: false
+        };
+
+        await db.collection('notifications').insertOne(successNote);
+      }
+
+      res.json({
+        message: "Payment recorded successfully",
+        paymentLogs,
+        totalPaid: amount,
+        collectionsCovered: paymentLogs.length,
+        remainingUnapplied: remainingAmount
       });
 
-      remainingAmount -= paymentToApply;
-      collectionNumber++;
+    } catch (error) {
+      console.error("Error adding payment:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
-
-    // Update loan totals
-    await db.collection("loans").updateOne(
-      { loanId: current.loanId },
-      {
-        $inc: {
-          paidAmount: amount,
-          balance: -amount
-        }
-      }
-    );
-
-    // Insert all payment logs
-    await db.collection("payments").insertMany(paymentLogs);
-
-    res.json({
-      message: "Payment recorded successfully",
-      paymentLogs,
-      totalPaid: amount,
-      collectionsCovered: paymentLogs.length,
-      remainingUnapplied: remainingAmount
-    });
-
-  } catch (error) {
-    console.error("Error adding payment:", error);
-    res.status(500).json({ error: "Internal server error" });
-  }
-});
-
-
+  });
 
   // GET COLLECTORS
   router.get('/collectors', async (req, res) => {
