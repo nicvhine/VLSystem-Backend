@@ -137,7 +137,15 @@ const isMatch = await bcrypt.compare(password, borrower.password);
       { $set: { borrowersId, username } }
     );
 
-    res.status(201).json({ message: "Borrower created", borrower });
+    res.status(201).json({
+    message: "Borrower created",
+    borrower: {
+      ...borrower,
+      password: undefined  // remove hashed password from response
+    },
+    tempPassword: defaultPassword // send temporary password separately
+  });
+
   } catch (error) {
     console.error("Error adding borrower:", error);
     res.status(500).json({ error: "Failed to add borrower" });
