@@ -32,10 +32,10 @@ module.exports = (db) => {
         appTypeBusiness, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences
       } = req.body;
 
-      if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
+      if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms ) {
         return res.status(400).json({ error: "All required fields must be provided." });
       }
 
@@ -51,6 +51,16 @@ module.exports = (db) => {
         return res.status(400).json({ error: "Invalid source of income." });
       }
 
+      if (!Array.isArray(appReferences) || appReferences.length !== 3) {
+        return res.status(400).json({ error: "Three references must be provided." });
+      }
+
+      for (const ref of appReferences) {
+        if (!ref.name || !ref.contact || !ref.relation) {
+          return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
+        }
+      }
+
       const applicationId = await generateApplicationId();
 
       const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
@@ -62,7 +72,7 @@ module.exports = (db) => {
         appName, appDob, appContact, appEmail, appMarital, appChildren,
         appSpouseName, appSpouseOccupation, appAddress,
         appMonthlyIncome,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable,
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable, appReferences,
         hasCollateral: false,
         loanType: "Regular Loan Without Collateral",
         status: "Pending",
