@@ -141,9 +141,9 @@ const isMatch = await bcrypt.compare(password, borrower.password);
     message: "Borrower created",
     borrower: {
       ...borrower,
-      password: undefined  // remove hashed password from response
+      password: undefined  
     },
-    tempPassword: defaultPassword // send temporary password separately
+    tempPassword: defaultPassword 
   });
 
   } catch (error) {
