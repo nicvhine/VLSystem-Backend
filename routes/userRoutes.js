@@ -2,6 +2,28 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `profile_${Date.now()}${ext}`);
+  },
+});
+
+const upload = multer({ storage });
+
+
 function generateUsername(fullName) {
   const parts = fullName.trim().toLowerCase().split(" ");
   if (parts.length < 2) return null;
@@ -17,6 +39,30 @@ function padId(num) {
 
 module.exports = (db) => {
   const users = db.collection('users');
+
+ router.post('/:userId/upload-profile', upload.single('profilePic'), async (req, res) => {
+  const { userId } = req.params;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const profilePic = `/uploads/${req.file.filename}`;
+
+  try {
+    await db.collection('users').updateOne(
+      { userId },
+      { $set: { profilePic } }
+    );
+
+    res.status(200).json({ message: 'Profile uploaded successfully', profilePic });
+  } catch (err) {
+    console.error('Error saving profile pic:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+
 
   // LOGIN
   router.post("/login", async (req, res) => {
@@ -127,10 +173,11 @@ router.post("/", async (req, res) => {
       email: user.email,
       role: user.role,
       username: user.username,
+      profilePic: user.profilePic || null
     },
     credentials: {
       username: user.username,
-      password: defaultPassword, // This is the unhashed version sent via email
+      password: defaultPassword,
     }
   });
 
@@ -140,8 +187,6 @@ router.post("/", async (req, res) => {
     res.status(500).json({ error: "Failed to add user" });
   }
 });
-
-
 
   // DELETE USER BY ID
   router.delete('/:id', async (req, res) => {
