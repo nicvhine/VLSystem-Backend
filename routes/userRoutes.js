@@ -90,7 +90,6 @@ module.exports = (db) => {
       role: user.role,  
       isFirstLogin: user.isFirstLogin !== false});
 
-      localStorage.setItem('name', response.name); 
 
   });
 
