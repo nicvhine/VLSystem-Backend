@@ -40,8 +40,12 @@ module.exports = (db) => {
       userId: user.userId, 
       username: user.username, 
       name: user.name, 
+      email: user.email,
       role: user.role,  
       isFirstLogin: user.isFirstLogin !== false});
+
+      localStorage.setItem('name', response.name); 
+
   });
 
   // GET ALL USERS
@@ -51,6 +55,7 @@ module.exports = (db) => {
       const mappedUsers = allUsers.map(u => ({
         userId: u.userId || u._id.toString(),
         name: u.name,
+        email: u.email,
         role: u.role,
         username: u.username,
       }));
@@ -61,57 +66,84 @@ module.exports = (db) => {
     }
   });
 
-  // ADD NEW USER
-  router.post("/", async (req, res) => {
-    try {
-      const { name, role } = req.body;
+// ADD NEW USER
+router.post("/", async (req, res) => {
+  try {
+    const { name, email, role } = req.body;
 
-      if (!name || !role) {
-        return res.status(400).json({ error: "Name and role are required" });
-      }
-      if (!name.trim().includes(" ")) {
-        return res.status(400).json({ error: "Please provide full name (first and last)" });
-      }
+    if (!name || !email || !role) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
 
-      const username = generateUsername(name);
-      if (!username) {
-        return res.status(400).json({ error: "Invalid full name" });
-      }
+    if (!name.trim().includes(" ")) {
+      return res.status(400).json({ message: "Please enter a full name with first and last name." });
+    }
 
-      const maxUser = await users.aggregate([
-        { $addFields: { userIdNum: { $toInt: "$userId" } } },
-        { $sort: { userIdNum: -1 } },
-        { $limit: 1 }
-      ]).toArray();
+    const username = generateUsername(name);
+    
+    if (!username) {
+      return res.status(400).json({ message: "Invalid full name. Cannot generate username." });
+    }
 
-      let nextId = 1;
-      if (maxUser.length > 0 && !isNaN(maxUser[0].userIdNum)) {
-        nextId = maxUser[0].userIdNum + 1;
-      }
+    const existingUser = await users.findOne({
+      $or: [{ email: email.toLowerCase() }, { username }]
+    });
 
-      const userId = padId(nextId);
+    
+    if (!username) {
+      return res.status(400).json({ message: "Invalid full name. Cannot generate username." });
+    }
 
-      const lastName = name.trim().split(" ").slice(-1)[0].toLowerCase();
-      
-      const defaultPassword =  `${lastName}${userId}`;
-      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-      
-      const user = {
-        userId,
-        name,
-        role,
-        username,
-        password: hashedPassword,
-      };
+    const maxUser = await users.aggregate([
+      { $addFields: { userIdNum: { $toInt: "$userId" } } },
+      { $sort: { userIdNum: -1 } },
+      { $limit: 1 }
+    ]).toArray();
 
-      await users.insertOne(user);
+    let nextId = 1;
+    if (maxUser.length > 0 && !isNaN(maxUser[0].userIdNum)) {
+      nextId = maxUser[0].userIdNum + 1;
+    }
 
-      res.status(201).json({ message: "User created", user: { userId, name, role, username } });
-    } catch (error) {
-      console.error("Error adding user:", error);
-      res.status(500).json({ error: "Failed to add user" });
+    const userId = padId(nextId);
+    const lastName = name.trim().split(" ").slice(-1)[0].toLowerCase();
+    const defaultPassword = `${lastName}${userId}`;
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    const user = {
+      userId,
+      name,
+      email: email.toLowerCase(),
+      role,
+      username,
+      password: hashedPassword,
+    };
+
+    await users.insertOne(user);
+
+    res.status(201).json({
+    message: "User created",
+    user: {
+      userId: user.userId,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      username: user.username,
+    },
+    credentials: {
+      username: user.username,
+      password: defaultPassword, // This is the unhashed version sent via email
     }
   });
+
+
+  } catch (error) {
+    console.error("Error adding user:", error);
+    res.status(500).json({ error: "Failed to add user" });
+  }
+});
+
+
 
   // DELETE USER BY ID
   router.delete('/:id', async (req, res) => {
@@ -167,7 +199,6 @@ module.exports = (db) => {
     res.status(500).json({ error: 'Failed to load collectors' });
   }
 });
-
 
   return router;
 };
