@@ -85,13 +85,11 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Invalid full name. Cannot generate username." });
     }
 
-    const existingUser = await users.findOne({
-      $or: [{ email: email.toLowerCase() }, { username }]
-    });
+    // Check only for duplicate email - allow duplicate names and usernames
+    const existingUser = await users.findOne({ email: email.toLowerCase() });
 
-    
-    if (!username) {
-      return res.status(400).json({ message: "Invalid full name. Cannot generate username." });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email address is already registered. Please use a different email." });
     }
 
     const maxUser = await users.aggregate([
