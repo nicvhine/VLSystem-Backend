@@ -90,7 +90,6 @@ module.exports = (db) => {
       role: user.role,  
       isFirstLogin: user.isFirstLogin !== false});
 
-      localStorage.setItem('name', response.name); 
 
   });
 
@@ -134,10 +133,10 @@ router.post("/", async (req, res) => {
     // Check only for duplicate email - allow duplicate names and usernames
     const existingUser = await users.findOne({ email: email.toLowerCase() });
 
-    if (existingUser) {
+  if (existingUser) {
       return res.status(400).json({ message: "Email address is already registered. Please use a different email." });
-    }
-
+  }
+  
     const maxUser = await users.aggregate([
       { $addFields: { userIdNum: { $toInt: "$userId" } } },
       { $sort: { userIdNum: -1 } },
