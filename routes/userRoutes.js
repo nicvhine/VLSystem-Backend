@@ -6,6 +6,12 @@ const multer = require('multer');
 const fs = require('fs');
 const path = require('path');
 
+const jwt = require('jsonwebtoken'); 
+require('dotenv').config();
+const JWT_SECRET = process.env.JWT_SECRET;
+
+
+
 const uploadDir = path.join(__dirname, '..', 'uploads');
 if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir);
@@ -82,13 +88,32 @@ module.exports = (db) => {
       return res.status(401).json({ error: "Invalid credentials" });
     }
 
-    res.json({ message: "Login successful", 
-      userId: user.userId, 
-      username: user.username, 
-      name: user.name, 
-      email: user.email,
-      role: user.role,  
-      isFirstLogin: user.isFirstLogin !== false});
+    const token = jwt.sign(
+      {
+        userId: user.userId,
+        role: user.role,
+        username: user.username,
+        email: user.email,
+        name: user.name,
+      },
+      JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        userId: user.userId,
+        username: user.username,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        profilePic: user.profilePic || null,
+        isFirstLogin: user.isFirstLogin !== false,
+      }
+    });
+
 
 
   });
