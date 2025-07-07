@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middleware/auth');
+const logAction = require('../utils/log');
 
 function padId(num) {
   return num.toString().padStart(5, '0');
@@ -142,12 +143,91 @@ module.exports = (db) => {
       await db.collection("collections").insertMany(collections);
       res.status(201).json({ message: "Loan created successfully", loan });
 
+      await logAction(db, req.user.username, 'CREATE_LOAN', `Loan ${loanId} created for ${borrower.name}`);
+
+
     } catch (error) {
       console.error("Error generating loan:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
 
+  router.get('/loan-stats', authenticateToken, async (req, res) => {
+  try {
+    const dbLoans = db.collection('loans');
+    const dbApplications = db.collection('loan_applications');
+
+    const loans = await dbLoans.find().toArray();
+    const applications = await dbApplications.find().toArray();
+
+    let totalPrincipal = 0;
+    let totalInterest = 0;
+    let totalCollectables = 0;
+    let totalCollected = 0;
+    let totalUnpaid = 0;
+
+    const loanTypeCount = {};
+
+    for (const loan of loans) {
+      const principal = loan.principal || 0;
+      const interestRate = loan.interestRate || 0;
+      const terms = loan.termsInMonths || 0;
+
+      const interest = principal * (interestRate / 100) * terms;
+      const totalPayable = principal + interest;
+      const paid = loan.paidAmount || 0;
+      const balance = loan.balance || (totalPayable - paid);
+
+      totalPrincipal += principal;
+      totalInterest += interest;
+      totalCollectables += totalPayable;
+      totalCollected += paid;
+      totalUnpaid += balance;
+
+      const type = loan.loanType || 'Unknown';
+      loanTypeCount[type] = (loanTypeCount[type] || 0) + 1;
+    }
+
+    const typeStats = Object.entries(loanTypeCount)
+    .map(([loanType, count]) => ({ loanType, count }))
+    .sort((a, b) => b.count - a.count);
+
+    const statusCounts = {
+      approved: 0,
+      denied: 0,
+      pending: 0,
+      onHold: 0,
+    };
+
+    for (const app of applications) {
+      const status = (app.status || '').toLowerCase();
+
+      if (status === 'accepted' || status === 'approved') {
+        statusCounts.approved++;
+      } else if (status === 'denied' || status === 'rejected') {
+        statusCounts.denied++;
+      } else if (status === 'pending') {
+        statusCounts.pending++;
+      } else if (status === 'on hold' || status === 'onhold') {
+        statusCounts.onHold++;
+      }
+    }
+
+    res.json({
+      totalLoans: loans.length,
+      totalPrincipal,
+      totalInterest,
+      totalCollectables,
+      totalCollected,
+      totalUnpaid,
+      typeStats,
+      applicationStatuses: statusCounts,
+    });
+  } catch (err) {
+    console.error('Error getting loan stats:', err);
+    res.status(500).json({ error: 'Failed to fetch loan statistics' });
+  }
+});
 
 
 

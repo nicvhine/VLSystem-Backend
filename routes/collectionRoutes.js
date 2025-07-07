@@ -65,21 +65,28 @@ module.exports = (db) => {
       const enriched = [];
 
       for (const loanId in groupedByLoan) {
-        const loanCollections = groupedByLoan[loanId];
-        const loan = loanMap[loanId];
-        let runningTotal = 0;
+      const loanCollections = groupedByLoan[loanId];
+      const loan = loanMap[loanId];
 
-        loanCollections.forEach((col, index) => {
-          const enrichedCol = {
-            ...col,
-            totalPayment: index === 0 ? 0 : runningTotal,
-            balance: loan.totalPayable - runningTotal,
-            loanBalance: loan.totalPayable - runningTotal,
-          };
-          runningTotal += col.paidAmount || 0;
-          enriched.push(enrichedCol);
-        });
+      if (!loan) {
+        console.warn(`Loan not found for loanId: ${loanId}, skipping collections.`);
+        continue;
       }
+
+      let runningTotal = 0;
+
+      loanCollections.forEach((col, index) => {
+        const enrichedCol = {
+          ...col,
+          totalPayment: index === 0 ? 0 : runningTotal,
+          balance: loan.totalPayable - runningTotal,
+          loanBalance: loan.totalPayable - runningTotal,
+        };
+        runningTotal += col.paidAmount || 0;
+        enriched.push(enrichedCol);
+      });
+    }
+
 
       res.json(enriched);
     } catch (err) {

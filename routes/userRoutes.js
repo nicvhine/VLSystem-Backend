@@ -9,7 +9,7 @@ const path = require('path');
 const jwt = require('jsonwebtoken'); 
 require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
-
+const authenticateToken = require('../middleware/auth');
 
 
 const uploadDir = path.join(__dirname, '..', 'uploads');
@@ -137,9 +137,10 @@ module.exports = (db) => {
   });
 
 // ADD NEW USER
-router.post("/", async (req, res) => {
+router.post("/", authenticateToken, async (req, res) => {
   try {
     const { name, email, role } = req.body;
+    const actor = req.user?.username;
 
     if (!name || !email || !role) {
       return res.status(400).json({ message: "All fields are required." });
@@ -189,6 +190,14 @@ router.post("/", async (req, res) => {
 
     await users.insertOne(user);
 
+    await db.collection('logs').insertOne({
+      timestamp: new Date(),
+      actor,
+      action: "CREATE_USER",
+      details: `Created user ${user.username} (${user.role}) with ID ${userId}.`,
+    });
+
+
     res.status(201).json({
     message: "User created",
     user: {
@@ -206,6 +215,8 @@ router.post("/", async (req, res) => {
   });
 
 
+
+
   } catch (error) {
     console.error("Error adding user:", error);
     res.status(500).json({ error: "Failed to add user" });
@@ -213,20 +224,37 @@ router.post("/", async (req, res) => {
 });
 
   // DELETE USER BY ID
-  router.delete('/:id', async (req, res) => {
-    try {
-      const id = req.params.id;
-      const deleteResult = await users.deleteOne({ userId: id });
+router.delete('/:id', authenticateToken, async (req, res) => {
+  try {
+    const id = req.params.id;
+    const actor = req.user?.username || 'Unknown';
 
-      if (deleteResult.deletedCount === 0) {
-        return res.status(404).json({ message: 'User not found' });
-      }
-      res.status(204).send();
-    } catch (err) {
-      console.error('Failed to delete user:', err);
-      res.status(500).json({ message: 'Internal server error' });
+    const userToDelete = await users.findOne({ userId: id });
+
+    if (!userToDelete) {
+      return res.status(404).json({ message: 'User not found' });
     }
-  });
+
+    const deleteResult = await users.deleteOne({ userId: id });
+
+    if (deleteResult.deletedCount === 0) {
+      return res.status(500).json({ message: 'Failed to delete user' });
+    }
+
+    await db.collection('logs').insertOne({
+      timestamp: new Date(),
+      actor,
+      action: "DELETE_USER",
+      details: `Deleted user ${userToDelete.username} (${userToDelete.role}) with ID ${userToDelete.userId}.`,
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    console.error('Failed to delete user:', err);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
 
   // CHANGE PASSWORD
   router.put('/:id/change-password', async (req, res) => {

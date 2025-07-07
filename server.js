@@ -155,7 +155,8 @@
       const collectionRoutes = require('./routes/collectionRoutes')(db);
       const paymentRoutes = require('./routes/paymentRoutes')(db);
       const notificationRoutes = require('./routes/notificationRoutes')(db);
-
+      const logsRoute = require('./routes/logs')(db);
+      
       app.use('/users', userRoutes);
       app.use('/loan-applications', loanApplicationRoutes);
       app.use('/borrowers', borrowersRoutes);
@@ -163,7 +164,8 @@
       app.use('/collections', collectionRoutes);
       app.use('/payments', paymentRoutes);
       app.use('/notifications', notificationRoutes);
-
+      app.use('/logs', logsRoute);
+      
       app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
       });
