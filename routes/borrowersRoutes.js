@@ -19,9 +19,6 @@ function padId(num) {
 
 module.exports = (db) => {
   const borrowers = db.collection("borrowers_account");
-  const { generateToken } = require('../auth');
-
-  const { authenticateToken } = require('../auth');
 
 // LOGIN
 router.post("/login", async (req, res) => {

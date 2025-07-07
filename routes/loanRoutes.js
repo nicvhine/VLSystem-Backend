@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const authenticateToken = require('../middleware/auth');
 
 function padId(num) {
   return num.toString().padStart(5, '0');
@@ -174,7 +175,7 @@ module.exports = (db) => {
     }
   });
   
-  router.get("/", async (req, res) => {
+  router.get("/", authenticateToken, async (req, res) => {
   try {
     const allLoans = await db.collection("loans").find().toArray();
     res.status(200).json(allLoans);

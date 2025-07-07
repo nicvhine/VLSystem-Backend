@@ -17,7 +17,6 @@
     credentials: true,
   }));
 
-  const { authenticateToken } = require('./auth');
 
   const uri = 'mongodb+srv://nichole:nichole@cluster0.gxpgomv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
   const client = new MongoClient(uri);
