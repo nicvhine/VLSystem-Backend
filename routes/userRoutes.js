@@ -94,6 +94,7 @@ module.exports = (db) => {
         role: user.role,
         username: user.username,
         email: user.email,
+        phoneNumber: user.phoneNumber,
         name: user.name,
       },
       JWT_SECRET,
@@ -108,6 +109,7 @@ module.exports = (db) => {
         username: user.username,
         name: user.name,
         email: user.email,
+        phoneNumber: user.phoneNumber,
         role: user.role,
         profilePic: user.profilePic || null,
         isFirstLogin: user.isFirstLogin !== false,
@@ -138,7 +140,7 @@ module.exports = (db) => {
   });
 
 // ADD NEW USER
-router.post("/", authenticateToken, async (req, res) => {
+router.post("/", async (req, res) => {
   try {
     const { name, email, phoneNumber, role } = req.body;
     const actor = req.user?.username;
@@ -258,32 +260,41 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
 
   // CHANGE PASSWORD
-  router.put('/:id/change-password', async (req, res) => {
-  const { id } = req.params;
-  const { newPassword } = req.body;
+ router.put('/:id/change-password', async (req, res) => {
+    const { id } = req.params;
+    const { newPassword } = req.body;
 
-  const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    if (!newPassword || !passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        message:
+          'Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.',
+      });
+    }
 
-  if (!newPassword || !passwordRegex.test(newPassword)) {
-    return res.status(400).json({
-      message: 'Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.'
-    });
-  }
-
-      try {
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-    
-        await db.collection('users').updateOne(
-          { userId: id },
-          { $set: { password: hashedPassword, isFirstLogin: false } }
-        );
-    
-        res.status(200).json({ message: 'Password updated successfully' });
-      } catch (err) {
-        console.error("Password update error:", err);
-        res.status(500).json({ message: 'Server error while updating password' });
+    try {
+      const user = await db.collection('users').findOne({ userId: id });
+      if (!user) {
+        return res.status(404).json({ message: 'User not found' });
       }
-    });
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await db.collection('users').updateOne(
+        { userId: id },
+        {
+          $set: {
+            password: hashedPassword,
+            isFirstLogin: false,
+          },
+        }
+      );
+
+      res.status(200).json({ message: 'Password updated successfully' });
+    } catch (err) {
+      console.error('Password update error:', err);
+      res.status(500).json({ message: 'Server error while updating password' });
+    }
+  });
 
     router.get('/collectors', async (req, res) => {
   try {
@@ -365,6 +376,53 @@ router.put('/:userId/update-phoneNumber', async (req, res) => {
     res.status(500).json({ error: 'Server error' });
   }
 });
+
+router.put('/:userId', async (req, res) => {
+  const { userId } = req.params;
+  const { name, email, phoneNumber, role } = req.body;
+
+  // At least one field must be present
+  if (!name && !email && !phoneNumber && !role) {
+    return res.status(400).json({ message: 'At least one field must be provided for update.' });
+  }
+
+  console.log("Updating userId:", userId);
+
+  try {
+    const updateFields = {
+      updatedAt: new Date(),
+    };
+
+    if (name) updateFields.name = name;
+    if (email) updateFields.email = email;
+    if (phoneNumber) updateFields.phoneNumber = phoneNumber;
+    if (role) updateFields.role = role;
+
+    // Use correct option: returnDocument = 'after' (Mongo v4+)
+    const result = await db.collection('users').findOneAndUpdate(
+      { userId: userId.toString() },
+      { $set: updateFields },
+      { returnDocument: 'after' }  // <- important: ensures result.value is the updated doc
+    );
+
+    if (!result.value) {
+      console.log("No user found for ID:", userId);
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      message: 'User updated successfully',
+      user: result.value,
+    });
+  } catch (error) {
+    console.error('Failed to update user:', error);
+    return res.status(500).json({ message: 'Server error' });
+  }
+});
+
+
+
+
 
   return router;
 };
