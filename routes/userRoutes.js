@@ -340,5 +340,31 @@ router.put('/:userId/update-email', async (req, res) => {
   }
 });
 
+router.put('/:userId/update-phoneNumber', async (req, res) => {
+  const { userId } = req.params;
+  const { phoneNumber } = req.body;
+
+  if (!phoneNumber) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  try {
+    const existingUser = await db.collection('users').findOne({ phoneNumber });
+    if (existingUser && existingUser.userId !== userId) {
+      return res.status(409).json({ error: 'Phone number already in use.' });
+    }
+
+    await db.collection('users').updateOne(
+      { userId },
+      { $set: { phoneNumber } }
+    );
+
+    res.status(200).json({ message: 'Phone number updated successfully' });
+  } catch (error) {
+    console.error('Failed to update phone number:', error);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
   return router;
 };

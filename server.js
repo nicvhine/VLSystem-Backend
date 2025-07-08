@@ -156,7 +156,8 @@
       const paymentRoutes = require('./routes/paymentRoutes')(db);
       const notificationRoutes = require('./routes/notificationRoutes')(db);
       const logsRoute = require('./routes/logs')(db);
-      
+      const smsRoutes = require('./routes/sms');
+
       app.use('/users', userRoutes);
       app.use('/loan-applications', loanApplicationRoutes);
       app.use('/borrowers', borrowersRoutes);
@@ -165,6 +166,7 @@
       app.use('/payments', paymentRoutes);
       app.use('/notifications', notificationRoutes);
       app.use('/logs', logsRoute);
+      app.use('/api', smsRoutes);
       
       app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);
