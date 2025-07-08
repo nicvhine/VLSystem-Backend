@@ -119,13 +119,14 @@ module.exports = (db) => {
   });
 
   // GET ALL USERS
-  router.get('/', async (req, res) => {
+  router.get('/', authenticateToken, async (req, res) => {
     try {
       const allUsers = await users.find().toArray();
       const mappedUsers = allUsers.map(u => ({
         userId: u.userId || u._id.toString(),
         name: u.name,
         email: u.email,
+        phoneNumber: u.phoneNumber,
         role: u.role,
         username: u.username,
       }));
@@ -139,10 +140,10 @@ module.exports = (db) => {
 // ADD NEW USER
 router.post("/", authenticateToken, async (req, res) => {
   try {
-    const { name, email, role } = req.body;
+    const { name, email, phoneNumber, role } = req.body;
     const actor = req.user?.username;
 
-    if (!name || !email || !role) {
+    if (!name || !email || !phoneNumber || !role) {
       return res.status(400).json({ message: "All fields are required." });
     }
 
@@ -183,6 +184,7 @@ router.post("/", authenticateToken, async (req, res) => {
       userId,
       name,
       email: email.toLowerCase(),
+      phoneNumber,
       role,
       username,
       password: hashedPassword,
@@ -204,6 +206,7 @@ router.post("/", authenticateToken, async (req, res) => {
       userId: user.userId,
       name: user.name,
       email: user.email,
+      phoneNumber: user.phoneNumber,
       role: user.role,
       username: user.username,
       profilePic: user.profilePic || null
@@ -213,8 +216,6 @@ router.post("/", authenticateToken, async (req, res) => {
       password: defaultPassword,
     }
   });
-
-
 
 
   } catch (error) {
@@ -292,6 +293,50 @@ router.delete('/:id', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Failed to fetch collectors:', err);
     res.status(500).json({ error: 'Failed to load collectors' });
+  }
+});
+
+router.post('/check-email', async (req, res) => {
+  const { email } = req.body;
+  if (!email) return res.status(400).json({ error: 'Email is required' });
+
+  try {
+    const existingUser = await db.collection('users').findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({ error: 'Email already in use.' });
+    }
+    return res.status(200).json({ message: 'Email is available' });
+  } catch (err) {
+    console.error('Error checking email:', err);
+    return res.status(500).json({ error: 'Server error' });
+  }
+});
+
+router.put('/:userId/update-email', async (req, res) => {
+  const { userId } = req.params;
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ error: 'Email is required' });
+  }
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  try {
+    const existingUser = await db.collection('users').findOne({ email: normalizedEmail });
+    if (existingUser && existingUser.userId !== userId) {
+      return res.status(409).json({ error: 'Email already in use.' });
+    }
+
+    await db.collection('users').updateOne(
+      { userId },
+      { $set: { email: normalizedEmail } }
+    );
+
+    res.status(200).json({ message: 'Email updated successfully' });
+  } catch (error) {
+    console.error('Failed to update email:', error);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
