@@ -378,51 +378,47 @@ router.put('/:userId/update-phoneNumber', async (req, res) => {
 });
 
 router.put('/:userId', async (req, res) => {
-  const { userId } = req.params;
-  const { name, email, phoneNumber, role } = req.body;
+    const { userId } = req.params;
+    const { name, email, phoneNumber, role } = req.body;
 
-  // At least one field must be present
-  if (!name && !email && !phoneNumber && !role) {
-    return res.status(400).json({ message: 'At least one field must be provided for update.' });
-  }
-
-  console.log("Updating userId:", userId);
-
-  try {
-    const updateFields = {
-      updatedAt: new Date(),
-    };
-
-    if (name) updateFields.name = name;
-    if (email) updateFields.email = email;
-    if (phoneNumber) updateFields.phoneNumber = phoneNumber;
-    if (role) updateFields.role = role;
-
-    // Use correct option: returnDocument = 'after' (Mongo v4+)
-    const result = await db.collection('users').findOneAndUpdate(
-      { userId: userId.toString() },
-      { $set: updateFields },
-      { returnDocument: 'after' }  // <- important: ensures result.value is the updated doc
-    );
-
-    if (!result.value) {
-      console.log("No user found for ID:", userId);
-      return res.status(404).json({ message: 'User not found' });
+    if (!name && !email && !phoneNumber && !role) {
+      return res.status(400).json({ message: 'At least one field must be provided for update.' });
     }
 
-    return res.status(200).json({
-      message: 'User updated successfully',
-      user: result.value,
-    });
-  } catch (error) {
-    console.error('Failed to update user:', error);
-    return res.status(500).json({ message: 'Server error' });
-  }
-});
+    try {
+      console.log("Updating userId:", userId);
 
+      const updateFields = {
+        updatedAt: new Date(),
+      };
 
+      if (name) updateFields.name = name;
+      if (email) updateFields.email = email;
+      if (phoneNumber) updateFields.phoneNumber = phoneNumber;
+      if (role) updateFields.role = role;
 
+      const updateResult = await db.collection('users').updateOne(
+        { userId: userId }, 
+        { $set: updateFields }
+      );
 
+      if (updateResult.matchedCount === 0) {
+        console.log("No user found for ID:", userId);
+        return res.status(404).json({ message: 'User not found' });
+      }
+
+      const updatedUser = await db.collection('users').findOne({ userId: userId });
+
+      return res.status(200).json({
+        message: 'User updated successfully',
+        user: updatedUser,
+      });
+
+    } catch (error) {
+      console.error('Failed to update user:', error);
+      return res.status(500).json({ message: 'Server error' });
+    }
+  });
 
   return router;
 };

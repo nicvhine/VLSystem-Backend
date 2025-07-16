@@ -1,11 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const { Vonage } = require('@vonage/server-sdk');
+const axios = require('axios');
 
-const vonage = new Vonage({
-  apiKey: '6ab8cc1f',
-  apiSecret: 'JRHMoN1ENtq9usyW',
-});
+const SEMAPHORE_API_KEY = 'd5d9585a8d91b2a5bf7d8a4b3f8dc9ec';
 
 const formatPhoneNumber = (number) => {
   if (number.startsWith('0')) {
@@ -17,17 +14,25 @@ const formatPhoneNumber = (number) => {
 router.post('/send-sms', async (req, res) => {
   const { phoneNumber, code } = req.body;
 
-  const from = 'VISTULA';
   const to = formatPhoneNumber(phoneNumber);
-  const text = `OTP: ${code}. Valid until ${new Date(Date.now() + 15 * 60000).toLocaleTimeString()}. Do not share this code.`;
+  const message = `OTP: ${code}. Valid until ${new Date(Date.now() + 15 * 60000).toLocaleTimeString()}. Do not share this code.`;
 
   try {
-    const response = await vonage.sms.send({ to, from, text });
-    console.log('SMS sent successfully:', response);
-    res.status(200).json({ success: true });
+    const response = await axios.post('https://api.semaphore.co/api/v4/messages', {
+      apikey: SEMAPHORE_API_KEY,
+      number: to,
+      message: message,
+      sendername: 'VISTULA' 
+    });
+
+    console.log('SMS sent successfully:', response.data);
+    res.status(200).json({ success: true, data: response.data });
   } catch (error) {
-    console.error('SMS send error:', error);
-    res.status(500).json({ success: false, error: error.message || 'Failed to send SMS' });
+    console.error('SMS send error:', error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data || error.message || 'Failed to send SMS'
+    });
   }
 });
 
