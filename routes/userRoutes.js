@@ -298,7 +298,7 @@ router.delete('/:id', authenticateToken, async (req, res) => {
 
     router.get('/collectors', async (req, res) => {
   try {
-    const collectors = await db.collection('users').find({ role: 'Collector' }).toArray();
+    const collectors = await db.collection('users').find({ role: 'collector' }).toArray();
     const names = collectors.map(c => c.name);
     res.json(names);
   } catch (err) {
