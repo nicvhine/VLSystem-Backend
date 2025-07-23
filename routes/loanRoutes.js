@@ -254,6 +254,34 @@ module.exports = (db) => {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+  // Get all loans for a borrower (for navigation)
+  router.get('/borrower-loans/:borrowersId', async (req, res) => {
+    const { borrowersId } = req.params;
+  
+    try {
+      const loans = await db.collection('loans').find({
+        borrowersId
+      }).sort({ dateDisbursed: -1 }).toArray(); // Sort by latest first
+  
+      if (!loans || loans.length === 0) {
+        return res.status(404).json({ error: 'No loans found for this borrower.' });
+      }
+  
+      // Add payment progress to each loan
+      const loansWithProgress = loans.map(loan => {
+        const paymentProgress = loan.totalPayable > 0
+          ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
+          : 0;
+        return { ...loan, paymentProgress };
+      });
+  
+      res.json(loansWithProgress);
+    } catch (err) {
+      console.error('Error fetching loans for borrower:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
   
   router.get("/", authenticateToken, async (req, res) => {
   try {

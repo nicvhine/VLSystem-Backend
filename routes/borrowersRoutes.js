@@ -60,6 +60,21 @@ const isMatch = await bcrypt.compare(password, borrower.password);
 
   });
 
+//GET BORROWER BY ID
+router.get('/:id', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const borrower = await borrowers.findOne({ borrowersId: id });
+    if (!borrower) {
+      return res.status(404).json({ error: "Borrower not found" });
+    }
+    res.json(borrower);
+  } catch (error) {
+    console.error("Error fetching borrower:", error);
+    res.status(500).json({ error: "Failed to fetch borrower" });
+  }
+});
+
 //ADD BORROWER
  router.post("/", async (req, res) => {
   try {
