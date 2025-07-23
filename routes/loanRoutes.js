@@ -115,7 +115,6 @@ module.exports = (db) => {
         const dueDate = new Date(disbursedDate);
         dueDate.setMonth(dueDate.getMonth() + i + 1);
 
-        // Adjust for edge case when month rolls over
         if (dueDate.getDate() !== disbursedDate.getDate()) {
           dueDate.setDate(0); 
           dueDate.setDate(0);
@@ -156,7 +155,6 @@ module.exports = (db) => {
   const { borrowersId } = req.params;
 
   try {
-    // Step 1: Get the latest accepted loan application
     const application = await db.collection("loan_applications").findOne(
       { borrowersId: borrowersId, status: "Accepted" },
       { sort: { dateCreated: -1 } }
@@ -166,13 +164,11 @@ module.exports = (db) => {
       return res.status(404).json({ message: 'No accepted loan application found for reloan.' });
     }
 
-    // Step 2: Get borrower details
     const borrower = await db.collection("borrowers_account").findOne({ borrowersId });
     if (!borrower) {
       return res.status(404).json({ message: 'Borrower not found.' });
     }
 
-    // Step 3: Get latest active loan (if any)
     const activeLoan = await db.collection("loans").findOne({
       borrowersId,
       status: "Active"
@@ -180,21 +176,17 @@ module.exports = (db) => {
 
     let unpaidBalance = 0;
     if (activeLoan) {
-      // Step 4: Close the active loan
       await db.collection("loans").updateOne(
         { loanId: activeLoan.loanId },
         { $set: { status: "Closed", closedAt: new Date() } }
       );
 
-      // Step 5: Capture unpaid balance
       unpaidBalance = activeLoan.balance || 0;
     }
 
-    // Step 6: Generate new loan ID
     const count = await db.collection("loans").countDocuments();
     const loanId = "LN" + String(count + 1).padStart(5, "0");
 
-    // Step 7: Compute values
     const appLoanAmount = application.appLoanAmount;
     const appInterest = application.appInterest;
     const appLoanTerms = application.appLoanTerms;
@@ -204,7 +196,6 @@ module.exports = (db) => {
     const totalPayable = principal + totalInterest;
     const monthlyDue = totalPayable / appLoanTerms;
 
-    // Step 8: Create reloan document
     const newLoan = {
       loanId,
       borrowerId: borrowersId,

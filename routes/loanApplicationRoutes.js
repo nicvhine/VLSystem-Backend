@@ -116,7 +116,6 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
       appInterest
     } = req.body;
 
-    // Fetch most recent application for the borrower
     const latestApplication = await loanApplications.findOne(
       { borrowersId },
       { sort: { dateApplied: -1 } }
@@ -132,7 +131,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
 
     const reloanApplication = {
   applicationId,
-  borrowersId, // ✅ from localStorage (send this from frontend),
+  borrowersId, 
   appName: latestApplication.appName,
   appDob: latestApplication.appDob,
   appContact: latestApplication.appContact,
