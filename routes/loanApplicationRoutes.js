@@ -32,8 +32,7 @@ module.exports = (db) => {
         appTypeBusiness, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
-        borrowersId // Added borrowersId
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences
       } = req.body;
 
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms ) {
@@ -80,11 +79,6 @@ module.exports = (db) => {
         dateApplied: new Date()
       };
 
-      // Conditionally add borrowersId if present
-      if (borrowersId) {
-        newApplication.borrowersId = borrowersId;
-      }
-
       if (newApplication.status === "Disbursed") {
         newApplication.dateDisbursed = new Date();
       }
@@ -122,8 +116,7 @@ module.exports = (db) => {
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
-        collateralType, collateralValue, collateralDescription, ownershipStatus,
-        borrowersId // Added borrowersId
+        collateralType, collateralValue, collateralDescription, ownershipStatus
       } = req.body;
 
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
@@ -165,11 +158,6 @@ module.exports = (db) => {
         dateApplied: new Date()
       };
 
-      // Conditionally add borrowersId if present
-      if (borrowersId) {
-        newApplication.borrowersId = borrowersId;
-      }
-
       if (newApplication.status === "Disbursed") {
   newApplication.dateDisbursed = new Date();
 }
@@ -207,8 +195,7 @@ module.exports = (db) => {
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
-        repaymentSchedule, specialConditions, isCustomTerms,
-        borrowersId // Added borrowersId
+        repaymentSchedule, specialConditions, isCustomTerms
       } = req.body;
 
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
@@ -247,11 +234,6 @@ module.exports = (db) => {
         status: "Pending",
         dateApplied: new Date()
       };
-
-      // Conditionally add borrowersId if present
-      if (borrowersId) {
-        newApplication.borrowersId = borrowersId;
-      }
 
       if (newApplication.status === "Disbursed") {
   newApplication.dateDisbursed = new Date();
@@ -356,7 +338,6 @@ router.get("/monthly-loan-stats", async (req, res) => {
             ],
           },
         },
-
       },
       {
         $sort: { _id: 1 },
