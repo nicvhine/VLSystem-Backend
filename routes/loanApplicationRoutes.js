@@ -105,6 +105,81 @@ module.exports = (db) => {
     }
   });
 
+ // RELOAN WITHOUT COLLATERAL
+router.post("/without/reloan/:borrowersId", async (req, res) => {
+  try {
+    const { borrowersId } = req.params;
+    const {
+      appLoanPurpose,
+      appLoanAmount,
+      appLoanTerms,
+      appInterest
+    } = req.body;
+
+    // Fetch most recent application for the borrower
+    const latestApplication = await loanApplications.findOne(
+      { borrowersId },
+      { sort: { dateApplied: -1 } }
+    );
+
+    if (!latestApplication) {
+      return res.status(404).json({ error: "No previous application found for this borrower." });
+    }
+
+    const applicationId = await generateApplicationId();
+    const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
+    const totalPayable = appLoanAmount + totalInterest;
+
+    const reloanApplication = {
+  applicationId,
+  borrowersId, // ✅ from localStorage (send this from frontend),
+  appName: latestApplication.appName,
+  appDob: latestApplication.appDob,
+  appContact: latestApplication.appContact,
+  appEmail: latestApplication.appEmail,
+  appMarital: latestApplication.appMarital,
+  appChildren: latestApplication.appChildren,
+  appSpouseName: latestApplication.appSpouseName,
+  appSpouseOccupation: latestApplication.appSpouseOccupation,
+  appAddress: latestApplication.appAddress,
+  appMonthlyIncome: latestApplication.appMonthlyIncome,
+  sourceOfIncome: latestApplication.sourceOfIncome,
+  appLoanPurpose,
+  appLoanAmount,
+  appLoanTerms,
+  appInterest,
+  totalPayable: appLoanAmount + (appLoanAmount * (appInterest / 100) * appLoanTerms),
+  status: "Pending",
+  hasCollateral: false,
+  loanType: "Reloan Without Collateral",
+  dateApplied: new Date()
+};
+
+
+if (latestApplication.sourceOfIncome === "business") {
+  reloanApplication.appTypeBusiness = latestApplication.appTypeBusiness;
+  reloanApplication.appDateStarted = latestApplication.appDateStarted;
+  reloanApplication.appBusinessLoc = latestApplication.appBusinessLoc;
+} else if (latestApplication.sourceOfIncome === "employed") {
+  reloanApplication.appOccupation = latestApplication.appOccupation;
+  reloanApplication.appEmploymentStatus = latestApplication.appEmploymentStatus;
+  reloanApplication.appCompanyName = latestApplication.appCompanyName;
+}
+
+
+    await loanApplications.insertOne(reloanApplication);
+    res.status(201).json({
+      message: "Reloan (no collateral) submitted successfully",
+      application: reloanApplication
+    });
+  } catch (error) {
+    console.error("Error in /loan-applications/without/reloan:", error);
+    res.status(500).json({ error: "Failed to submit reloan application." });
+  }
+});
+
+
+
   //LOAN WITH COLLATERAL
   router.post("/with", async (req, res) => {
     try {
