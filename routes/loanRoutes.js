@@ -352,4 +352,3 @@ router.get('/:loanId', async (req, res) => {
 
   return router;
 };
-
