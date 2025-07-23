@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../middleware/auth');
 const logAction = require('../utils/log');
-
+const { ObjectId } = require("mongodb");
 function padId(num) {
   return num.toString().padStart(5, '0');
 }
@@ -151,6 +151,94 @@ module.exports = (db) => {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+
+ router.post('/generate-reloan/:borrowersId', async (req, res) => {
+  const { borrowersId } = req.params;
+
+  try {
+    // Step 1: Get the latest accepted loan application
+    const application = await db.collection("loan_applications").findOne(
+      { borrowersId: borrowersId, status: "Accepted" },
+      { sort: { dateCreated: -1 } }
+    );
+
+    if (!application) {
+      return res.status(404).json({ message: 'No accepted loan application found for reloan.' });
+    }
+
+    // Step 2: Get borrower details
+    const borrower = await db.collection("borrowers_account").findOne({ borrowersId });
+    if (!borrower) {
+      return res.status(404).json({ message: 'Borrower not found.' });
+    }
+
+    // Step 3: Get latest active loan (if any)
+    const activeLoan = await db.collection("loans").findOne({
+      borrowersId,
+      status: "Active"
+    });
+
+    let unpaidBalance = 0;
+    if (activeLoan) {
+      // Step 4: Close the active loan
+      await db.collection("loans").updateOne(
+        { loanId: activeLoan.loanId },
+        { $set: { status: "Closed", closedAt: new Date() } }
+      );
+
+      // Step 5: Capture unpaid balance
+      unpaidBalance = activeLoan.balance || 0;
+    }
+
+    // Step 6: Generate new loan ID
+    const count = await db.collection("loans").countDocuments();
+    const loanId = "LN" + String(count + 1).padStart(5, "0");
+
+    // Step 7: Compute values
+    const appLoanAmount = application.appLoanAmount;
+    const appInterest = application.appInterest;
+    const appLoanTerms = application.appLoanTerms;
+
+    const principal = appLoanAmount + unpaidBalance;
+    const totalInterest = principal * (appInterest / 100) * appLoanTerms;
+    const totalPayable = principal + totalInterest;
+    const monthlyDue = totalPayable / appLoanTerms;
+
+    // Step 8: Create reloan document
+    const newLoan = {
+      loanId,
+      borrowerId: borrowersId,
+      principal,
+      interestRate: appInterest,
+      termsInMonths: appLoanTerms,
+      totalPayable,
+      monthlyDue,
+      paidAmount: 0,
+      balance: totalPayable,
+      status: "Pending",
+      type: "reloan",
+      dateReleased: null,
+      dateCreated: new Date(),
+      previousLoanId: activeLoan?.loanId || null,
+    };
+
+    await db.collection("loans").insertOne(newLoan);
+
+    res.status(201).json({
+      message: "Reloan successfully generated",
+      loan: newLoan,
+      previousLoanClosed: activeLoan?.loanId || null,
+      unpaidBalanceTransferred: unpaidBalance
+    });
+
+  } catch (error) {
+    console.error("Error generating reloan:", error);
+    res.status(500).json({ message: "Internal server error" });
+  }
+});
+
+
+
 
   router.get('/loan-stats', authenticateToken, async (req, res) => {
   try {
