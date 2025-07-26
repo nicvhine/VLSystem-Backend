@@ -340,7 +340,10 @@ module.exports = (db) => {
   
     try {
       const loans = await db.collection('loans').find({
-        borrowersId
+        $or: [
+          { borrowersId },
+          { borrowerId: borrowersId }
+        ]
       }).sort({ dateDisbursed: -1 }).toArray(); // Sort by latest first
   
       if (!loans || loans.length === 0) {
