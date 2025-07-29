@@ -466,12 +466,29 @@ if (previousLoan.length > 0) {
         return res.status(404).json({ error: 'No loans found for this borrower.' });
       }
   
-      // Add payment progress to each loan
+      // Add payment progress and update status based on remaining balance
       const loansWithProgress = loans.map(loan => {
         const paymentProgress = loan.totalPayable > 0
           ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
           : 0;
-        return { ...loan, paymentProgress };
+        
+        // Calculate remaining balance
+        const remainingBalance = loan.totalPayable - loan.paidAmount;
+        
+        // Set status based on remaining balance
+        let status;
+        if (remainingBalance <= 0) {
+          status = 'Closed';
+        } else {
+          status = 'In Progress';
+        }
+        
+        return { 
+          ...loan, 
+          paymentProgress,
+          balance: remainingBalance,
+          status
+        };
       });
   
       res.json(loansWithProgress);
