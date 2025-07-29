@@ -32,7 +32,7 @@ module.exports = (db) => {
         appTypeBusiness, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences, 
       } = req.body;
 
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms ) {
@@ -76,7 +76,8 @@ module.exports = (db) => {
         hasCollateral: false,
         loanType: "Regular Loan Without Collateral",
         status: "Pending",
-        dateApplied: new Date()
+        dateApplied: new Date(),
+        isReloan: false
       };
 
       if (newApplication.status === "Disbursed") {
@@ -106,76 +107,61 @@ module.exports = (db) => {
   });
 
  // RELOAN WITHOUT COLLATERAL
-router.post("/without/reloan/:borrowersId", async (req, res) => {
-  try {
-    const { borrowersId } = req.params;
-    const {
-      appLoanPurpose,
-      appLoanAmount,
-      appLoanTerms,
-      appInterest
-    } = req.body;
 
-    const latestApplication = await loanApplications.findOne(
-      { borrowersId },
-      { sort: { dateApplied: -1 } }
-    );
+  router.post("/without/reloan/:borrowersId", async (req, res) => {
+    try {
+      const { borrowersId } = req.params;
 
-    if (!latestApplication) {
-      return res.status(404).json({ error: "No previous application found for this borrower." });
+      // 1. Find borrower's latest loan
+      const recentLoan = await loans.findOne(
+        { borrowersId },
+        { sort: { dateDisbursed: -1 } }
+      );
+
+      if (recentLoan && recentLoan.status === "Active") {
+        // Auto-close the active loan
+        await loans.updateOne(
+          { _id: recentLoan._id },
+          { $set: { status: "Closed", dateClosed: new Date() } }
+        );
+      }
+
+      // 2. Get max applicationId and generate new one
+      const maxApp = await applications
+        .aggregate([
+          { $addFields: { applicationIdNum: { $toInt: "$applicationId" } } },
+          { $sort: { applicationIdNum: -1 } },
+          { $limit: 1 },
+        ])
+        .toArray();
+
+      const lastAppId = maxApp[0]?.applicationIdNum || 0;
+      const newAppId = padId(lastAppId + 1);
+
+      // 3. Create new reloan application
+      const newApplication = {
+        applicationId: newAppId,
+        borrowersId,
+        dateFiled: new Date(),
+        loanType: "Without Collateral",
+        status: "For Releasing",
+        approvedBy: "",
+        dateApproved: "",
+        remarks: "",
+      };
+
+      const result = await applications.insertOne(newApplication);
+
+      res.status(200).json({
+        message: "Reloan application created and previous loan closed (if any).",
+        application: newApplication,
+      });
+    } catch (error) {
+      console.error("Error in /without/reloan/:borrowersId:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
+  });
 
-    const applicationId = await generateApplicationId();
-    const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
-    const totalPayable = appLoanAmount + totalInterest;
-
-    const reloanApplication = {
-  applicationId,
-  borrowersId, 
-  appName: latestApplication.appName,
-  appDob: latestApplication.appDob,
-  appContact: latestApplication.appContact,
-  appEmail: latestApplication.appEmail,
-  appMarital: latestApplication.appMarital,
-  appChildren: latestApplication.appChildren,
-  appSpouseName: latestApplication.appSpouseName,
-  appSpouseOccupation: latestApplication.appSpouseOccupation,
-  appAddress: latestApplication.appAddress,
-  appMonthlyIncome: latestApplication.appMonthlyIncome,
-  sourceOfIncome: latestApplication.sourceOfIncome,
-  appLoanPurpose,
-  appLoanAmount,
-  appLoanTerms,
-  appInterest,
-  totalPayable: appLoanAmount + (appLoanAmount * (appInterest / 100) * appLoanTerms),
-  status: "Pending",
-  hasCollateral: false,
-  loanType: "Reloan Without Collateral",
-  dateApplied: new Date()
-};
-
-
-if (latestApplication.sourceOfIncome === "business") {
-  reloanApplication.appTypeBusiness = latestApplication.appTypeBusiness;
-  reloanApplication.appDateStarted = latestApplication.appDateStarted;
-  reloanApplication.appBusinessLoc = latestApplication.appBusinessLoc;
-} else if (latestApplication.sourceOfIncome === "employed") {
-  reloanApplication.appOccupation = latestApplication.appOccupation;
-  reloanApplication.appEmploymentStatus = latestApplication.appEmploymentStatus;
-  reloanApplication.appCompanyName = latestApplication.appCompanyName;
-}
-
-
-    await loanApplications.insertOne(reloanApplication);
-    res.status(201).json({
-      message: "Reloan (no collateral) submitted successfully",
-      application: reloanApplication
-    });
-  } catch (error) {
-    console.error("Error in /loan-applications/without/reloan:", error);
-    res.status(500).json({ error: "Failed to submit reloan application." });
-  }
-});
 
 
 
