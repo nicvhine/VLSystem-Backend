@@ -11,6 +11,7 @@ module.exports = (db) => {
   router.post('/generate-loan/:applicationId', async (req, res) => {
     const { applicationId } = req.params;
 
+
     try {
       // Step 1: Fetch the loan application
       const application = await db.collection("loan_applications").findOne({ applicationId });
@@ -142,7 +143,6 @@ module.exports = (db) => {
       await db.collection("collections").insertMany(collections);
       res.status(201).json({ message: "Loan created successfully", loan });
 
-      await logAction(db, req.user.username, 'CREATE_LOAN', `Loan ${loanId} created for ${borrower.name}`);
 
 
     } catch (error) {
@@ -154,38 +154,75 @@ module.exports = (db) => {
  router.post('/generate-reloan/:borrowersId', async (req, res) => {
   const { borrowersId } = req.params;
 
+    console.log(`Generating reloan for borrower ${borrowersId}`);
+
+
   try {
-    const application = await db.collection("loan_applications").findOne(
-      { borrowersId: borrowersId, status: "Accepted" },
+    const dbLoans = db.collection("loans");
+    const dbApplications = db.collection("loan_applications");
+    const dbBorrowers = db.collection("borrowers_account");
+
+    const application = await dbApplications.findOne(
+      { borrowersId, status: "Accepted" },
       { sort: { dateCreated: -1 } }
     );
 
     if (!application) {
-      return res.status(404).json({ message: 'No accepted loan application found for reloan.' });
+      return res.status(404).json({ error: 'No accepted application found.' });
     }
 
-    const borrower = await db.collection("borrowers_account").findOne({ borrowersId });
+    const borrower = await dbBorrowers.findOne({ borrowersId });
     if (!borrower) {
-      return res.status(404).json({ message: 'Borrower not found.' });
+      return res.status(404).json({ error: 'Borrower not found.' });
     }
 
-    const activeLoan = await db.collection("loans").findOne({
-      borrowersId,
-      status: "Active"
-    });
+   const previousLoan = await db.collection("loans")
+  .find({ borrowersId, status: { $in: ["Active", "Closed"] } })
+  .sort({ dateDisbursed: -1 })
+  .limit(1)
+  .toArray();
 
-    let unpaidBalance = 0;
-    if (activeLoan) {
-      await db.collection("loans").updateOne(
-        { loanId: activeLoan.loanId },
-        { $set: { status: "Closed", closedAt: new Date() } }
-      );
+let unpaidBalance = 0;
+let previousLoanId = null;
 
-      unpaidBalance = activeLoan.balance || 0;
+if (previousLoan.length > 0) {
+  unpaidBalance = Number(previousLoan[0].balance) || 0;
+  previousLoanId = previousLoan[0].loanId;
+
+  // Mark previous loan as closed if it's still active
+  if (previousLoan[0].status === "Active") {
+    await db.collection("loans").updateOne(
+      { loanId: previousLoanId },
+      { $set: { status: "Closed", closedAt: new Date() } }
+    );
+  }
+}
+
+
+    // Generate new loanId
+    const maxLoan = await db.collection("loans").aggregate([
+      {
+        $addFields: {
+          loanIdNum: {
+            $convert: {
+              input: { $substrBytes: ["$loanId", 1, { $subtract: [{ $strLenBytes: "$loanId" }, 1] }] },
+              to: "int",
+              onError: 0,
+              onNull: 0
+            }
+          }
+        }
+      },
+      { $sort: { loanIdNum: -1 } },
+      { $limit: 1 }
+    ]).toArray();
+
+    let nextId = 1;
+    if (maxLoan.length > 0 && !isNaN(maxLoan[0].loanIdNum)) {
+      nextId = maxLoan[0].loanIdNum + 1;
     }
+    const loanId = 'L' + padId(nextId);
 
-    const count = await db.collection("loans").countDocuments();
-    const loanId = "LN" + String(count + 1).padStart(5, "0");
 
     const appLoanAmount = application.appLoanAmount;
     const appInterest = application.appInterest;
@@ -198,33 +235,111 @@ module.exports = (db) => {
 
     const newLoan = {
       loanId,
-      borrowerId: borrowersId,
+      applicationId: application.applicationId,
+      name: borrower.name,
+      dateOfBirth: application.appDob,
+      maritalStatus: application.appMarital,
+      noOfChildren: application.appChildren,
+      borrowersId: borrower.borrowersId,
+      address: application.appAdress,
+      mobileNumber: application.appContact,
+      email: application.appEmail,
+      incomeSource: application.sourceOfIncome,
+      monthlyIncome: application.appMonthlyIncome,
+      occupation: application.appOccupation,
+      borrowerUsername: borrower.username,
       principal,
+      originalPrincipal: appLoanAmount,
+  carriedOverBalance: unpaidBalance,
+    previousLoanId,
       interestRate: appInterest,
       termsInMonths: appLoanTerms,
+      loanType: application.loanType || "Reloan",
       totalPayable,
       monthlyDue,
       paidAmount: 0,
       balance: totalPayable,
-      status: "Pending",
+      status: "Active",
+      dateReleased: new Date(),
+      dateDisbursed: new Date(),
+      previousLoanId,
       type: "reloan",
-      dateReleased: null,
-      dateCreated: new Date(),
-      previousLoanId: activeLoan?.loanId || null,
     };
 
-    await db.collection("loans").insertOne(newLoan);
+    await dbLoans.insertOne(newLoan);
+
+    // Generate collections
+    const collections = [];
+    const disbursedDate = new Date();
+
+    for (let i = 0; i < appLoanTerms; i++) {
+      const dueDate = new Date(disbursedDate);
+      dueDate.setMonth(dueDate.getMonth() + i + 1);
+      if (dueDate.getDate() !== disbursedDate.getDate()) {
+        dueDate.setDate(0);
+      }
+
+      collections.push({
+        referenceNumber: `${loanId}-C${i + 1}`,
+        loanId,
+        borrowersId,
+        name: borrower.name,
+        collectionNumber: i + 1,
+        dueDate,
+        periodAmount: monthlyDue,
+        totalPaidAmount: 0,
+        paidAmount: 0,
+        balance: monthlyDue,
+        status: 'Unpaid',
+        collector: borrower.assignedCollector,
+        note: '',
+        createdAt: new Date(),
+      });
+    }
+
+    await db.collection("collections").insertMany(collections);
 
     res.status(201).json({
       message: "Reloan successfully generated",
       loan: newLoan,
-      previousLoanClosed: activeLoan?.loanId || null,
+      previousLoanClosed: previousLoanId || null,
+
       unpaidBalanceTransferred: unpaidBalance
     });
 
+    await logAction(db, req.user.username, 'CREATE_RELOAN', `Reloan ${loanId} created for ${borrower.name}`);
+
   } catch (error) {
     console.error("Error generating reloan:", error);
-    res.status(500).json({ message: "Internal server error" });
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
+   // Close loan by updating its status
+  router.put('/close/:loanId', async (req, res) => {
+  const { loanId } = req.params;
+  const dbLoans = db.collection("loans"); // FIXED
+
+  try {
+    const result = await dbLoans.updateOne(
+      { loanId },
+      {
+        $set: {
+          status: "Closed",
+          closedAt: new Date()
+        }
+      }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Loan not found" });
+    }
+
+    res.json({ message: "Loan successfully closed" });
+  } catch (err) {
+    console.error("Error closing loan:", err);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -318,6 +433,7 @@ module.exports = (db) => {
         borrowersId,
         status: 'Active'
       });
+
   
       if (!loan) {
         return res.status(404).json({ error: 'No active loan found for this borrower.' });
