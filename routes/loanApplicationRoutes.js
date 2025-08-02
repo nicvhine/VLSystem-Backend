@@ -106,61 +106,94 @@ module.exports = (db) => {
     }
   });
 
- // RELOAN WITHOUT COLLATERAL
+// RELOAN WITHOUT COLLATERAL
+router.post("/without/reloan/:borrowersId", async (req, res) => {
+  const { borrowersId } = req.params; 
+  const borrowers = db.collection("borrowers_account");
+  const loans = db.collection("loans");
 
-  router.post("/without/reloan/:borrowersId", async (req, res) => {
-    try {
-      const { borrowersId } = req.params;
+  try {
+    const borrowersInfo = await borrowers.findOne({ borrowersId });
 
-      // 1. Find borrower's latest loan
-      const recentLoan = await loans.findOne(
-        { borrowersId },
-        { sort: { dateDisbursed: -1 } }
-      );
-
-      if (recentLoan && recentLoan.status === "Active") {
-        // Auto-close the active loan
-        await loans.updateOne(
-          { _id: recentLoan._id },
-          { $set: { status: "Closed", dateClosed: new Date() } }
-        );
-      }
-
-      // 2. Get max applicationId and generate new one
-      const maxApp = await applications
-        .aggregate([
-          { $addFields: { applicationIdNum: { $toInt: "$applicationId" } } },
-          { $sort: { applicationIdNum: -1 } },
-          { $limit: 1 },
-        ])
-        .toArray();
-
-      const lastAppId = maxApp[0]?.applicationIdNum || 0;
-      const newAppId = padId(lastAppId + 1);
-
-      // 3. Create new reloan application
-      const newApplication = {
-        applicationId: newAppId,
-        borrowersId,
-        dateFiled: new Date(),
-        loanType: "Without Collateral",
-        status: "For Releasing",
-        approvedBy: "",
-        dateApproved: "",
-        remarks: "",
-      };
-
-      const result = await applications.insertOne(newApplication);
-
-      res.status(200).json({
-        message: "Reloan application created and previous loan closed (if any).",
-        application: newApplication,
-      });
-    } catch (error) {
-      console.error("Error in /without/reloan/:borrowersId:", error);
-      res.status(500).json({ error: "Internal server error" });
+    if (!borrowersInfo) {
+      return res.status(404).json({ error: "Borrower information not found." });
     }
-  });
+
+    const {
+      appReloanType,
+      appLoanPurpose,
+      appLoanAmount,
+      appLoanTerms,
+      appInterest,
+    } = req.body;
+
+    if (!appLoanPurpose || !appLoanAmount || !appLoanTerms || !appInterest) {
+      return res.status(400).json({ error: "All reloan fields must be provided." });
+    }
+
+    const latestLoan = await loans.findOne(
+      { borrowersId, status: "Active" },
+      { sort: { dateDisbursed: -1 } }
+    );
+
+    if (!latestLoan) {
+      return res.status(404).json({ error: "No active loan found for this borrower." });
+    }
+
+    const applicationId = await generateApplicationId();
+
+    const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
+    const totalPayable = appLoanAmount + totalInterest;
+
+    const reloanApplication = {
+      applicationId,
+      borrowersId,
+      appName: latestLoan.appName,
+      appDob: latestLoan.appDob,
+      appContact: latestLoan.appContact,
+      appEmail: latestLoan.appEmail,
+      appMarital: latestLoan.appMarital,
+      appChildren: latestLoan.appChildren,
+      appSpouseName: latestLoan.appSpouseName,
+      appSpouseOccupation: latestLoan.appSpouseOccupation,
+      appAddress: latestLoan.appAddress,
+      appMonthlyIncome: latestLoan.appMonthlyIncome,
+      sourceOfIncome: latestLoan.sourceOfIncome,
+      appLoanPurpose,
+      appLoanAmount,
+      appLoanTerms,
+      appInterest,
+      totalPayable,
+      loanType: "Reloan Without Collateral",
+      hasCollateral: false,
+      isReloan: true,
+      appReloanType,
+      status: "Pending",
+      dateApplied: new Date(),
+    };
+
+    if (latestLoan.sourceOfIncome === "business") {
+      reloanApplication.appTypeBusiness = latestLoan.appTypeBusiness;
+      reloanApplication.appDateStarted = latestLoan.appDateStarted;
+      reloanApplication.appBusinessLoc = latestLoan.appBusinessLoc;
+    } else if (latestLoan.sourceOfIncome === "employed") {
+      reloanApplication.appOccupation = latestLoan.appOccupation;
+      reloanApplication.appEmploymentStatus = latestLoan.appEmploymentStatus;
+      reloanApplication.appCompanyName = latestLoan.appCompanyName;
+    }
+
+    await loanApplications.insertOne(reloanApplication);
+
+    res.status(201).json({
+      message: "Reloan application submitted successfully.",
+      application: reloanApplication,
+    });
+
+  } catch (error) {
+    console.error("Error in /loan-applications/without/reloan:", error);
+    res.status(500).json({ error: "Failed to submit reloan application." });
+  }
+});
 
 
 
