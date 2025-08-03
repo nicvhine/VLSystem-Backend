@@ -2,10 +2,33 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+
 const jwt = require('jsonwebtoken'); 
 require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
 const authenticateToken = require('../middleware/auth');
+
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `profile_${Date.now()}${ext}`);
+  },
+});
+
+const upload = multer({ storage });
+
+
 
 //GENERATE USERNAME
 function generateUsername(fullName) {
@@ -24,6 +47,28 @@ function padId(num) {
 
 module.exports = (db) => {
   const borrowers = db.collection("borrowers_account");
+
+   router.post('/:borrowersId/upload-profile', upload.single('profilePic'), async (req, res) => {
+  const { borrowersId } = req.params;
+
+  if (!req.file) {
+    return res.status(400).json({ error: 'No file uploaded' });
+  }
+
+  const profilePic = `/uploads/${req.file.filename}`;
+
+  try {
+    await db.collection('users').updateOne(
+      { borrowersId },
+      { $set: { profilePic } }
+    );
+
+    res.status(200).json({ message: 'Profile uploaded successfully', profilePic });
+  } catch (err) {
+    console.error('Error saving profile pic:', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
 
 // LOGIN
 router.post("/login", async (req, res) => {
@@ -48,11 +93,13 @@ const isMatch = await bcrypt.compare(password, borrower.password);
       role: "borrower"},
     JWT_SECRET,
     {expiresIn: '1h'});
+
   res.json({
   message: "Login successful",
   name: borrower.name,
   username: borrower.username,
   role: "borrower",
+  profilePic: borrower.profilePic || null,
   borrowersId: borrower.borrowersId,
   isFirstLogin: borrower.isFirstLogin !== false, 
   token
