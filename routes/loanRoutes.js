@@ -152,7 +152,7 @@ module.exports = (db) => {
   });
 
  router.post('/generate-reloan/:borrowersId', async (req, res) => {
-  const { borrowersId } = req.params;
+  const { borrowersId} = req.params;
 
     console.log(`Generating reloan for borrower ${borrowersId}`);
 
@@ -227,11 +227,22 @@ if (previousLoan.length > 0) {
     const appLoanAmount = application.appLoanAmount;
     const appInterest = application.appInterest;
     const appLoanTerms = application.appLoanTerms;
+    const appReloanType = application.appReloanType || 'Add-To-Principal'; 
 
-    const principal = appLoanAmount + unpaidBalance;
+    let principal, releasedAmount;
+
+    if (appReloanType === 'Net-Proceeds') {
+      principal = appLoanAmount;
+      releasedAmount = appLoanAmount - unpaidBalance;
+    } else {
+      principal = appLoanAmount + unpaidBalance;
+      releasedAmount = principal;
+    }
+
     const totalInterest = principal * (appInterest / 100) * appLoanTerms;
     const totalPayable = principal + totalInterest;
     const monthlyDue = totalPayable / appLoanTerms;
+
 
     const newLoan = {
       loanId,
@@ -250,11 +261,12 @@ if (previousLoan.length > 0) {
       borrowerUsername: borrower.username,
       principal,
       originalPrincipal: appLoanAmount,
-  carriedOverBalance: unpaidBalance,
-    previousLoanId,
+      carriedOverBalance: unpaidBalance,
+      previousLoanId,
       interestRate: appInterest,
       termsInMonths: appLoanTerms,
       loanType: application.loanType || "Reloan",
+      appReloanType,
       totalPayable,
       monthlyDue,
       paidAmount: 0,
@@ -466,29 +478,12 @@ if (previousLoan.length > 0) {
         return res.status(404).json({ error: 'No loans found for this borrower.' });
       }
   
-      // Add payment progress and update status based on remaining balance
+      // Add payment progress to each loan
       const loansWithProgress = loans.map(loan => {
         const paymentProgress = loan.totalPayable > 0
           ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
           : 0;
-        
-        // Calculate remaining balance
-        const remainingBalance = loan.totalPayable - loan.paidAmount;
-        
-        // Set status based on remaining balance
-        let status;
-        if (remainingBalance <= 0) {
-          status = 'Closed';
-        } else {
-          status = 'In Progress';
-        }
-        
-        return { 
-          ...loan, 
-          paymentProgress,
-          balance: remainingBalance,
-          status
-        };
+        return { ...loan, paymentProgress };
       });
   
       res.json(loansWithProgress);
