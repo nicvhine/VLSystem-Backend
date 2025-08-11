@@ -1,4 +1,5 @@
-  const express = require('express');
+  require('dotenv').config();
+  express = require('express');
   const cors = require('cors');
   const { MongoClient } = require('mongodb');
   const path = require('path');
@@ -18,7 +19,7 @@
   }));
 
 
-  const uri = 'mongodb+srv://nichole:nichole@cluster0.gxpgomv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+  const uri = process.env.MONGODB_URI;
   const client = new MongoClient(uri);
 
   async function getNextSequence(db, name) {

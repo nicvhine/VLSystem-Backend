@@ -1,7 +1,11 @@
+require('dotenv').config();
 const express = require('express');
 const router = express.Router();
 const { MongoClient, ObjectId } = require('mongodb');
 const paymongoService = require('../services/paymongoService');
+
+module.exports = function (db) {
+
 
 const uri = process.env.MONGODB_URI;
 
@@ -235,4 +239,6 @@ router.get('/test-objectid', async (req, res) => {
     }
 });
 
-module.exports = router;
+return router;
+};
+
