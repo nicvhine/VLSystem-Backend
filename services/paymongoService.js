@@ -85,6 +85,29 @@ class PayMongoService {
             throw new Error('Failed to retrieve payment intent');
         }
     }
+
+    // Create Checkout Session for GCash and QRPH
+    async createCheckoutSession(amount, currency = 'PHP', description = 'Loan Payment', paymentMethods = ['gcash', 'qrph']) {
+        try {
+            const response = await axios.post(`${this.baseURL}/checkout_sessions`, {
+                data: {
+                    attributes: {
+                        amount: amount * 100, // PayMongo expects amount in centavos
+                        currency,
+                        description,
+                        payment_method_types: paymentMethods,
+                        success_url: process.env.PAYMONGO_SUCCESS_URL,
+                        cancel_url: process.env.PAYMONGO_CANCEL_URL
+                    }
+                }
+            }, { headers: this.headers });
+
+            return response.data;
+        } catch (error) {
+            console.error('PayMongo createCheckoutSession error:', error.response?.data || error.message);
+            throw new Error('Failed to create checkout session');
+        }
+    }
 }
 
 module.exports = new PayMongoService();

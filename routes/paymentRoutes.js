@@ -221,6 +221,19 @@ router.get('/loan-details/:loanId', async (req, res) => {
     }
 });
 
+// Create a checkout session for GCash and QRPH
+router.post('/create-checkout-session', async (req, res) => {
+    const { amount, description } = req.body;
+
+    try {
+        const session = await paymongoService.createCheckoutSession(amount, 'PHP', description);
+        res.status(200).json({ session });
+    } catch (error) {
+        console.error('Error creating checkout session:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // Simple test endpoint to verify ObjectId works
 router.get('/test-objectid', async (req, res) => {
     try {
