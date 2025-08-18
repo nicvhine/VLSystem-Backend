@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const router = express.Router();
 const { MongoClient, ObjectId } = require('mongodb');
-const paymongoService = require('../services/paymongoService');
+const PayMongoService = require('../services/paymongoService');
 
 module.exports = function (db) {
 
@@ -222,17 +222,20 @@ router.get('/loan-details/:loanId', async (req, res) => {
 });
 
 // Create a checkout session for GCash and QRPH
-router.post('/create-checkout-session', async (req, res) => {
-    const { amount, description } = req.body;
-
+router.post("/create-checkout-session", async (req, res) => {
     try {
-        const session = await paymongoService.createCheckoutSession(amount, 'PHP', description);
-        res.status(200).json({ session });
+      const { amount } = req.body; 
+      const checkoutSession = await PayMongoService.createCheckoutSession(amount);
+      res.json(checkoutSession);
     } catch (error) {
-        console.error('Error creating checkout session:', error);
-        res.status(500).json({ error: error.message });
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ error: "Failed to create checkout session" });
     }
-});
+  });
+  
+  
+  
+  
 
 // Simple test endpoint to verify ObjectId works
 router.get('/test-objectid', async (req, res) => {
