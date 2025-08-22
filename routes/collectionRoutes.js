@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
+
 
 module.exports = (db) => {
   // GET payment schedule for a borrower and loan
@@ -228,6 +230,74 @@ module.exports = (db) => {
     } catch (err) {
       console.error('Failed to fetch collectors:', err);
       res.status(500).json({ error: 'Failed to load collectors' });
+    }
+  });
+
+  router.post('/:referenceNumber/paymongo', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { amount, currency } = req.body; // amount in pesos, currency e.g., 'PHP'
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({ error: "Invalid amount." });
+    }
+
+    try {
+      // Fetch collection and loan info
+      const collection = await db.collection('collections').findOne({ referenceNumber });
+      if (!collection) return res.status(404).json({ error: "Collection not found." });
+
+      const loan = await db.collection('loans').findOne({ loanId: collection.loanId });
+      if (!loan) return res.status(404).json({ error: "Loan not found." });
+
+      // PayMongo secret key from environment
+      const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
+      const authHeader = `Basic ${Buffer.from(PAYMONGO_SECRET_KEY + ':').toString('base64')}`;
+
+      // Create Payment Intent
+      const paymentIntentRes = await axios.post(
+        'https://api.paymongo.com/v1/payment_intents',
+        {
+          data: {
+            attributes: {
+              amount: Math.round(amount * 100), // in centavos
+              currency: currency.toLowerCase(),
+              payment_method_allowed: ['gcash'],
+              description: `Loan ${loan.loanId} - Collection ${collection.collectionNumber}`,
+            },
+          },
+        },
+        { headers: { Authorization: authHeader, 'Content-Type': 'application/json' } }
+      );
+
+      const paymentIntent = paymentIntentRes.data.data;
+
+      // Create GCash source for redirect
+      const sourceRes = await axios.post(
+        'https://api.paymongo.com/v1/sources',
+        {
+          data: {
+            attributes: {
+              type: 'gcash',
+              amount: Math.round(amount * 100),
+              currency: currency.toLowerCase(),
+              redirect: {
+                success: `http://localhost:3000/components/borrower/payment-success/${referenceNumber}`,
+                failed: `http://localhost:3000/borrower/payment-failed/${referenceNumber}`,
+              },
+              payment_intent: paymentIntent.id,
+              statement_descriptor: `Loan ${loan.loanId} - Collection ${collection.collectionNumber}`,
+            },
+          },
+        },
+        { headers: { Authorization: authHeader, 'Content-Type': 'application/json' } }
+      );
+
+      const checkoutUrl = sourceRes.data.data.attributes.redirect.checkout_url;
+
+      res.json({ checkout_url: checkoutUrl });
+    } catch (err) {
+      console.error(err.response?.data || err.message);
+      res.status(500).json({ error: 'Failed to create PayMongo payment' });
     }
   });
 
