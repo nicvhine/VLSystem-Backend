@@ -18,7 +18,7 @@
   }));
 
 
-  const uri = 'mongodb+srv://nichole:nichole@cluster0.gxpgomv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
+  const uri = 'mongodb+srv://nichole:Nichole_25@cluster0.gxpgomv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
   const client = new MongoClient(uri);
 
   async function getNextSequence(db, name) {

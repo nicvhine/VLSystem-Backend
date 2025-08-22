@@ -2,6 +2,21 @@ const express = require('express');
 const router = express.Router();
 
 module.exports = (db) => {
+  // GET payment schedule for a borrower and loan
+  router.get('/schedule/:borrowersId/:loanId', async (req, res) => {
+    const { borrowersId, loanId } = req.params;
+    try {
+      const collectionsCol = db.collection('collections');
+      const schedule = await collectionsCol.find({ borrowersId, loanId }).sort({ collectionNumber: 1 }).toArray();
+      if (!schedule || schedule.length === 0) {
+        return res.status(404).json({ error: 'No payment schedule found for this borrower and loan.' });
+      }
+      res.json(schedule);
+    } catch (err) {
+      console.error('Error fetching payment schedule:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 
   // GET COLLECTIONS
   router.get('/', async (req, res) => {
