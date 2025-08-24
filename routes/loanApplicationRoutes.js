@@ -1,8 +1,48 @@
 const express = require('express');
 const router = express.Router();
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "uploads/"); 
+  },
+  filename: function (req, file, cb) {
+    cb(null, Date.now() + path.extname(file.originalname));
+  },
+});
+
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = ["application/pdf", "image/png"];
+  if (allowedTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Only PDF and PNG files are allowed"), false);
+  }
+};
+
+const upload = multer({
+  storage,
+  fileFilter,
+  limits: { fileSize: 5 * 1024 * 1024 }, 
+});
+
 
 function padId(num) {
   return num.toString().padStart(5, '0');
+}
+
+function processUploadedDocs(files) {
+  if (!files || files.length === 0) {
+    throw new Error("At least one document (PDF or PNG) is required.");
+  }
+
+  return files.map((file) => ({
+    fileName: file.originalname,
+    filePath: file.path,
+    mimeType: file.mimetype,
+  }));
 }
 
 module.exports = (db) => {
@@ -22,8 +62,7 @@ module.exports = (db) => {
     return padId(nextAppId);
   }
 
-  // LOAN WITHOUT COLLATERAL
-  router.post("/without", async (req, res) => {
+  router.post("/without", upload.array("documents", 5), async (req, res) => {
     try {
       const {
         sourceOfIncome,
@@ -32,13 +71,15 @@ module.exports = (db) => {
         appTypeBusiness, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences, 
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
       } = req.body;
-
-      if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms ) {
+  
+      const uploadedDocs = processUploadedDocs(req.files);
+  
+      if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
         return res.status(400).json({ error: "All required fields must be provided." });
       }
-
+  
       if (sourceOfIncome === "business") {
         if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
           return res.status(400).json({ error: "Business fields are required for business income source." });
@@ -50,23 +91,22 @@ module.exports = (db) => {
       } else {
         return res.status(400).json({ error: "Invalid source of income." });
       }
-
+  
       if (!Array.isArray(appReferences) || appReferences.length !== 3) {
         return res.status(400).json({ error: "Three references must be provided." });
       }
-
+  
       for (const ref of appReferences) {
         if (!ref.name || !ref.contact || !ref.relation) {
           return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
         }
       }
-
+  
       const applicationId = await generateApplicationId();
-
+  
       const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
-
       const totalPayable = appLoanAmount + totalInterest;
-      
+  
       let newApplication = {
         applicationId,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -77,34 +117,39 @@ module.exports = (db) => {
         loanType: "Regular Loan Without Collateral",
         status: "Pending",
         dateApplied: new Date(),
-        isReloan: false
+        isReloan: false,
+        documents: uploadedDocs,
       };
-
+  
       if (newApplication.status === "Disbursed") {
         newApplication.dateDisbursed = new Date();
       }
-
+  
       if (sourceOfIncome === "business") {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
-          appTypeBusiness, appDateStarted, appBusinessLoc
+          appTypeBusiness, appDateStarted, appBusinessLoc,
         };
       } else {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
-          appOccupation, appEmploymentStatus, appCompanyName
+          appOccupation, appEmploymentStatus, appCompanyName,
         };
       }
-
+  
       await loanApplications.insertOne(newApplication);
-      res.status(201).json({ message: "Loan application (no collateral) submitted successfully", application: newApplication });
+      res.status(201).json({
+        message: "Loan application (no collateral) submitted successfully",
+        application: newApplication,
+      });
     } catch (error) {
       console.error("Error in /loan-applications/without:", error);
       res.status(500).json({ error: "Failed to submit loan application." });
     }
   });
+  
 
 // RELOAN WITHOUT COLLATERAL
 router.post("/without/reloan/:borrowersId", async (req, res) => {
