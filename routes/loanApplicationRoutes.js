@@ -148,9 +148,12 @@ module.exports = (db) => {
   
       const applicationId = await generateApplicationId();
   
-      const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
-      
-      const totalPayable = appLoanAmount + totalInterest;
+      const principal = Number(appLoanAmount);
+      const interestRate = Number(appInterest);
+      const terms = Number(appLoanTerms);
+
+      const totalInterest = principal * (interestRate / 100) * terms;
+      const totalPayable = principal + totalInterest;
   
       let newApplication = {
         applicationId,
