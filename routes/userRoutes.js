@@ -43,6 +43,110 @@ function padId(num) {
   return num.toString().padStart(5, '0');
 }
 
+// Helper function: generate unique username
+async function generateUniqueUsername(name, role, users) {
+  const parts = name.trim().toLowerCase().split(" ");
+  if (parts.length < 1) return null;
+
+  const firstName = parts[0];
+  const baseUsername = `${role.toLowerCase()}${firstName}`;
+
+  let username = baseUsername;
+  let count = 1;
+
+  while (await users.findOne({ username })) {
+    count++;
+    username = baseUsername + count;
+  }
+
+  return username;
+}
+
+// In your Add New User route
+router.post("/", async (req, res) => {
+  try {
+    const { name, email, phoneNumber, role } = req.body;
+    const actor = req.user?.username;
+
+    if (!name || !email || !phoneNumber || !role) {
+      return res.status(400).json({ message: "All fields are required." });
+    }
+
+    if (!name.trim().includes(" ")) {
+      return res.status(400).json({ message: "Please enter a full name with first and last name." });
+    }
+
+    // Generate username based on role + firstname
+    const username = await generateUniqueUsername(name, role, users);
+    if (!username) {
+      return res.status(400).json({ message: "Invalid full name. Cannot generate username." });
+    }
+
+    // Check for duplicate email
+    const existingUser = await users.findOne({ email: email.toLowerCase() });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email address is already registered. Please use a different email." });
+    }
+
+    const maxUser = await users.aggregate([
+      { $addFields: { userIdNum: { $toInt: "$userId" } } },
+      { $sort: { userIdNum: -1 } },
+      { $limit: 1 }
+    ]).toArray();
+
+    let nextId = 1;
+    if (maxUser.length > 0 && !isNaN(maxUser[0].userIdNum)) {
+      nextId = maxUser[0].userIdNum + 1;
+    }
+
+    const userId = padId(nextId);
+    const lastName = name.trim().split(" ").slice(-1)[0].toLowerCase();
+    const defaultPassword = `${lastName}${userId}`;
+    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+
+    const user = {
+      userId,
+      name,
+      email: email.toLowerCase(),
+      phoneNumber,
+      role,
+      username,
+      password: hashedPassword,
+    };
+
+    await users.insertOne(user);
+
+    await db.collection('logs').insertOne({
+      timestamp: new Date(),
+      actor,
+      action: "CREATE_USER",
+      details: `Created user ${user.username} (${user.role}) with ID ${userId}.`,
+    });
+
+    res.status(201).json({
+      message: "User created",
+      user: {
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+        username: user.username,
+        profilePic: user.profilePic || null
+      },
+      credentials: {
+        username: user.username,
+        password: defaultPassword,
+      }
+    });
+
+  } catch (error) {
+    console.error("Error adding user:", error);
+    res.status(500).json({ error: "Failed to add user" });
+  }
+});
+
+
 module.exports = (db) => {
   const users = db.collection('users');
 
@@ -153,19 +257,17 @@ router.post("/", async (req, res) => {
       return res.status(400).json({ message: "Please enter a full name with first and last name." });
     }
 
-    const username = generateUsername(name);
-    
+    const username = await generateUniqueUsername(name, role, users);
     if (!username) {
       return res.status(400).json({ message: "Invalid full name. Cannot generate username." });
     }
 
-    // Check only for duplicate email - allow duplicate names and usernames
+    // Check for duplicate email
     const existingUser = await users.findOne({ email: email.toLowerCase() });
-
-  if (existingUser) {
+    if (existingUser) {
       return res.status(400).json({ message: "Email address is already registered. Please use a different email." });
-  }
-  
+    }
+
     const maxUser = await users.aggregate([
       { $addFields: { userIdNum: { $toInt: "$userId" } } },
       { $sort: { userIdNum: -1 } },
@@ -201,24 +303,22 @@ router.post("/", async (req, res) => {
       details: `Created user ${user.username} (${user.role}) with ID ${userId}.`,
     });
 
-
     res.status(201).json({
-    message: "User created",
-    user: {
-      userId: user.userId,
-      name: user.name,
-      email: user.email,
-      phoneNumber: user.phoneNumber,
-      role: user.role,
-      username: user.username,
-      profilePic: user.profilePic || null
-    },
-    credentials: {
-      username: user.username,
-      password: defaultPassword,
-    }
-  });
-
+      message: "User created",
+      user: {
+        userId: user.userId,
+        name: user.name,
+        email: user.email,
+        phoneNumber: user.phoneNumber,
+        role: user.role,
+        username: user.username,
+        profilePic: user.profilePic || null
+      },
+      credentials: {
+        username: user.username,
+        password: defaultPassword,
+      }
+    });
 
   } catch (error) {
     console.error("Error adding user:", error);
