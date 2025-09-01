@@ -74,6 +74,36 @@ module.exports = (db) => {
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
       } = req.body;
   
+      const names = new Map();
+      const numbers = new Map();
+
+      appReferences.forEach((r, idx) => {
+        const nameKey = (r.name || "").trim().toLowerCase();
+        const numKey = (r.contact || "").trim();
+      
+        if (nameKey) {
+          if (!names.has(nameKey)) names.set(nameKey, []);
+          names.get(nameKey).push(idx);
+        }
+        if (numKey) {
+          if (!numbers.has(numKey)) numbers.set(numKey, []);
+          numbers.get(numKey).push(idx);
+        }
+      });
+      
+      const dupNameIndices = [...names.values()].filter((arr) => arr.length > 1).flat();
+      const dupNumberIndices = [...numbers.values()].filter((arr) => arr.length > 1).flat();
+      
+      if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
+        return res.status(400).json({
+          error: "Reference names and contact numbers must be unique.",
+          duplicates: {
+            nameIndices: dupNameIndices,
+            numberIndices: dupNumberIndices,
+          },
+        });
+      }
+
       const uploadedDocs = processUploadedDocs(req.files);
   
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
@@ -101,10 +131,25 @@ module.exports = (db) => {
           return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
         }
       }
+
+      const existing = await loanApplications.findOne({
+        appName: appName.trim(),
+        appDob: appDob.trim(),
+        appContact: appContact.trim(),
+        appEmail: appEmail.trim(),
+        status: "Pending"
+      });
+
+      if (existing) {
+        return res.status(400).json({
+          error: "You already have a pending application with these details. Please wait for it to be processed."
+        });
+      }
   
       const applicationId = await generateApplicationId();
   
       const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
+      
       const totalPayable = appLoanAmount + totalInterest;
   
       let newApplication = {
@@ -240,11 +285,8 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   }
 });
 
-
-
-
   //LOAN WITH COLLATERAL
-  router.post("/with", async (req, res) => {
+  router.post("/with", upload.array("documents", 5), async (req, res) => {
     try {
       const {
         sourceOfIncome,
@@ -253,18 +295,68 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         appTypeBusiness, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
         collateralType, collateralValue, collateralDescription, ownershipStatus
       } = req.body;
-
+  
+      let parsedReferences = [];
+      if (appReferences) {
+        try {
+          if (Array.isArray(appReferences)) {
+            parsedReferences = appReferences;
+          } else {
+            parsedReferences = JSON.parse(appReferences);
+          }
+        } catch (err) {
+          return res.status(400).json({ error: "Invalid format for references." });
+        }
+      }
+  
+      const names = new Map();
+      const numbers = new Map();
+  
+      parsedReferences.forEach((r, idx) => {
+        const nameKey = (r.name || "").trim().toLowerCase();
+        const numKey = (r.contact || "").trim();
+  
+        if (nameKey) {
+          if (!names.has(nameKey)) names.set(nameKey, []);
+          names.get(nameKey).push(idx);
+        }
+        if (numKey) {
+          if (!numbers.has(numKey)) numbers.set(numKey, []);
+          numbers.get(numKey).push(idx);
+        }
+      });
+  
+      const dupNameIndices = [...names.values()].filter((arr) => arr.length > 1).flat();
+      const dupNumberIndices = [...numbers.values()].filter((arr) => arr.length > 1).flat();
+  
+      if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
+        return res.status(400).json({
+          error: "Reference names and contact numbers must be unique.",
+          duplicates: {
+            nameIndices: dupNameIndices,
+            numberIndices: dupNumberIndices,
+          },
+        });
+      }
+  
+      // ✅ Require at least 1 uploaded document
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ error: "At least one document (PDF or PNG) is required." });
+      }
+  
+      const uploadedDocs = processUploadedDocs(req.files);
+  
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
         return res.status(400).json({ error: "All required fields must be provided." });
       }
-
+  
       if (!collateralType || !collateralValue || !collateralDescription || !ownershipStatus) {
         return res.status(400).json({ error: "All collateral fields are required for collateral loan applications." });
       }
-
+  
       if (sourceOfIncome === "business") {
         if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
           return res.status(400).json({ error: "Business fields are required for business income source." });
@@ -276,13 +368,35 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
       } else {
         return res.status(400).json({ error: "Invalid source of income." });
       }
-
+  
+      if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3) {
+        return res.status(400).json({ error: "Three references must be provided." });
+      }
+  
+      for (const ref of parsedReferences) {
+        if (!ref.name || !ref.contact || !ref.relation) {
+          return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
+        }
+      }
+  
+      const existing = await loanApplications.findOne({
+        appName: appName.trim(),
+        appDob: appDob.trim(),
+        appContact: appContact.trim(),
+        appEmail: appEmail.trim(),
+        status: "Pending"
+      });
+  
+      if (existing) {
+        return res.status(400).json({
+          error: "You already have a pending application with these details. Please wait for it to be processed."
+        });
+      }
+  
       const applicationId = await generateApplicationId();
-
       const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
-
       const totalPayable = appLoanAmount + totalInterest;
-
+  
       let newApplication = {
         applicationId,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -293,13 +407,14 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         collateralType, collateralValue, collateralDescription, ownershipStatus,
         loanType: "Regular Loan With Collateral",
         status: "Pending",
-        dateApplied: new Date()
+        dateApplied: new Date(),
+        documents: uploadedDocs,
       };
-
+  
       if (newApplication.status === "Disbursed") {
-  newApplication.dateDisbursed = new Date();
-}
-
+        newApplication.dateDisbursed = new Date();
+      }
+  
       if (sourceOfIncome === "business") {
         newApplication = {
           ...newApplication,
@@ -313,7 +428,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
           appOccupation, appEmploymentStatus, appCompanyName
         };
       }
-
+  
       await loanApplications.insertOne(newApplication);
       res.status(201).json({ message: "Loan application (with collateral) submitted successfully", application: newApplication });
     } catch (error) {
@@ -321,6 +436,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
       res.status(500).json({ error: "Failed to submit loan application." });
     }
   });
+  
 
 //OPEN-TERM LOAN
   router.post("/open-term", async (req, res) => {

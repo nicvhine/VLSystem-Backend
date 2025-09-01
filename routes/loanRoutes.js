@@ -77,6 +77,8 @@ module.exports = (db) => {
       const balance = totalPayable;
       const paidAmount = 0;
 
+      const releasedAmount = principal; 
+
       const loan = {
         loanId,
         applicationId,
