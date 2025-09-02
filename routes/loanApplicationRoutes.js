@@ -146,7 +146,7 @@ module.exports = (db) => {
         });
       }
   
-      const applicationId = await generateApplicationId();
+      const applicationId = await generateApplicationId();  
   
       const principal = Number(appLoanAmount);
       const interestRate = Number(appInterest);
@@ -528,31 +528,29 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
     }
   });
 
-
-
-router.get("/loan-stats", async (req, res) => {
-  try {
-    const collection = db.collection("loan_applications");
-
-    const [approved, denied, pending, onHold] = await Promise.all([
-      collection.countDocuments({ status: "Accepted" }),
-      collection.countDocuments({ status: "Denied by LO" }),
-      collection.countDocuments({ status: "Pending" }),
-      collection.countDocuments({ status: "On Hold" }),
-    ]);
-
-    res.json({
-      approved,
-      denied,
-      pending,
-      onHold,
-    });
-  } catch (error) {
-    console.error("Error fetching loan stats:", error);
-    res.status(500).json({ error: "Failed to fetch statistics" });
-  }
-});
+  router.get("/loan-stats", async (req, res) => {
+    try {
+      const collection = db.collection("loan_applications");
   
+      const [approved, denied, pending, onHold] = await Promise.all([
+        collection.countDocuments({ status: { $regex: /^accepted$/i } }),
+        collection.countDocuments({ status: { $regex: /^denied by LO$/i } }),
+        collection.countDocuments({ status: { $regex: /^pending$/i } }),
+        collection.countDocuments({ status: { $regex: /^on hold$/i } }),
+      ]);
+  
+      res.json({
+        approved,
+        denied,
+        pending,
+        onHold,
+      });
+    } catch (error) {
+      console.error("Error fetching loan stats:", error);
+      res.status(500).json({ error: "Failed to fetch statistics" });
+    }
+  });
+    
 
 
 router.get("/monthly-loan-stats", async (req, res) => {
