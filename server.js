@@ -163,7 +163,7 @@
       app.use('/loan-applications', loanApplicationRoutes);
       app.use('/borrowers', borrowersRoutes);
       app.use('/loans', loanRoutes);
-      app.use('/collections', collectionRoutes);
+      app.use('/collections', collectionRoutes);  
       app.use('/payments', paymentRoutes);
       app.use('/notifications', notificationRoutes);
       app.use('/logs', logsRoute);

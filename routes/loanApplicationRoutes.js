@@ -3,7 +3,26 @@ const router = express.Router();
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const jwt = require("jsonwebtoken");
 
+
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  const token = authHeader && authHeader.split(" ")[1]; // Bearer <token>
+
+  if (!token) {
+    return res.status(401).json({ error: "No token provided" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
+    if (err) {
+      console.error("JWT verification failed:", err.message);
+      return res.status(403).json({ error: "Invalid token" });
+    }
+    req.user = user; // 👈 attaches role, userId, etc. to request
+    next();
+  });
+}
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "uploads/"); 
@@ -713,39 +732,120 @@ router.get("/:applicationId", async (req, res) => {
   }
 });
 
-router.put("/:applicationId", async (req, res) => {
+router.put("/:applicationId", authenticateToken, async (req, res) => {
   try {
     const { applicationId } = req.params;
     const updateData = req.body;
 
-    console.log("Received PUT request for:", applicationId);
-    console.log("Update data:", updateData);
+    console.log("[PUT] Incoming request for", applicationId, updateData);
 
-    if (updateData.status === "Disbursed") {
+    // Add dateDisbursed if applicable
+    if (
+      typeof updateData.status === "string" &&
+      updateData.status.trim().toLowerCase() === "disbursed"
+    ) {
       updateData.dateDisbursed = new Date();
     }
 
-    const result = await loanApplications.updateOne(
-      { applicationId: applicationId },
-      { $set: updateData }
-    );
-
-    console.log("MongoDB update result:", result);
-
-    if (result.matchedCount === 0) {
+    // 1) Find existing application
+    const existingApp = await loanApplications.findOne({ applicationId });
+    if (!existingApp) {
       return res.status(404).json({ error: "Loan application not found." });
     }
 
+    // 2) Update application
+    await loanApplications.updateOne({ applicationId }, { $set: updateData });
+
+    // 3) Reload updated doc
     const updatedDoc = await loanApplications.findOne({ applicationId });
 
-    res.status(200).json(updatedDoc);
+    // 4) Normalize role from JWT or header
+    function normalizeRole(role) {
+      return String(role || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[_-]+/g, " "); // "Loan_Officer" -> "loan officer"
+    }
+
+    const rawRole =
+      (req.user && req.user.role) ||
+      req.headers["x-user-role"] ||
+      "";
+
+    const actorRole = normalizeRole(rawRole);
+
+    // 5) Compare statuses
+    const prevStatus = String(existingApp.status || "");
+    const nextStatus = String(updatedDoc.status || updateData.status || "");
+    const changed =
+      nextStatus.trim().toLowerCase() !== prevStatus.trim().toLowerCase();
+
+    // 6) Decide collection
+    const roleToCollection = {
+      manager: "loanOfficer_notifications",       // notify Loan Officer
+      "loan officer": "manager_notifications"    // notify Manager
+    };
+
+    const targetCollectionName = roleToCollection[actorRole];
+
+    // 7) Debug log
+    console.log("[NOTIFICATION DEBUG]", {
+      actorRole,
+      rawRole,
+      prevStatus,
+      nextStatus,
+      statusChanged: changed,
+      targetCollection: targetCollectionName
+    });
+
+    // 8) Insert notification if status changed
+    if (changed && targetCollectionName) {
+      const message =
+        actorRole === "manager"
+          ? `Manager has changed application ${applicationId} to ${nextStatus}`
+          : `Loan Officer has changed application ${applicationId} to ${nextStatus}`;
+
+      const notificationDoc = {
+        applicationId,
+        message,
+        status: nextStatus,
+        createdAt: new Date(),
+        read: false,
+        actorRole,
+        previousStatus: prevStatus
+      };
+
+      await db.collection(targetCollectionName).insertOne(notificationDoc);
+
+      console.log(
+        "[NOTIFICATION DEBUG] Inserted into",
+        targetCollectionName,
+        notificationDoc
+      );
+    } else if (!changed) {
+      console.log("[NOTIFICATION DEBUG] No status change, skipping insert.");
+    } else {
+      console.log("[NOTIFICATION DEBUG] Unknown role, skipping insert.");
+    }
+
+    // 9) Respond
+    res.status(200).json({
+      ...updatedDoc,
+      _debug: {
+        actorRole,
+        prevStatus,
+        nextStatus,
+        statusChanged: changed,
+        targetCollection: targetCollectionName
+      }
+    });
   } catch (error) {
     console.error("Error in PUT /loan-applications/:applicationId:", error);
-    res.status(500).json({ error: "Failed to update loan application." });
+    res
+      .status(500)
+      .json({ error: "Failed to update loan application." });
   }
 });
-
-
 
 
 
