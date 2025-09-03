@@ -81,6 +81,20 @@ module.exports = (db) => {
     return padId(nextAppId);
   }
 
+  router.get("/interviews", authenticateToken, async (req, res) => {
+    try {
+      const interviews = await db.collection("loan_applications")
+        .find({ interviewDate: { $exists: true } })
+        .project({ applicationId: 1, appName: 1, interviewDate: 1, interviewTime: 1, status: 1, appAddress: 1, _id: 0 })
+        .toArray();
+      
+      res.status(200).json(interviews);
+    } catch (error) {
+      console.error("Error fetching interviews:", error);
+      res.status(500).json({ error: "Failed to fetch interviews" });
+    }
+  });
+
   router.post("/without", upload.array("documents", 5), async (req, res) => {
     try {
       const {
@@ -846,6 +860,63 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
       .json({ error: "Failed to update loan application." });
   }
 });
+
+
+
+// Update interview schedule
+router.put("/:applicationId/schedule-interview", authenticateToken, async (req, res) => {
+  const { applicationId } = req.params;
+  const { interviewDate, interviewTime } = req.body;
+
+  if (!interviewDate || !interviewTime) {
+    return res.status(400).json({ error: "Date and time are required" });
+  }
+
+  try {
+    const loanApplications = db.collection("loan_applications");
+    const result = await loanApplications.updateOne(
+      { applicationId },
+      { $set: { interviewDate, interviewTime } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    res.json({ message: "Interview scheduled successfully" });
+  } catch (error) {
+    console.error("Error scheduling interview:", error);
+    res.status(500).json({ error: "Failed to schedule interview" });
+  }
+});
+
+router.put("/:applicationId/schedule-interview", authenticateToken, async (req, res) => {
+  const { applicationId } = req.params;
+  const { interviewDate, interviewTime } = req.body;
+
+  if (!interviewDate || !interviewTime) {
+    return res.status(400).json({ error: "Date and time are required" });
+  }
+
+  try {
+    const loanApplications = db.collection("loan_applications");
+    const result = await loanApplications.updateOne(
+      { applicationId },
+      { $set: { interviewDate, interviewTime } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    res.json({ message: "Interview scheduled successfully" });
+  } catch (error) {
+    console.error("Error scheduling interview:", error);
+    res.status(500).json({ error: "Failed to schedule interview" });
+  }
+});
+
+
 
 
 
