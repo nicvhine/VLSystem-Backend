@@ -802,7 +802,7 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
     if (changed && targetCollectionName) {
       const message =
         actorRole === "manager"
-          ? `Manager has changed application ${applicationId} to ${nextStatus}`
+          ? `Manager has changed application ${applicationId} to "${nextStatus}"`
           : `Loan Officer has changed application ${applicationId} to ${nextStatus}`;
 
       const notificationDoc = {
