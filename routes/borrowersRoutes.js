@@ -298,5 +298,43 @@ router.post("/", async (req, res) => {
 });
 
 
+  // CHANGE PASSWORD
+  router.put('/:id/change-password', async (req, res) => {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+    if (!newPassword || !passwordRegex.test(newPassword)) {
+      return res.status(400).json({
+        message:
+          'Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.',
+      });
+    }
+
+    try {
+      const user = await db.collection('borrowers_account').findOne({ borrowersId: id });
+      if (!user) {
+        return res.status(404).json({ message: 'Borrower not found' });
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await db.collection('borrowers_account').updateOne(
+        { userId: id },
+        {
+          $set: {
+            password: hashedPassword,
+            isFirstLogin: false,
+          },
+        }
+      );
+
+      res.status(200).json({ message: 'Password updated successfully' });
+    } catch (err) {
+      console.error('Password update error:', err);
+      res.status(500).json({ message: 'Server error while updating password' });
+    }
+  });
+
+
     return router;
   };

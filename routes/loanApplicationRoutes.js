@@ -46,9 +46,23 @@ const fileFilter = (req, file, cb) => {
 
 const upload = multer({
   storage,
-  fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, 
+  fileFilter: (req, file, cb) => {
+    const allowedDocs = ["application/pdf", "image/png"];
+    const allowedPp = ["image/jpeg", "image/png"];
+    
+    if (file.fieldname === "documents") {
+      if (allowedDocs.includes(file.mimetype)) cb(null, true);
+      else cb(new Error("Only PDF and PNG allowed for documents"));
+    } else if (file.fieldname === "profilePic") {
+      if (allowedPp.includes(file.mimetype)) cb(null, true);
+      else cb(new Error("Only JPEG or PNG allowed for profile picture"));
+    } else {
+      cb(new Error("Unknown file field"), false);
+    }
+  },
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
+
 
 //id format
 function padId(num) {
@@ -102,7 +116,10 @@ module.exports = (db) => {
   });
 
   //add application without
-  router.post("/without", upload.array("documents", 5), async (req, res) => {
+  router.post("/without", upload.fields([
+    { name: "documents", maxCount: 5 },
+    { name: "profilePic", maxCount: 1 }
+  ]), async (req, res) => {
     try {
       const {
         sourceOfIncome,
@@ -145,6 +162,16 @@ module.exports = (db) => {
       }
 
       const uploadedDocs = processUploadedDocs(req.files);
+
+      let uploadedPp = null;
+      if (req.files.profilePic && req.files.profilePic[0]) {
+        uploadedPp = {
+          fileName: req.files.profilePic[0].originalname,
+          filePath: req.files.profilePic[0].path,
+          mimeType: req.files.profilePic[0].mimetype
+        };
+      }
+
   
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
         return res.status(400).json({ error: "All required fields must be provided." });
@@ -207,6 +234,7 @@ module.exports = (db) => {
         dateApplied: new Date(),
         isReloan: false,
         documents: uploadedDocs,
+        profilePic: uploadedPp,
       };
   
       if (newApplication.status === "Disbursed") {
@@ -328,8 +356,11 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
 });
 
   //add application with
-  router.post("/with", upload.array("documents", 5), async (req, res) => {
-    try {
+  router.post("/with", upload.fields([
+    { name: "documents", maxCount: 5 },
+    { name: "profilePic", maxCount: 1 }
+  ]), async (req, res) => {
+  try {
       const {
         sourceOfIncome,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -390,6 +421,15 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   
       const uploadedDocs = processUploadedDocs(req.files);
   
+      let uploadedPp = null;
+      if (req.files.profilePic && req.files.profilePic[0]) {
+        uploadedPp = {
+          fileName: req.files.profilePic[0].originalname,
+          filePath: req.files.profilePic[0].path,
+          mimeType: req.files.profilePic[0].mimetype
+        };
+      }
+      
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
         return res.status(400).json({ error: "All required fields must be provided." });
       }
@@ -450,6 +490,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         status: "Pending",
         dateApplied: new Date(),
         documents: uploadedDocs,
+        profilePic: uploadedPp,
       };
   
       if (newApplication.status === "Disbursed") {
@@ -480,8 +521,10 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   
 
   //add application open-term
-  router.post("/open-term", async (req, res) => {
-    try {
+  router.post("/open-term", upload.fields([
+    { name: "documents", maxCount: 5 },
+    { name: "profilePic", maxCount: 1 }
+  ]), async (req, res) => {    try {
       const {
         sourceOfIncome,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -489,9 +532,50 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         appTypeBusiness, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest,
-        repaymentSchedule, specialConditions, isCustomTerms
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
+        collateralType, collateralValue, collateralDescription, ownershipStatus
       } = req.body;
+  
+      const names = new Map();
+      const numbers = new Map();
+
+      appReferences.forEach((r, idx) => {
+        const nameKey = (r.name || "").trim().toLowerCase();
+        const numKey = (r.contact || "").trim();
+      
+        if (nameKey) {
+          if (!names.has(nameKey)) names.set(nameKey, []);
+          names.get(nameKey).push(idx);
+        }
+        if (numKey) {
+          if (!numbers.has(numKey)) numbers.set(numKey, []);
+          numbers.get(numKey).push(idx);
+        }
+      });
+
+      const dupNameIndices = [...names.values()].filter((arr) => arr.length > 1).flat();
+      const dupNumberIndices = [...numbers.values()].filter((arr) => arr.length > 1).flat();
+  
+      if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
+        return res.status(400).json({
+          error: "Reference names and contact numbers must be unique.",
+          duplicates: {
+            nameIndices: dupNameIndices,
+            numberIndices: dupNumberIndices,
+          },
+        });
+      }
+
+      const uploadedDocs = processUploadedDocs(req.files);
+
+      let uploadedPp = null;
+      if (req.files.profilePic && req.files.profilePic[0]) {
+        uploadedPp = {
+          fileName: req.files.profilePic[0].originalname,
+          filePath: req.files.profilePic[0].path,
+          mimeType: req.files.profilePic[0].mimetype
+        };
+      }
 
       if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
         return res.status(400).json({ error: "All required fields must be provided." });
@@ -509,6 +593,31 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         return res.status(400).json({ error: "Invalid source of income." });
       }
 
+      if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3) {
+        return res.status(400).json({ error: "Three references must be provided." });
+      }
+
+
+      for (const ref of parsedReferences) {
+        if (!ref.name || !ref.contact || !ref.relation) {
+          return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
+        }
+      }
+
+      const existing = await loanApplications.findOne({
+        appName: appName.trim(),
+        appDob: appDob.trim(),
+        appContact: appContact.trim(),
+        appEmail: appEmail.trim(),
+        status: "Pending"
+      });
+  
+      if (existing) {
+        return res.status(400).json({
+          error: "You already have a pending application with these details. Please wait for it to be processed."
+        });
+      }
+
       const applicationId = await generateApplicationId();
 
       const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
@@ -521,13 +630,13 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         appSpouseName, appSpouseOccupation, appAddress,
         appMonthlyIncome,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable,
-        hasCollateral: false,
+        hasCollateral: true,
+        collateralType, collateralValue, collateralDescription, ownershipStatus,
         loanType: "Open-Term Loan",
-        repaymentSchedule,
-        specialConditions,
-        isCustomTerms: isCustomTerms || false,
         status: "Pending",
-        dateApplied: new Date()
+        dateApplied: new Date(),
+        documents: uploadedDocs,
+        profilePic: uploadedPp,
       };
 
       if (newApplication.status === "Disbursed") {
