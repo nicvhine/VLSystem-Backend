@@ -4,11 +4,12 @@ const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
+const cron = require("node-cron");
 
-
+//authenticator
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1]; // Bearer <token>
+  const token = authHeader && authHeader.split(" ")[1]; 
 
   if (!token) {
     return res.status(401).json({ error: "No token provided" });
@@ -19,10 +20,12 @@ function authenticateToken(req, res, next) {
       console.error("JWT verification failed:", err.message);
       return res.status(403).json({ error: "Invalid token" });
     }
-    req.user = user; // 👈 attaches role, userId, etc. to request
+    req.user = user; 
     next();
   });
 }
+
+//for document upload
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
     cb(null, "uploads/"); 
@@ -47,11 +50,12 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }, 
 });
 
-
+//id format
 function padId(num) {
   return num.toString().padStart(5, '0');
 }
 
+//docs checker
 function processUploadedDocs(files) {
   if (!files || files.length === 0) {
     throw new Error("At least one document (PDF or PNG) is required.");
@@ -67,6 +71,7 @@ function processUploadedDocs(files) {
 module.exports = (db) => {
   const loanApplications = db.collection("loan_applications");
 
+  //id generator
   async function generateApplicationId() {
     const maxApp = await loanApplications.aggregate([
       { $addFields: { applicationIdNum: { $toInt: "$applicationId" } } },
@@ -81,6 +86,22 @@ module.exports = (db) => {
     return padId(nextAppId);
   }
 
+  //fetch interview list
+  router.get("/interviews", authenticateToken, async (req, res) => {
+    try {
+      const interviews = await db.collection("loan_applications")
+        .find({ interviewDate: { $exists: true } })
+        .project({ applicationId: 1, appName: 1, interviewDate: 1, interviewTime: 1, status: 1, appAddress: 1, _id: 0 })
+        .toArray();
+      
+      res.status(200).json(interviews);
+    } catch (error) {
+      console.error("Error fetching interviews:", error);
+      res.status(500).json({ error: "Failed to fetch interviews" });
+    }
+  });
+
+  //add application without
   router.post("/without", upload.array("documents", 5), async (req, res) => {
     try {
       const {
@@ -217,8 +238,7 @@ module.exports = (db) => {
     }
   });
   
-
-// RELOAN WITHOUT COLLATERAL
+//add application reloan-without
 router.post("/without/reloan/:borrowersId", async (req, res) => {
   const { borrowersId } = req.params; 
   const borrowers = db.collection("borrowers_account");
@@ -307,7 +327,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   }
 });
 
-  //LOAN WITH COLLATERAL
+  //add application with
   router.post("/with", upload.array("documents", 5), async (req, res) => {
     try {
       const {
@@ -364,7 +384,6 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         });
       }
   
-      // ✅ Require at least 1 uploaded document
       if (!req.files || req.files.length === 0) {
         return res.status(400).json({ error: "At least one document (PDF or PNG) is required." });
       }
@@ -460,7 +479,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   });
   
 
-//OPEN-TERM LOAN
+  //add application open-term
   router.post("/open-term", async (req, res) => {
     try {
       const {
@@ -536,7 +555,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
     }
   });
 
-  //  Get all loan applications 
+  //fetch all loan applications
   router.get("/", async (req, res) => {
     try {
       const applications = await loanApplications.find().toArray();
@@ -547,6 +566,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
     }
   });
 
+  //fetch loan statistics
   router.get("/loan-stats", async (req, res) => {
     try {
       const collection = db.collection("loan_applications");
@@ -570,8 +590,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
     }
   });
     
-
-
+//fetch monthlt loan stats for the graph
 router.get("/monthly-loan-stats", async (req, res) => {
   try {
     const pipeline = [
@@ -688,6 +707,7 @@ router.get("/monthly-loan-stats", async (req, res) => {
   }
 });
 
+//fetch loan stats for loan type
 router.get("/loan-type-stats", async (req, res) => {
   try {
     const collection = db.collection("loan_applications");
@@ -714,7 +734,8 @@ router.get("/loan-type-stats", async (req, res) => {
     res.status(500).json({ error: "Failed to fetch loan type statistics" });
   }
 });
-  // GET: Fetch a single application 
+
+//fetch application by Id
 router.get("/:applicationId", async (req, res) => {
   const { applicationId } = req.params;
 
@@ -732,6 +753,7 @@ router.get("/:applicationId", async (req, res) => {
   }
 });
 
+//edit application by id
 router.put("/:applicationId", authenticateToken, async (req, res) => {
   try {
     const { applicationId } = req.params;
@@ -739,7 +761,6 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
 
     console.log("[PUT] Incoming request for", applicationId, updateData);
 
-    // Add dateDisbursed if applicable
     if (
       typeof updateData.status === "string" &&
       updateData.status.trim().toLowerCase() === "disbursed"
@@ -747,24 +768,33 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
       updateData.dateDisbursed = new Date();
     }
 
-    // 1) Find existing application
+    //find existing app
     const existingApp = await loanApplications.findOne({ applicationId });
     if (!existingApp) {
       return res.status(404).json({ error: "Loan application not found." });
     }
 
-    // 2) Update application
+    //if status is denied by lo, delete
+    if (
+      typeof updateData.status === "string" &&
+      updateData.status.trim().toLowerCase() === "denied by lo"
+    ) {
+      await loanApplications.deleteOne({ applicationId });
+      return res.status(200).json({
+        message: `Application ${applicationId} has been denied and deleted from records.`,
+        deleted: true
+      });
+    }
+
     await loanApplications.updateOne({ applicationId }, { $set: updateData });
 
-    // 3) Reload updated doc
     const updatedDoc = await loanApplications.findOne({ applicationId });
 
-    // 4) Normalize role from JWT or header
     function normalizeRole(role) {
       return String(role || "")
         .trim()
         .toLowerCase()
-        .replace(/[_-]+/g, " "); // "Loan_Officer" -> "loan officer"
+        .replace(/[_-]+/g, " "); 
     }
 
     const rawRole =
@@ -774,21 +804,18 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
 
     const actorRole = normalizeRole(rawRole);
 
-    // 5) Compare statuses
     const prevStatus = String(existingApp.status || "");
     const nextStatus = String(updatedDoc.status || updateData.status || "");
     const changed =
       nextStatus.trim().toLowerCase() !== prevStatus.trim().toLowerCase();
 
-    // 6) Decide collection
     const roleToCollection = {
-      manager: "loanOfficer_notifications",       // notify Loan Officer
-      "loan officer": "manager_notifications"    // notify Manager
+      manager: "loanOfficer_notifications",       
+      "loan officer": "manager_notifications"   
     };
 
     const targetCollectionName = roleToCollection[actorRole];
 
-    // 7) Debug log
     console.log("[NOTIFICATION DEBUG]", {
       actorRole,
       rawRole,
@@ -798,7 +825,6 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
       targetCollection: targetCollectionName
     });
 
-    // 8) Insert notification if status changed
     if (changed && targetCollectionName) {
       const message =
         actorRole === "manager"
@@ -828,7 +854,6 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
       console.log("[NOTIFICATION DEBUG] Unknown role, skipping insert.");
     }
 
-    // 9) Respond
     res.status(200).json({
       ...updatedDoc,
       _debug: {
@@ -847,7 +872,73 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
   }
 });
 
+//update interview schedule 
+router.put("/:applicationId/schedule-interview", authenticateToken, async (req, res) => {
+  const { applicationId } = req.params;
+  const { interviewDate, interviewTime } = req.body;
 
+  if (!interviewDate || !interviewTime) {
+    return res.status(400).json({ error: "Date and time are required" });
+  }
+
+  try {
+    const loanApplications = db.collection("loan_applications");
+    const result = await loanApplications.updateOne(
+      { applicationId },
+      { $set: { interviewDate, interviewTime } }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    res.json({ message: "Interview scheduled successfully" });
+  } catch (error) {
+    console.error("Error scheduling interview:", error);
+    res.status(500).json({ error: "Failed to schedule interview" });
+  }
+});
+
+//cleanup if no sched after 7 days
+router.delete("/cleanup/unscheduled", async (req, res) => {
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const result = await loanApplications.deleteMany({
+      interviewDate: { $exists: false },
+      dateApplied: { $lte: sevenDaysAgo },
+    });
+
+    res.status(200).json({
+      message: `Deleted ${result.deletedCount} unscheduled applications older than 7 days.`,
+    });
+  } catch (error) {
+    console.error("Error cleaning up unscheduled applications:", error);
+    res.status(500).json({ error: "Failed to clean up unscheduled applications." });
+  }
+});
+
+// test delete if no sched after 1 minute
+cron.schedule("* * * * *", async () => {
+  try {
+    const oneMinuteAgo = new Date();
+    oneMinuteAgo.setMinutes(oneMinuteAgo.getMinutes() - 1);
+
+    const result = await loanApplications.deleteMany({
+      interviewDate: { $exists: false },
+      dateApplied: { $lte: oneMinuteAgo },
+    });
+
+    if (result.deletedCount > 0) {
+      console.log(`[CRON] Deleted ${result.deletedCount} unscheduled applications older than 1 minute.`);
+    } else {
+      console.log("[CRON] No unscheduled applications to delete.");
+    }
+  } catch (error) {
+    console.error("[CRON] Cleanup job failed:", error);
+  }
+});
 
   return router;
 };
