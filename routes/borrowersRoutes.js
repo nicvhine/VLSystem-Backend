@@ -184,12 +184,22 @@ router.post("/verify-otp", (req, res) => {
         const { id } = req.params;
         const borrower = await borrowers.findOne({ borrowersId: id });
         if (!borrower) return res.status(404).json({ error: "Borrower not found" });
-        res.json(borrower);
+    
+        const loan = await db.collection('loans').findOne(
+          { borrowersId: id, status: 'Active' },
+          { sort: { dateDisbursed: -1 } }
+        );
+    
+        const profilePic = loan?.profilePic || borrower.profilePic || borrower.imageUrl || null;
+    
+        res.json({ ...borrower, profilePic });
+    
       } catch (error) {
         console.error("Error fetching borrower:", error);
         res.status(500).json({ error: "Failed to fetch borrower" });
       }
     });
+    
 
    // Add Borrower
 router.post("/", async (req, res) => {
@@ -276,6 +286,7 @@ router.post("/", async (req, res) => {
       characterReferences: application.appReferences || [],
       score: application.score || 0,
       imageUrl: application.imageUrl || null,
+      profilePic: application.profilePic || application.imageUrl || null,
     };
 
     await borrowers.insertOne(borrower);
