@@ -71,16 +71,20 @@ function padId(num) {
 
 //docs checker
 function processUploadedDocs(files) {
-  if (!files || files.length === 0) {
+  if (!files || Object.keys(files).length === 0) {
     throw new Error("At least one document (PDF or PNG) is required.");
   }
 
-  return files.map((file) => ({
+  // Flatten all file arrays into a single array
+  const allFiles = Object.values(files).flat();
+
+  return allFiles.map((file) => ({
     fileName: file.originalname,
     filePath: file.path,
     mimeType: file.mimetype,
   }));
 }
+
 
 module.exports = (db) => {
   const loanApplications = db.collection("loan_applications");
@@ -535,14 +539,27 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
         collateralType, collateralValue, collateralDescription, ownershipStatus
       } = req.body;
+
+      let parsedReferences = [];
+      if (appReferences) {
+        try {
+          if (Array.isArray(appReferences)) {
+            parsedReferences = appReferences;
+          } else {
+            parsedReferences = JSON.parse(appReferences);
+          }
+        } catch (err) {
+          return res.status(400).json({ error: "Invalid format for references." });
+        }
+      }
   
       const names = new Map();
       const numbers = new Map();
 
-      appReferences.forEach((r, idx) => {
+      parsedReferences.forEach((r, idx) => {
         const nameKey = (r.name || "").trim().toLowerCase();
         const numKey = (r.contact || "").trim();
-      
+  
         if (nameKey) {
           if (!names.has(nameKey)) names.set(nameKey, []);
           names.get(nameKey).push(idx);
@@ -552,6 +569,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
           numbers.get(numKey).push(idx);
         }
       });
+  
 
       const dupNameIndices = [...names.values()].filter((arr) => arr.length > 1).flat();
       const dupNumberIndices = [...numbers.values()].filter((arr) => arr.length > 1).flat();
