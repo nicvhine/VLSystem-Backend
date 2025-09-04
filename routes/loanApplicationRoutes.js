@@ -86,6 +86,7 @@ function processUploadedDocs(files) {
 }
 
 
+
 module.exports = (db) => {
   const loanApplications = db.collection("loan_applications");
 
@@ -528,7 +529,8 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   router.post("/open-term", upload.fields([
     { name: "documents", maxCount: 5 },
     { name: "profilePic", maxCount: 1 }
-  ]), async (req, res) => {    try {
+  ]), async (req, res) => {
+    try {
       const {
         sourceOfIncome,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -536,10 +538,26 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         appTypeBusiness, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
+        appLoanPurpose, appLoanAmount, appReferences,
         collateralType, collateralValue, collateralDescription, ownershipStatus
       } = req.body;
-
+  
+      // Loan options with predefined interest
+      const loanOptions = [
+        { amount: 50000, interest: 6 },
+        { amount: 100000, interest: 5 },
+        { amount: 200000, interest: 4 },
+        { amount: 500000, interest: 3 },
+      ];
+  
+      // Automatically determine interest based on amount
+      const selectedLoan = loanOptions.find(option => Number(option.amount) === Number(appLoanAmount));
+      if (!selectedLoan) {
+        return res.status(400).json({ error: "Invalid loan amount." });
+      }
+      const appInterest = selectedLoan.interest;
+  
+      // Parse references
       let parsedReferences = [];
       if (appReferences) {
         try {
@@ -553,9 +571,10 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         }
       }
   
+      // Check for duplicate names and numbers
       const names = new Map();
       const numbers = new Map();
-
+  
       parsedReferences.forEach((r, idx) => {
         const nameKey = (r.name || "").trim().toLowerCase();
         const numKey = (r.contact || "").trim();
@@ -570,9 +589,8 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         }
       });
   
-
-      const dupNameIndices = [...names.values()].filter((arr) => arr.length > 1).flat();
-      const dupNumberIndices = [...numbers.values()].filter((arr) => arr.length > 1).flat();
+      const dupNameIndices = [...names.values()].filter(arr => arr.length > 1).flat();
+      const dupNumberIndices = [...numbers.values()].filter(arr => arr.length > 1).flat();
   
       if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
         return res.status(400).json({
@@ -583,9 +601,10 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
           },
         });
       }
-
+  
+      // Process uploaded documents
       const uploadedDocs = processUploadedDocs(req.files);
-
+  
       let uploadedPp = null;
       if (req.files.profilePic && req.files.profilePic[0]) {
         uploadedPp = {
@@ -594,11 +613,13 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
           mimeType: req.files.profilePic[0].mimetype
         };
       }
-
-      if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
+  
+      // Required fields validation
+      if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount) {
         return res.status(400).json({ error: "All required fields must be provided." });
       }
-
+  
+      // Source of income validation
       if (sourceOfIncome === "business") {
         if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
           return res.status(400).json({ error: "Business fields are required for business income source." });
@@ -610,18 +631,19 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
       } else {
         return res.status(400).json({ error: "Invalid source of income." });
       }
-
+  
+      // References validation
       if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3) {
         return res.status(400).json({ error: "Three references must be provided." });
       }
-
-
+  
       for (const ref of parsedReferences) {
         if (!ref.name || !ref.contact || !ref.relation) {
           return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
         }
       }
-
+  
+      // Check for existing pending application
       const existing = await loanApplications.findOne({
         appName: appName.trim(),
         appDob: appDob.trim(),
@@ -635,19 +657,21 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
           error: "You already have a pending application with these details. Please wait for it to be processed."
         });
       }
-
+  
+      // Generate application ID
       const applicationId = await generateApplicationId();
-
-      const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
-
-      const totalPayable = appLoanAmount + totalInterest;
-
+  
+      // Total interest and payable for open-term loan
+      const totalInterest = 0; // interest accrual handled later
+      const totalPayable = Number(appLoanAmount); // principal only
+  
+      // Construct new application object
       let newApplication = {
         applicationId,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
         appSpouseName, appSpouseOccupation, appAddress,
         appMonthlyIncome,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable,
+        appLoanPurpose, appLoanAmount: Number(appLoanAmount), appInterest, totalPayable,
         hasCollateral: true,
         collateralType, collateralValue, collateralDescription, ownershipStatus,
         loanType: "Open-Term Loan",
@@ -656,10 +680,12 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         documents: uploadedDocs,
         profilePic: uploadedPp,
       };
-
+  
       if (newApplication.status === "Disbursed") {
-  newApplication.dateDisbursed = new Date();
-}
+        newApplication.dateDisbursed = new Date();
+      }
+  
+      // Add source of income info
       if (sourceOfIncome === "business") {
         newApplication = {
           ...newApplication,
@@ -673,14 +699,21 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
           appOccupation, appEmploymentStatus, appCompanyName
         };
       }
-
+  
+      // Insert into database
       await loanApplications.insertOne(newApplication);
-      res.status(201).json({ message: "Open-term loan application submitted successfully", application: newApplication });
+  
+      res.status(201).json({
+        message: "Open-term loan application submitted successfully",
+        application: newApplication
+      });
+  
     } catch (error) {
       console.error("Error in /loan-applications/open-term:", error);
       res.status(500).json({ error: "Failed to submit open-term loan application." });
     }
   });
+  
 
   //fetch all loan applications
   router.get("/", async (req, res) => {
@@ -1047,25 +1080,25 @@ router.delete("/cleanup/unscheduled", async (req, res) => {
 });
 
 // test delete if no sched after 1 minute
-cron.schedule("* * * * *", async () => {
-  try {
-    const oneMinuteAgo = new Date();
-    oneMinuteAgo.setMinutes(oneMinuteAgo.getMinutes() - 1);
+// cron.schedule("* * * * *", async () => {
+//   try {
+//     const oneMinuteAgo = new Date();
+//     oneMinuteAgo.setMinutes(oneMinuteAgo.getMinutes() - 1);
 
-    const result = await loanApplications.deleteMany({
-      interviewDate: { $exists: false },
-      dateApplied: { $lte: oneMinuteAgo },
-    });
+//     const result = await loanApplications.deleteMany({
+//       interviewDate: { $exists: false },
+//       dateApplied: { $lte: oneMinuteAgo },
+//     });
 
-    if (result.deletedCount > 0) {
-      console.log(`[CRON] Deleted ${result.deletedCount} unscheduled applications older than 1 minute.`);
-    } else {
-      console.log("[CRON] No unscheduled applications to delete.");
-    }
-  } catch (error) {
-    console.error("[CRON] Cleanup job failed:", error);
-  }
-});
+//     if (result.deletedCount > 0) {
+//       console.log(`[CRON] Deleted ${result.deletedCount} unscheduled applications older than 1 minute.`);
+//     } else {
+//       console.log("[CRON] No unscheduled applications to delete.");
+//     }
+//   } catch (error) {
+//     console.error("[CRON] Cleanup job failed:", error);
+//   }
+// });
 
   return router;
 };
