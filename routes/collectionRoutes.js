@@ -125,9 +125,7 @@ module.exports = (db) => {
       const now = new Date();
       const current = await db.collection("collections").findOne({ referenceNumber });
 
-      if (!current) {
-        return res.status(404).json({ error: "Collection not found." });
-      }
+      if (!current) return res.status(404).json({ error: "Collection not found." });
 
       let remainingAmount = amount;
       let collectionNumber = current.collectionNumber;
@@ -145,22 +143,33 @@ module.exports = (db) => {
         const due = collection.periodAmount;
         const remainingBalance = Math.max(due - alreadyPaid, 0);
         const paymentToApply = Math.min(remainingAmount, remainingBalance);
-        const newPaid = alreadyPaid + paymentToApply;
-        const newBalance = Math.max(due - newPaid, 0);
-        const newStatus = newBalance === 0 ? 'Paid' : 'Partial';
 
-        // Update collection
+        // Update current collection
         await db.collection("collections").updateOne(
           { referenceNumber: collection.referenceNumber },
           {
             $set: {
-              paidAmount: newPaid,
-              balance: newBalance,
-              status: newStatus,
-              note: newStatus === 'Paid' ? '' : (collection.note || '')
+              paidAmount: alreadyPaid + paymentToApply,
+              balance: Math.max(due - (alreadyPaid + paymentToApply), 0),
+              status: Math.max(due - (alreadyPaid + paymentToApply), 0) === 0 ? "Paid" : "Partial",
             }
           }
         );
+
+        // Apply totalPayment to next collection if current fully paid
+        if (alreadyPaid + paymentToApply >= due) {
+          const nextCollection = await db.collection("collections").findOne({
+            loanId: current.loanId,
+            collectionNumber: collectionNumber + 1
+          });
+
+          if (nextCollection) {
+            await db.collection("collections").updateOne(
+              { referenceNumber: nextCollection.referenceNumber },
+              { $inc: { totalPayment: paymentToApply, loanBalance: -paymentToApply } }
+            );
+          }
+        }
 
         // Log payment
         paymentLogs.push({
@@ -169,7 +178,7 @@ module.exports = (db) => {
           borrowersId: current.borrowersId,
           collector: current.collector || null,
           amount: paymentToApply,
-          balance: newBalance,
+          balance: Math.max(due - (alreadyPaid + paymentToApply), 0),
           paidToCollection: collection.collectionNumber,
           datePaid: now,
           createdAt: now
@@ -179,25 +188,19 @@ module.exports = (db) => {
         collectionNumber++;
       }
 
-      // Update loan
+      // Update loan totals
       await db.collection("loans").updateOne(
         { loanId: current.loanId },
-        {
-          $inc: {
-            paidAmount: amount,
-            balance: -amount
-          }
-        }
+        { $inc: { paidAmount: amount - remainingAmount, balance: -(amount - remainingAmount) } }
       );
 
-      // Save logs
-      await db.collection("payments").insertMany(paymentLogs);
-
-      // Save notification
+      // Save payment logs
       if (paymentLogs.length > 0) {
+        await db.collection("payments").insertMany(paymentLogs);
+
         const successNote = {
           id: `success-${paymentLogs[0].referenceNumber}-${Date.now()}`,
-          message: `✅ Payment of ₱${amount.toFixed(2)} was successfully recorded.`,
+          message: `✅ Payment of ₱${(amount - remainingAmount).toFixed(2)} was successfully recorded.`,
           referenceNumber: paymentLogs[0].referenceNumber,
           borrowersId: paymentLogs[0].borrowersId,
           date: new Date(),
@@ -210,7 +213,7 @@ module.exports = (db) => {
       res.json({
         message: "Payment recorded successfully",
         paymentLogs,
-        totalPaid: amount,
+        totalPaid: amount - remainingAmount,
         collectionsCovered: paymentLogs.length,
         remainingUnapplied: remainingAmount
       });
@@ -220,6 +223,7 @@ module.exports = (db) => {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+
 
   // GET COLLECTORS
   router.get('/collectors', async (req, res) => {

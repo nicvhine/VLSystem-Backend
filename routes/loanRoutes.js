@@ -93,6 +93,8 @@ module.exports = (db) => {
         incomeSource: application.sourceOfIncome,
         monthlyIncome: application.appMonthlyIncome,
         occupation: application.appOccupation,
+        employmentStatus: application.appEmploymentStatus,
+        companyName: application.appCompanyName,
         borrowerUsername: borrower.username,
         principal: application.appLoanAmount,
         releasedAmount,
