@@ -50,7 +50,7 @@ module.exports = (db) => {
                 to: "int",
                 onError: 0,
                 onNull: 0
-              }              
+              }
             }
           }
         },
@@ -66,14 +66,17 @@ module.exports = (db) => {
   
       // Step 6: Compute totals
       const termsInMonths = application.appLoanTerms;
-      const principal = application.appLoanAmount;
-      const interestRate = application.appInterest; 
-      const totalInterest = principal * (interestRate / 100) * termsInMonths;
+      const principal = Number(application.appLoanAmount);
+      const interestRate = Number(application.appInterest);
+  
+      const interestAmount = principal * (interestRate / 100);
+      const totalInterest = interestAmount * termsInMonths;
+  
       const totalPayable = principal + totalInterest;
       const monthlyDue = totalPayable / termsInMonths;
       const balance = totalPayable;
       const paidAmount = 0;
-      const releasedAmount = principal; 
+      const releasedAmount = principal;
   
       const loan = {
         loanId,
@@ -82,7 +85,7 @@ module.exports = (db) => {
         dateOfBirth: application.appDob,
         maritalStatus: application.appMarital,
         noOfChildren: application.appChildren,
-        borrowersId: borrower.borrowersId,  
+        borrowersId: borrower.borrowersId,
         address: application.appAddress,
         mobileNumber: application.appContact,
         email: application.appEmail,
@@ -95,8 +98,10 @@ module.exports = (db) => {
         principal,
         releasedAmount,
         interestRate,
+        interestAmount,   
+        totalInterest,    
         termsInMonths,
-        profilePic: application.profilePic, 
+        profilePic: application.profilePic,
         loanType: application.loanType,
         totalPayable,
         monthlyDue,
@@ -124,7 +129,7 @@ module.exports = (db) => {
         }
   
         collections.push({
-          referenceNumber: `${loanId}-C${i + 1}`, 
+          referenceNumber: `${loanId}-C${i + 1}`,
           loanId,
           borrowersId: borrower.borrowersId,
           name: borrower.name,
@@ -150,6 +155,7 @@ module.exports = (db) => {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+  
   
 
  router.post('/generate-reloan/:borrowersId', async (req, res) => {
@@ -360,80 +366,21 @@ if (previousLoan.length > 0) {
 
 
 
-  router.get('/loan-stats', authenticateToken, async (req, res) => {
+router.get("/loan-stats", async (req, res) => {
   try {
-    const dbLoans = db.collection('loans');
-    const dbApplications = db.collection('loan_applications');
-
-    const loans = await dbLoans.find().toArray();
-    const applications = await dbApplications.find().toArray();
-
-    let totalPrincipal = 0;
-    let totalInterest = 0;
-    let totalCollectables = 0;
-    let totalCollected = 0;
-    let totalUnpaid = 0;
-
-    const loanTypeCount = {};
-
-    for (const loan of loans) {
-      const principal = loan.principal || 0;
-      const interestRate = loan.interestRate || 0;
-      const terms = loan.termsInMonths || 0;
-
-      const interest = principal * (interestRate / 100) * terms;
-      const totalPayable = principal + interest;
-      const paid = loan.paidAmount || 0;
-      const balance = loan.balance || (totalPayable - paid);
-
-      totalPrincipal += principal;
-      totalInterest += interest;
-      totalCollectables += totalPayable;
-      totalCollected += paid;
-      totalUnpaid += balance;
-
-      const type = loan.loanType || 'Unknown';
-      loanTypeCount[type] = (loanTypeCount[type] || 0) + 1;
-    }
-
-    const typeStats = Object.entries(loanTypeCount)
-    .map(([loanType, count]) => ({ loanType, count }))
-    .sort((a, b) => b.count - a.count);
-
-    const statusCounts = {
-      approved: 0,
-      denied: 0,
-      pending: 0,
-      onHold: 0,
-    };
-
-    for (const app of applications) {
-      const status = (app.status || '').toLowerCase();
-
-      if (status === 'accepted' || status === 'approved') {
-        statusCounts.approved++;
-      } else if (status === 'denied' || status === 'rejected') {
-        statusCounts.denied++;
-      } else if (status === 'pending') {
-        statusCounts.pending++;
-      } else if (status === 'on hold' || status === 'onhold') {
-        statusCounts.onHold++;
+    const result = await db.collection("loans").aggregate([
+      {
+        $group: {
+          _id: null,
+          totalPrincipal: { $sum: "$principal" }
+        }
       }
-    }
+    ]).toArray();
 
-    res.json({
-      totalLoans: loans.length,
-      totalPrincipal,
-      totalInterest,
-      totalCollectables,
-      totalCollected,
-      totalUnpaid,
-      typeStats,
-      applicationStatuses: statusCounts,
-    });
+    res.json({ totalPrincipal: result[0]?.totalPrincipal || 0 });
   } catch (err) {
-    console.error('Error getting loan stats:', err);
-    res.status(500).json({ error: 'Failed to fetch loan statistics' });
+    console.error(err);
+    res.status(500).json({ error: "Failed to fetch loan stats" });
   }
 });
 
