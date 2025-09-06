@@ -235,7 +235,7 @@ module.exports = (db) => {
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable, appReferences,
         hasCollateral: false,
         loanType: "Regular Loan Without Collateral",
-        status: "Pending",
+        status: "Applied",
         dateApplied: new Date(),
         isReloan: false,
         documents: uploadedDocs,
@@ -333,7 +333,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
       hasCollateral: false,
       isReloan: true,
       appReloanType,
-      status: "Pending",
+      status: "Applied",
       dateApplied: new Date(),
     };
 
@@ -480,8 +480,13 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
       }
   
       const applicationId = await generateApplicationId();
-      const totalInterest = appLoanAmount * (appInterest / 100) * appLoanTerms;
-      const totalPayable = appLoanAmount + totalInterest;
+      
+      const principal = Number(appLoanAmount);
+      const interestRate = Number(appInterest);
+      const terms = Number(appLoanTerms);
+
+      const totalInterest = principal * (interestRate / 100) * terms;
+      const totalPayable = principal + totalInterest;
   
       let newApplication = {
         applicationId,
@@ -492,7 +497,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         hasCollateral: true,
         collateralType, collateralValue, collateralDescription, ownershipStatus,
         loanType: "Regular Loan With Collateral",
-        status: "Pending",
+        status: "Applied",
         dateApplied: new Date(),
         documents: uploadedDocs,
         profilePic: uploadedPp,
@@ -675,7 +680,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         hasCollateral: true,
         collateralType, collateralValue, collateralDescription, ownershipStatus,
         loanType: "Open-Term Loan",
-        status: "Pending",
+        status: "Applied",
         dateApplied: new Date(),
         documents: uploadedDocs,
         profilePic: uploadedPp,
