@@ -5,6 +5,7 @@ const path = require("path");
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const cron = require("node-cron");
+const sharp = require("sharp");
 
 //authenticator
 function authenticateToken(req, res, next) {
