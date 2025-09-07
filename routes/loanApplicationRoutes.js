@@ -35,12 +35,19 @@ const storage = multer.diskStorage({
   },
 });
 
+// Multer filter
 const fileFilter = (req, file, cb) => {
-  const allowedTypes = ["application/pdf", "image/png"];
-  if (allowedTypes.includes(file.mimetype)) {
-    cb(null, true);
+  const allowedDocs = ["application/pdf", "image/png"];
+  const allowedPp = ["image/png"];
+
+  if (file.fieldname === "documents") {
+    if (allowedDocs.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only PDF or PNG allowed for documents"), false);
+  } else if (file.fieldname === "profilePic") {
+    if (allowedPp.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Only PNG allowed for profile picture"), false);
   } else {
-    cb(new Error("Only PDF and PNG files are allowed"), false);
+    cb(new Error("Unknown file field"), false);
   }
 };
 
@@ -62,6 +69,27 @@ const upload = multer({
   },
   limits: { fileSize: 5 * 1024 * 1024 },
 });
+
+async function validate2x2(req, res, next) {
+  try {
+    if (req.files.profilePic && req.files.profilePic[0]) {
+      const filePath = req.files.profilePic[0].path;
+
+      const metadata = await sharp(filePath).metadata();
+
+      // Standard: 600x600 pixels (2x2 inches at 300 DPI)
+      if (metadata.width !== 600 || metadata.height !== 600) {
+        return res.status(400).json({
+          error: "Profile picture must be 2x2 inches (600x600 pixels) PNG format.",
+        });
+      }
+    }
+    next();
+  } catch (err) {
+    console.error("Error validating profile picture:", err.message);
+    res.status(500).json({ error: "Failed to validate profile picture." });
+  }
+}
 
 
 //id format
@@ -121,155 +149,170 @@ module.exports = (db) => {
   });
 
   //add application without
-  router.post("/without", upload.fields([
-    { name: "documents", maxCount: 5 },
-    { name: "profilePic", maxCount: 1 }
-  ]), async (req, res) => {
-    try {
-      const {
-        sourceOfIncome,
-        appName, appDob, appContact, appEmail, appMarital, appChildren,
-        appSpouseName, appSpouseOccupation, appAddress,
-        appTypeBusiness, appDateStarted, appBusinessLoc,
-        appMonthlyIncome,
-        appOccupation, appEmploymentStatus, appCompanyName,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
-      } = req.body;
-  
-      const names = new Map();
-      const numbers = new Map();
-
-      appReferences.forEach((r, idx) => {
-        const nameKey = (r.name || "").trim().toLowerCase();
-        const numKey = (r.contact || "").trim();
-      
-        if (nameKey) {
-          if (!names.has(nameKey)) names.set(nameKey, []);
-          names.get(nameKey).push(idx);
-        }
-        if (numKey) {
-          if (!numbers.has(numKey)) numbers.set(numKey, []);
-          numbers.get(numKey).push(idx);
-        }
-      });
-      
-      const dupNameIndices = [...names.values()].filter((arr) => arr.length > 1).flat();
-      const dupNumberIndices = [...numbers.values()].filter((arr) => arr.length > 1).flat();
-      
-      if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
-        return res.status(400).json({
-          error: "Reference names and contact numbers must be unique.",
-          duplicates: {
-            nameIndices: dupNameIndices,
-            numberIndices: dupNumberIndices,
-          },
-        });
-      }
-
-      const uploadedDocs = processUploadedDocs(req.files);
-
-      let uploadedPp = null;
-      if (req.files.profilePic && req.files.profilePic[0]) {
-        uploadedPp = {
-          fileName: req.files.profilePic[0].originalname,
-          filePath: req.files.profilePic[0].path,
-          mimeType: req.files.profilePic[0].mimetype
-        };
-      }
-
-  
-      if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
-        return res.status(400).json({ error: "All required fields must be provided." });
-      }
-  
-      if (sourceOfIncome === "business") {
-        if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
-          return res.status(400).json({ error: "Business fields are required for business income source." });
-        }
-      } else if (sourceOfIncome === "employed") {
-        if (!appOccupation || !appEmploymentStatus || !appCompanyName || appMonthlyIncome == null) {
-          return res.status(400).json({ error: "Employment fields are required for employed income source." });
-        }
-      } else {
-        return res.status(400).json({ error: "Invalid source of income." });
-      }
-  
-      if (!Array.isArray(appReferences) || appReferences.length !== 3) {
-        return res.status(400).json({ error: "Three references must be provided." });
-      }
-  
-      for (const ref of appReferences) {
-        if (!ref.name || !ref.contact || !ref.relation) {
-          return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
-        }
-      }
-
-      const existing = await loanApplications.findOne({
-        appName: appName.trim(),
-        appDob: appDob.trim(),
-        appContact: appContact.trim(),
-        appEmail: appEmail.trim(),
-        status: "Pending"
-      });
-
-      if (existing) {
-        return res.status(400).json({
-          error: "You already have a pending application with these details. Please wait for it to be processed."
-        });
-      }
-  
-      const applicationId = await generateApplicationId();  
-  
-      const principal = Number(appLoanAmount);
-      const interestRate = Number(appInterest);
-      const terms = Number(appLoanTerms);
-
-      const totalInterest = principal * (interestRate / 100) * terms;
-      const totalPayable = principal + totalInterest;
-  
-      let newApplication = {
-        applicationId,
-        appName, appDob, appContact, appEmail, appMarital, appChildren,
-        appSpouseName, appSpouseOccupation, appAddress,
-        appMonthlyIncome,
-        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable, appReferences,
-        hasCollateral: false,
-        loanType: "Regular Loan Without Collateral",
-        status: "Applied",
-        dateApplied: new Date(),
-        isReloan: false,
-        documents: uploadedDocs,
-        profilePic: uploadedPp,
-      };
-  
-      if (newApplication.status === "Disbursed") {
-        newApplication.dateDisbursed = new Date();
-      }
-  
-      if (sourceOfIncome === "business") {
-        newApplication = {
-          ...newApplication,
+  router.post(
+    "/without",
+    upload.fields([
+      { name: "documents", maxCount: 5 },
+      { name: "profilePic", maxCount: 1 }
+    ]),
+    validate2x2,
+    async (req, res) => {
+      try {
+        const {
           sourceOfIncome,
+          appName, appDob, appContact, appEmail, appMarital, appChildren,
+          appSpouseName, appSpouseOccupation, appAddress,
           appTypeBusiness, appDateStarted, appBusinessLoc,
-        };
-      } else {
-        newApplication = {
-          ...newApplication,
-          sourceOfIncome,
+          appMonthlyIncome,
           appOccupation, appEmploymentStatus, appCompanyName,
-        };
-      }
+          appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
+        } = req.body;
   
-      await loanApplications.insertOne(newApplication);
-      res.status(201).json({
-        message: "Loan application (no collateral) submitted successfully",
-        application: newApplication,
-      });
-    } catch (error) {
-      console.error("Error in /loan-applications/without:", error);
-      res.status(500).json({ error: "Failed to submit loan application." });
+        // ✅ Parse references
+        let parsedReferences;
+        try {
+          parsedReferences =
+            typeof appReferences === "string" ? JSON.parse(appReferences) : appReferences;
+        } catch (e) {
+          return res.status(400).json({ error: "Invalid format for character references." });
+        }
+  
+        if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3) {
+          return res.status(400).json({ error: "Three references must be provided." });
+        }
+  
+        for (const ref of parsedReferences) {
+          if (!ref.name || !ref.contact || !ref.relation) {
+            return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
+          }
+        }
+  
+        const names = new Map();
+        const numbers = new Map();
+  
+        parsedReferences.forEach((r, idx) => {
+          const nameKey = (r.name || "").trim().toLowerCase();
+          const numKey = (r.contact || "").trim();
+  
+          if (nameKey) {
+            if (!names.has(nameKey)) names.set(nameKey, []);
+            names.get(nameKey).push(idx);
+          }
+          if (numKey) {
+            if (!numbers.has(numKey)) numbers.set(numKey, []);
+            numbers.get(numKey).push(idx);
+          }
+        });
+  
+        const dupNameIndices = [...names.values()].filter((arr) => arr.length > 1).flat();
+        const dupNumberIndices = [...numbers.values()].filter((arr) => arr.length > 1).flat();
+  
+        if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
+          return res.status(400).json({
+            error: "Reference names and contact numbers must be unique.",
+            duplicates: {
+              nameIndices: dupNameIndices,
+              numberIndices: dupNumberIndices,
+            },
+          });
+        }
+  
+        const uploadedDocs = processUploadedDocs(req.files);
+  
+        let uploadedPp = null;
+        if (req.files.profilePic && req.files.profilePic[0]) {
+          uploadedPp = {
+            fileName: req.files.profilePic[0].originalname,
+            filePath: req.files.profilePic[0].path,
+            mimeType: req.files.profilePic[0].mimetype,
+          };
+        }
+  
+        if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || !appLoanTerms) {
+          return res.status(400).json({ error: "All required fields must be provided." });
+        }
+  
+        if (sourceOfIncome === "business") {
+          if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
+            return res.status(400).json({ error: "Business fields are required for business income source." });
+          }
+        } else if (sourceOfIncome === "employed") {
+          if (!appOccupation || !appEmploymentStatus || !appCompanyName || appMonthlyIncome == null) {
+            return res.status(400).json({ error: "Employment fields are required for employed income source." });
+          }
+        } else {
+          return res.status(400).json({ error: "Invalid source of income." });
+        }
+  
+        const existing = await loanApplications.findOne({
+          appName: appName.trim(),
+          appDob: appDob.trim(),
+          appContact: appContact.trim(),
+          appEmail: appEmail.trim(),
+          status: "Pending"
+        });
+  
+        if (existing) {
+          return res.status(400).json({
+            error: "You already have a pending application with these details. Please wait for it to be processed."
+          });
+        }
+  
+        const applicationId = await generateApplicationId();
+        const principal = Number(appLoanAmount);
+        const interestRate = Number(appInterest);
+        const terms = Number(appLoanTerms);
+  
+        const totalInterest = principal * (interestRate / 100) * terms;
+        const totalPayable = principal + totalInterest;
+  
+        let newApplication = {
+          applicationId,
+          appName, appDob, appContact, appEmail, appMarital, appChildren,
+          appSpouseName, appSpouseOccupation, appAddress,
+          appMonthlyIncome,
+          appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, totalPayable,
+          appReferences: parsedReferences,
+          hasCollateral: false,
+          loanType: "Regular Loan Without Collateral",
+          status: "Applied",
+          dateApplied: new Date(),
+          isReloan: false,
+          documents: uploadedDocs,
+          profilePic: uploadedPp,
+        };
+  
+        if (newApplication.status === "Disbursed") {
+          newApplication.dateDisbursed = new Date();
+        }
+  
+        if (sourceOfIncome === "business") {
+          newApplication = {
+            ...newApplication,
+            sourceOfIncome,
+            appTypeBusiness, appDateStarted, appBusinessLoc,
+          };
+        } else {
+          newApplication = {
+            ...newApplication,
+            sourceOfIncome,
+            appOccupation, appEmploymentStatus, appCompanyName,
+          };
+        }
+  
+        await loanApplications.insertOne(newApplication);
+        res.status(201).json({
+          message: "Loan application (no collateral) submitted successfully",
+          application: newApplication,
+        });
+  
+      } catch (error) {
+        console.error("Error in /loan-applications/without:", error);
+        res.status(500).json({ error: "Failed to submit loan application." });
+      }
     }
-  });
+  );
+  
   
 //add application reloan-without
 router.post("/without/reloan/:borrowersId", async (req, res) => {
@@ -364,7 +407,9 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   router.post("/with", upload.fields([
     { name: "documents", maxCount: 5 },
     { name: "profilePic", maxCount: 1 }
-  ]), async (req, res) => {
+  ]),
+  validate2x2,
+  async (req, res) => {
   try {
       const {
         sourceOfIncome,
@@ -377,19 +422,24 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         collateralType, collateralValue, collateralDescription, ownershipStatus
       } = req.body;
   
-      let parsedReferences = [];
-      if (appReferences) {
-        try {
-          if (Array.isArray(appReferences)) {
-            parsedReferences = appReferences;
-          } else {
-            parsedReferences = JSON.parse(appReferences);
-          }
-        } catch (err) {
-          return res.status(400).json({ error: "Invalid format for references." });
-        }
+      let parsedReferences;
+      try {
+        parsedReferences =
+          typeof appReferences === "string" ? JSON.parse(appReferences) : appReferences;
+      } catch (e) {
+        return res.status(400).json({ error: "Invalid format for character references." });
       }
+
+        if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3) {
+          return res.status(400).json({ error: "Three references must be provided." });
+        }
   
+        for (const ref of parsedReferences) {
+          if (!ref.name || !ref.contact || !ref.relation) {
+            return res.status(400).json({ error: "Each reference must include name, contact, and relation." });
+          }
+        }
+
       const names = new Map();
       const numbers = new Map();
   
@@ -732,22 +782,19 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   });
 
   //fetch loan statistics
-  router.get("/loan-stats", async (req, res) => {
+  router.get("/applicationStatus-stats", async (req, res) => {
     try {
       const collection = db.collection("loan_applications");
   
-      const [approved, denied, pending, onHold] = await Promise.all([
-        collection.countDocuments({ status: { $regex: /^accepted$/i } }),
-        collection.countDocuments({ status: { $regex: /^denied by LO$/i } }),
-        collection.countDocuments({ status: { $regex: /^pending$/i } }),
-        collection.countDocuments({ status: { $regex: /^on hold$/i } }),
-      ]);
+      const applied = await collection.countDocuments({ status: { $regex: /^applied$/i } });
+      const approved = await collection.countDocuments({ status: { $regex: /^approved$/i } });
+      const denied = await collection.countDocuments({ status: { $regex: /^denied$/i } });
+
   
       res.json({
         approved,
         denied,
-        pending,
-        onHold,
+        applied
       });
     } catch (error) {
       console.error("Error fetching loan stats:", error);
@@ -937,18 +984,6 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
     const existingApp = await loanApplications.findOne({ applicationId });
     if (!existingApp) {
       return res.status(404).json({ error: "Loan application not found." });
-    }
-
-    //if status is denied by lo, delete
-    if (
-      typeof updateData.status === "string" &&
-      updateData.status.trim().toLowerCase() === "denied by lo"
-    ) {
-      await loanApplications.deleteOne({ applicationId });
-      return res.status(200).json({
-        message: `Application ${applicationId} has been denied and deleted from records.`,
-        deleted: true
-      });
     }
 
     await loanApplications.updateOne({ applicationId }, { $set: updateData });
