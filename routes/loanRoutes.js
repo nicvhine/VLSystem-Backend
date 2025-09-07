@@ -372,15 +372,46 @@ router.get("/loan-stats", async (req, res) => {
       {
         $group: {
           _id: null,
-          totalPrincipal: { $sum: "$principal" }
+          totalPrincipal: { $sum: "$principal" },
+          totalInterest: { $sum: "$totalInterest"}
         }
       }
     ]).toArray();
 
-    res.json({ totalPrincipal: result[0]?.totalPrincipal || 0 });
+    res.json({
+    totalPrincipal: result[0]?.totalPrincipal || 0,
+    totalInterest: result[0]?.totalInterest || 0,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "Failed to fetch loan stats" });
+  }
+});
+
+router.get("/loan-type-stats", async (req, res) => {
+  try {
+    const collection = db.collection("loans");
+
+    const types = await collection.aggregate([
+      {
+        $group: {
+          _id: "$loanType",
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          loanType: "$_id",
+          count: 1
+        }
+      }
+    ]).toArray();
+
+    res.status(200).json(types);
+  } catch (error) {
+    console.error("Error fetching loan type stats:", error);
+    res.status(500).json({ error: "Failed to fetch loan type statistics" });
   }
 });
 
