@@ -44,6 +44,30 @@ module.exports = (db) => {
     }
   });
 
+  router.get("/manager", authenticateToken, async (req, res) => {
+    try {
+      const role = (req.user?.role || "").toLowerCase().trim();
+      if (role !== "manager") {
+        return res
+          .status(403)
+          .json({ error: "Access denied. Manager role required." });
+      }
+
+      const notifications = await db
+        .collection("manager_notifications")
+        .find({})
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .toArray();
+
+      res.status(200).json(notifications);
+    } catch (error) {
+      console.error("❌ Error fetching manager notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications." });
+    }
+  });
+
+
   // PUT: Mark single notification as read
   router.put("/loan-officer/:id/read", authenticateToken, async (req, res) => {
     try {
@@ -75,6 +99,37 @@ module.exports = (db) => {
     }
   });
 
+    // PUT: Mark single notification as read
+    router.put("/manager/:id/read", authenticateToken, async (req, res) => {
+      try {
+        const rawId = req.params.id;
+        let filter;
+  
+        if (ObjectId.isValid(rawId)) {
+          filter = { _id: new ObjectId(rawId) };
+        } else {
+          filter = { id: rawId };
+        }
+  
+        const result = await db
+          .collection("manager_notifications")
+          .findOneAndUpdate(
+            filter,
+            { $set: { read: true } },
+            { returnDocument: "after" }
+          );
+  
+        if (!result.value) {
+          return res.status(404).json({ message: "Notification not found" });
+        }
+  
+        return res.json(result.value);
+      } catch (err) {
+        console.error("❌ Error in PUT /manager/:id/read:", err);
+        return res.status(500).json({ error: "Failed to update notification" });
+      }
+    });
+
   // PUT: Mark all as read
   router.put("/loan-officer/read-all", authenticateToken, async (req, res) => {
     try {
@@ -88,6 +143,24 @@ module.exports = (db) => {
       });
     } catch (err) {
       console.error("❌ Error in PUT /loan-officer/read-all:", err);
+      return res
+        .status(500)
+        .json({ error: "Failed to mark all as read", details: err.message });
+    }
+  });
+
+   router.put("/manager/read-all", authenticateToken, async (req, res) => {
+    try {
+      const updateResult = await db
+        .collection("manager_notifications")
+        .updateMany({ read: false }, { $set: { read: true } });
+
+      return res.json({
+        matched: updateResult.matchedCount,
+        modified: updateResult.modifiedCount,
+      });
+    } catch (err) {
+      console.error("❌ Error in PUT /manager/read-all:", err);
       return res
         .status(500)
         .json({ error: "Failed to mark all as read", details: err.message });
