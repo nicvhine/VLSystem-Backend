@@ -5,6 +5,7 @@ const path = require("path");
 const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const cron = require("node-cron");
+const sharp = require("sharp"); 
 
 //authenticator
 function authenticateToken(req, res, next) {
@@ -77,7 +78,6 @@ async function validate2x2(req, res, next) {
 
       const metadata = await sharp(filePath).metadata();
 
-      // Standard: 600x600 pixels (2x2 inches at 300 DPI)
       if (metadata.width !== 600 || metadata.height !== 600) {
         return res.status(400).json({
           error: "Profile picture must be 2x2 inches (600x600 pixels) PNG format.",
@@ -168,7 +168,6 @@ module.exports = (db) => {
           appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
         } = req.body;
   
-        // ✅ Parse references
         let parsedReferences;
         try {
           parsedReferences =
@@ -404,10 +403,12 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
 });
 
   //add application with
-  router.post("/with", upload.fields([
-    { name: "documents", maxCount: 5 },
-    { name: "profilePic", maxCount: 1 }
-  ]),
+  router.post(
+    "/with",
+    upload.fields([
+      { name: "documents", maxCount: 5 },
+      { name: "profilePic", maxCount: 1 }
+    ]),
   validate2x2,
   async (req, res) => {
   try {
