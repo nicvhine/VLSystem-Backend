@@ -1,260 +1,235 @@
 require('dotenv').config();
 const express = require('express');
-const router = express.Router();
+const axios = require('axios');
 const { MongoClient, ObjectId } = require('mongodb');
-const PayMongoService = require('../services/paymongoService');
 
-module.exports = function (db) {
-
-
+const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || 'sk_test_Q4rqE9GpwUrNxJeGXvdVCgY5';
 const uri = process.env.MONGODB_URI;
 
-// Helper function to safely create ObjectId
-function createObjectId(id) {
+module.exports = function (db) {
+  const router = express.Router();
+
+  // ✅ Helper: safely create ObjectId
+  function createObjectId(id) {
     try {
-        if (ObjectId.isValid(id)) {
-            return new ObjectId(id);
-        }
-        return null;
+      if (ObjectId.isValid(id)) return new ObjectId(id);
+      return null;
     } catch (error) {
-        console.error('Invalid ObjectId:', error);
-        return null;
+      console.error('Invalid ObjectId:', error);
+      return null;
     }
-}
+  }
 
-// Create payment intent
-router.post('/create-payment-intent', async (req, res) => {
-    let client;
-    try {
-        const { amount, loanId, description } = req.body;
+  // ✅ PayMongo GCash Payment (create intent + source)
+  router.post('/paymongo/gcash', async (req, res) => {
+    const { amount, collectionNumber, referenceNumber, borrowersId } = req.body;
 
-        // Validate input
-        if (!amount || !loanId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Amount and loan ID are required'
-            });
-        }
-
-        // Create payment intent with PayMongo
-        const paymentIntent = await paymongoService.createPaymentIntent(
-            amount,
-            'PHP',
-            description || `Payment for Loan ${loanId}`
-        );
-
-        // Store payment record in database
-        client = new MongoClient(uri);
-        await client.connect();
-        const db = client.db('VLSystem');
-        
-        const paymentRecord = {
-            loanId: loanId,
-            paymentIntentId: paymentIntent.data.id,
-            amount: amount,
-            currency: 'PHP',
-            status: 'pending',
-            paymongoData: paymentIntent.data,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        };
-
-        const result = await db.collection('payments').insertOne(paymentRecord);
-
-        res.json({
-            success: true,
-            paymentIntent: paymentIntent.data,
-            paymentId: result.insertedId.toString()
-        });
-
-    } catch (error) {
-        console.error('Create payment intent error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to create payment intent',
-            error: error.message
-        });
-    } finally {
-        if (client) {
-            await client.close();
-        }
+    if (!referenceNumber || !borrowersId || !amount || amount <= 0) {
+      return res.status(400).json({ error: "Invalid request payload" });
     }
-});
 
-// Process payment
-router.post('/process-payment', async (req, res) => {
-    let client;
     try {
-        const { paymentIntentId, paymentMethodId, loanId } = req.body;
-
-        if (!paymentIntentId || !paymentMethodId || !loanId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Payment intent ID, payment method ID, and loan ID are required'
-            });
-        }
-
-        // Attach payment method to payment intent
-        const result = await paymongoService.attachPaymentIntent(paymentIntentId, paymentMethodId);
-
-        client = new MongoClient(uri);
-        await client.connect();
-        const db = client.db('VLSystem');
-
-        // Update payment record
-        await db.collection('payments').updateOne(
-            { paymentIntentId: paymentIntentId },
-            {
-                $set: {
-                    status: result.data.attributes.status,
-                    paymentMethodId: paymentMethodId,
-                    paymongoData: result.data,
-                    updatedAt: new Date()
-                }
-            }
-        );
-
-        // If payment is successful, update loan balance
-        if (result.data.attributes.status === 'succeeded') {
-            const payment = await db.collection('payments').findOne({ paymentIntentId: paymentIntentId });
-            
-            if (payment) {
-                // Update loan balance
-                await db.collection('loans').updateOne(
-                    { loanId: loanId },
-                    {
-                        $inc: { 
-                            totalPaid: payment.amount,
-                            remainingBalance: -payment.amount 
-                        },
-                        $set: { updatedAt: new Date() }
-                    }
-                );
-
-                // Add to payment history
-                await db.collection('paymentHistory').insertOne({
-                    loanId: loanId,
-                    paymentId: payment._id.toString(),
-                    amount: payment.amount,
-                    paymentMethod: 'PayMongo',
-                    referenceNumber: paymentIntentId,
-                    datePaid: new Date(),
-                    status: 'completed',
-                    createdAt: new Date()
-                });
-            }
-        }
-
-        res.json({
-            success: true,
-            payment: result.data,
-            status: result.data.attributes.status
-        });
-
-    } catch (error) {
-        console.error('Process payment error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to process payment',
-            error: error.message
-        });
-    } finally {
-        if (client) {
-            await client.close();
-        }
-    }
-});
-
-// Get loan payment details
-router.get('/loan-details/:loanId', async (req, res) => {
-    let client;
-    try {
-        const { loanId } = req.params;
-
-        client = new MongoClient(uri);
-        await client.connect();
-        const db = client.db('VLSystem');
-
-        // Get loan details
-        const loan = await db.collection('loans').findOne({ loanId: loanId });
-        
-        if (!loan) {
-            return res.status(404).json({
-                success: false,
-                message: 'Loan not found'
-            });
-        }
-
-        // Get payment history
-        const payments = await db.collection('paymentHistory')
-            .find({ loanId: loanId })
-            .sort({ datePaid: -1 })
-            .toArray();
-
-        // Calculate next payment amount
-        const nextPaymentAmount = Math.min(25000, loan.remainingBalance || 0);
-
-        res.json({
-            success: true,
-            loan: {
-                ...loan,
-                _id: loan._id.toString()
+      // 1️⃣ Create payment intent
+      const paymentIntentRes = await axios.post(
+        'https://api.paymongo.com/v1/payment_intents',
+        {
+          data: {
+            attributes: {
+              amount: Math.round(amount * 100),
+              currency: 'PHP',
+              payment_method_allowed: ['gcash'],
+              description: `Payment for collection ${collectionNumber}`,
+              metadata: { referenceNumber, borrowersId },
             },
-            payments: payments.map(payment => ({
-                ...payment,
-                _id: payment._id ? payment._id.toString() : null
-            })),
-            nextPaymentAmount
-        });
+          },
+        },
+        { auth: { username: PAYMONGO_SECRET_KEY, password: '' } }
+      );
 
-    } catch (error) {
-        console.error('Get loan details error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to get loan details',
-            error: error.message
-        });
-    } finally {
-        if (client) {
-            await client.close();
-        }
-    }
-});
+      const paymentIntent = paymentIntentRes.data.data;
 
-// Create a checkout session for GCash and QRPH
-router.post("/create-checkout-session", async (req, res) => {
-    try {
-      const { amount } = req.body; 
-      const checkoutSession = await PayMongoService.createCheckoutSession(amount);
-      res.json(checkoutSession);
-    } catch (error) {
-      console.error("Error creating checkout session:", error);
-      res.status(500).json({ error: "Failed to create checkout session" });
+      // 2️⃣ Create GCash source
+      const sourceRes = await axios.post(
+        'https://api.paymongo.com/v1/sources',
+        {
+          data: {
+            attributes: {
+              type: 'gcash',
+              amount: Math.round(amount * 100),
+              currency: 'PHP',
+              redirect: {
+                success: `http://localhost:3000/components/borrower/payment-success/${referenceNumber}`,
+                failed: `http://localhost:3000/borrower/payment-failed/${referenceNumber}`,
+              },
+              payment_intent: paymentIntent.id,
+              statement_descriptor: `Collection ${collectionNumber}`,
+              metadata: { referenceNumber, borrowersId },
+            },
+          },
+        },
+        { auth: { username: PAYMONGO_SECRET_KEY, password: '' } }
+      );
+
+      const checkoutUrl = sourceRes.data.data.attributes.redirect.checkout_url;
+
+      // 3️⃣ Save pending record
+      await db.collection('paymongo-payments').insertOne({
+        referenceNumber,
+        collectionNumber,
+        borrowersId,
+        amount,
+        paymentIntentId: paymentIntent.id,
+        sourceId: sourceRes.data.data.id,
+        status: 'pending',
+        createdAt: new Date(),
+      });
+
+      res.json({ checkout_url: checkoutUrl });
+    } catch (err) {
+      console.error("PayMongo error:", err.response?.data || err.message);
+      return res.status(500).json({ error: 'PayMongo payment failed' });
     }
   });
-  
-  
-  
-  
 
-// Simple test endpoint to verify ObjectId works
-router.get('/test-objectid', async (req, res) => {
+  // ✅ PayMongo success callback
+  router.post('/:referenceNumber/paymongo/success', async (req, res) => {
+    const { referenceNumber } = req.params;
+
     try {
-        const testId = new ObjectId();
-        res.json({
-            success: true,
-            message: 'ObjectId works correctly',
-            testId: testId.toString()
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'ObjectId error',
-            error: error.message
-        });
+      const collection = await db.collection('collections').findOne({ referenceNumber });
+      if (!collection) return res.status(404).json({ error: 'Collection not found' });
+
+      // Update collection
+      await db.collection('collections').updateOne(
+        { referenceNumber },
+        { $set: { status: 'Paid', paidAt: new Date() } }
+      );
+
+      // Update paymongo-payments
+      await db.collection('paymongo-payments').updateOne(
+        { referenceNumber },
+        { $set: { status: 'paid', paidAt: new Date() } }
+      );
+
+      // Update loan
+      const loan = await db.collection('loans').findOne({ loanId: collection.loanId });
+      if (!loan) return res.status(404).json({ error: 'Loan not found' });
+
+      const newPaidAmount = (loan.paidAmount || 0) + (collection.periodAmount || 0);
+      const newBalance = (loan.totalPayable || 0) - newPaidAmount;
+
+      await db.collection('loans').updateOne(
+        { loanId: collection.loanId },
+        { $set: { paidAmount: newPaidAmount, balance: newBalance } }
+      );
+
+      // Insert into payments ledger
+      await db.collection('payments').insertOne({
+        loanId: collection.loanId,
+        referenceNumber,
+        borrowersId: collection.borrowersId,
+        collector: "PayMongo",
+        amount: collection.periodAmount,
+        balance: newBalance,
+        datePaid: new Date(),
+        status: "Paid",
+        mode: "GCash",
+        createdAt: new Date()
+      });
+
+      res.json({ message: 'Payment successful, records updated' });
+    } catch (err) {
+      console.error('Error updating PayMongo payment:', err);
+      res.status(500).json({ error: 'Internal server error' });
     }
-});
+  });
 
-return router;
+  // ✅ Cash payment route
+  router.post('/:referenceNumber/cash', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { collectorName } = req.body;
+
+    try {
+      const collection = await db.collection('collections').findOne({ referenceNumber });
+      if (!collection) return res.status(404).json({ error: 'Collection not found' });
+
+      // Update collection
+      await db.collection('collections').updateOne(
+        { referenceNumber },
+        { $set: { status: 'Paid', paidAt: new Date() } }
+      );
+
+      // Update loan
+      const loan = await db.collection('loans').findOne({ loanId: collection.loanId });
+      if (!loan) return res.status(404).json({ error: 'Loan not found' });
+
+      const newPaidAmount = (loan.paidAmount || 0) + (collection.periodAmount || 0);
+      const newBalance = (loan.totalPayable || 0) - newPaidAmount;
+
+      await db.collection('loans').updateOne(
+        { loanId: collection.loanId },
+        { $set: { paidAmount: newPaidAmount, balance: newBalance } }
+      );
+
+      // Insert into payments ledger
+      await db.collection('payments').insertOne({
+        loanId: collection.loanId,
+        referenceNumber,
+        borrowersId: collection.borrowersId,
+        collector: collectorName || "Cash Collector",
+        amount: collection.periodAmount,
+        balance: newBalance,
+        datePaid: new Date(),
+        status: "Paid",
+        mode: "Cash",
+        createdAt: new Date()
+      });
+
+      res.json({ message: 'Cash payment successful, records updated' });
+    } catch (err) {
+      console.error('Error handling cash payment:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // ✅ Get payment ledger
+  router.get('/ledger/:loanId', async (req, res) => {
+    try {
+      const { loanId } = req.params;
+
+      const cashPayments = await db.collection('payments')
+        .find({ loanId: loanId })
+        .sort({ datePaid: -1 })
+        .toArray();
+
+      const paymongoPayments = await db.collection('paymongo-payments')
+        .find({ borrowersId: loanId })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      const normalizedCash = cashPayments.map(p => ({
+        ...p,
+        _id: p._id ? p._id.toString() : null,
+        mode: p.mode || "Cash"
+      }));
+
+      const normalizedPaymongo = paymongoPayments.map(p => ({
+        ...p,
+        _id: p._id ? p._id.toString() : null,
+        datePaid: p.paidAt || p.createdAt,
+        mode: "PayMongo"
+      }));
+
+      const mergedPayments = [...normalizedCash, ...normalizedPaymongo].sort(
+        (a, b) => new Date(a.datePaid).getTime() - new Date(b.datePaid).getTime()
+      );
+
+      res.json({ success: true, payments: mergedPayments });
+    } catch (error) {
+      console.error('Ledger error:', error);
+      res.status(500).json({ success: false, message: 'Failed to get ledger' });
+    }
+  });
+
+  return router;
 };
-
