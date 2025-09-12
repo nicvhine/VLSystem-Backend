@@ -424,30 +424,40 @@ router.get("/loan-type-stats", async (req, res) => {
 
 
 
-  router.get('/active-loan/:borrowersId', async (req, res) => {
-    const { borrowersId } = req.params;
+router.get('/active-loan/:borrowersId', async (req, res) => {
+  const { borrowersId } = req.params;
   
-    try {
-      const loan = await db.collection('loans').findOne({
-        borrowersId,
-        status: 'Active'
-      });
+  try {
+    const loan = await db.collection('loans').findOne({
+      borrowersId,
+      status: 'Active'
+    });
 
-  
-      if (!loan) {
-        return res.status(404).json({ error: 'No active loan found for this borrower.' });
-      }
-  
-       const paymentProgress = loan.totalPayable > 0
+    if (!loan) {
+      return res.status(404).json({ error: 'No active loan found for this borrower.' });
+    }
+
+    const paymentProgress = loan.totalPayable > 0
       ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
       : 0;
 
-      res.json({ ...loan, paymentProgress });
-    } catch (err) {
-      console.error('Error fetching loan by borrower ID:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
+    res.json({ 
+      loanId: loan.loanId,
+      borrowersId: loan.borrowersId,
+      principal: loan.principal,
+      totalPayable: loan.totalPayable,
+      monthlyDue: loan.monthlyDue,
+      paidAmount: loan.paidAmount,
+      balance: loan.balance,
+      status: loan.status,
+      paymentProgress
+    });
+  } catch (err) {
+    console.error('Error fetching loan by borrower ID:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
 
   // Get all loans for a borrower (for navigation)
   router.get('/borrower-loans/:borrowersId', async (req, res) => {
