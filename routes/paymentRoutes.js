@@ -20,7 +20,115 @@ module.exports = function (db) {
     }
   }
 
-  // ✅ PayMongo GCash Payment (create intent + source)
+
+  //Cash payment route
+  router.post('/:referenceNumber/cash', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { amount, collectorName } = req.body;
+  
+    if (!amount || isNaN(amount) || amount <= 0) {
+      return res.status(400).json({ error: 'Invalid payment amount' });
+    }
+  
+    try {
+      const now = new Date();
+      const collection = await db.collection('collections').findOne({ referenceNumber });
+      if (!collection) return res.status(404).json({ error: 'Collection not found' });
+  
+      let remainingAmount = amount;
+      let collectionNumber = collection.collectionNumber;
+      const paymentLogs = [];
+      let runningTotal = collection.totalPaidAmount || 0; // cumulative total for this loan
+  
+      while (remainingAmount > 0) {
+        const currentCol = await db.collection('collections').findOne({
+          loanId: collection.loanId,
+          collectionNumber
+        });
+        if (!currentCol) break;
+  
+        const alreadyPaid = currentCol.paidAmount || 0;
+        const due = currentCol.periodAmount || 0;
+        const remainingBalance = Math.max(due - alreadyPaid, 0);
+        const paymentToApply = Math.min(remainingAmount, remainingBalance);
+  
+        // Update current collection
+        const newPaidAmount = alreadyPaid + paymentToApply;
+        runningTotal += paymentToApply;
+  
+        await db.collection('collections').updateOne(
+          { referenceNumber: currentCol.referenceNumber },
+          {
+            $set: {
+              paidAmount: newPaidAmount,
+              totalPaidAmount: runningTotal, // cumulative sum carried forward
+              balance: Math.max(due - newPaidAmount, 0),
+              status: newPaidAmount >= due ? 'Paid' : 'Partial',
+              mode: 'Cash',
+            }
+          }
+        );
+  
+        // Forward cumulative total to the next collection
+        const nextCollection = await db.collection('collections').findOne({
+          loanId: collection.loanId,
+          collectionNumber: collectionNumber + 1
+        });
+  
+        if (nextCollection) {
+          await db.collection('collections').updateOne(
+            { referenceNumber: nextCollection.referenceNumber },
+            { $set: { totalPaidAmount: runningTotal, loanBalance: (nextCollection.loanBalance || nextCollection.periodAmount) - runningTotal } }
+          );
+        }
+  
+        // Log payment
+        paymentLogs.push({
+          loanId: collection.loanId,
+          referenceNumber: currentCol.referenceNumber,
+          borrowersId: currentCol.borrowersId,
+          collector: collectorName || 'Cash Collector',
+          amount: paymentToApply,
+          balance: Math.max(due - newPaidAmount, 0),
+          paidToCollection: currentCol.collectionNumber,
+          mode: 'Cash',
+          datePaid: now,
+          createdAt: now
+        });
+  
+        remainingAmount -= paymentToApply;
+        collectionNumber++;
+      }
+  
+      // Update loan totals
+      const loan = await db.collection('loans').findOne({ loanId: collection.loanId });
+      if (!loan) return res.status(404).json({ error: 'Loan not found' });
+  
+      const totalApplied = amount - remainingAmount;
+      await db.collection('loans').updateOne(
+        { loanId: loan.loanId },
+        { $inc: { paidAmount: totalApplied, balance: -totalApplied } }
+      );
+  
+      // Insert into payments ledger
+      if (paymentLogs.length > 0) {
+        await db.collection('payments').insertMany(paymentLogs);
+      }
+  
+      res.json({
+        message: 'Cash payment successful, cumulative total recorded for next months',
+        paymentLogs,
+        remainingUnapplied: remainingAmount
+      });
+  
+    } catch (err) {
+      console.error('Error handling cash payment:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+
+  // PayMongo GCash Payment (create intent + source)
   router.post('/paymongo/gcash', async (req, res) => {
     const { amount, collectionNumber, referenceNumber, borrowersId } = req.body;
 
@@ -144,53 +252,6 @@ module.exports = function (db) {
     }
   });
 
-  // ✅ Cash payment route
-  router.post('/:referenceNumber/cash', async (req, res) => {
-    const { referenceNumber } = req.params;
-    const { collectorName } = req.body;
-
-    try {
-      const collection = await db.collection('collections').findOne({ referenceNumber });
-      if (!collection) return res.status(404).json({ error: 'Collection not found' });
-
-      // Update collection
-      await db.collection('collections').updateOne(
-        { referenceNumber },
-        { $set: { status: 'Paid', paidAt: new Date() } }
-      );
-
-      // Update loan
-      const loan = await db.collection('loans').findOne({ loanId: collection.loanId });
-      if (!loan) return res.status(404).json({ error: 'Loan not found' });
-
-      const newPaidAmount = (loan.paidAmount || 0) + (collection.periodAmount || 0);
-      const newBalance = (loan.totalPayable || 0) - newPaidAmount;
-
-      await db.collection('loans').updateOne(
-        { loanId: collection.loanId },
-        { $set: { paidAmount: newPaidAmount, balance: newBalance } }
-      );
-
-      // Insert into payments ledger
-      await db.collection('payments').insertOne({
-        loanId: collection.loanId,
-        referenceNumber,
-        borrowersId: collection.borrowersId,
-        collector: collectorName || "Cash Collector",
-        amount: collection.periodAmount,
-        balance: newBalance,
-        datePaid: new Date(),
-        status: "Paid",
-        mode: "Cash",
-        createdAt: new Date()
-      });
-
-      res.json({ message: 'Cash payment successful, records updated' });
-    } catch (err) {
-      console.error('Error handling cash payment:', err);
-      res.status(500).json({ error: 'Internal server error' });
-    }
-  });
 
   // ✅ Get payment ledger
   router.get('/ledger/:loanId', async (req, res) => {

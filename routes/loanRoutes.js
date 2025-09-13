@@ -116,7 +116,7 @@ module.exports = (db) => {
         balance,
         status: "Active",
         dateReleased: new Date(),
-        dateDisbursed: application.dateDisbursed,
+        dateDisbursed: application.dateDisbursed || new Date(),
       };
   
       // Step 7: Insert loan
