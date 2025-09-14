@@ -1,27 +1,15 @@
 require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
-const { MongoClient, ObjectId } = require('mongodb');
+const { ObjectId } = require('mongodb');
+const { applyOverduePenalty, determineLoanStatus} = require('../utils/collection');
+
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || 'sk_test_Q4rqE9GpwUrNxJeGXvdVCgY5';
-const uri = process.env.MONGODB_URI;
 
 module.exports = function (db) {
   const router = express.Router();
 
-  // ✅ Helper: safely create ObjectId
-  function createObjectId(id) {
-    try {
-      if (ObjectId.isValid(id)) return new ObjectId(id);
-      return null;
-    } catch (error) {
-      console.error('Invalid ObjectId:', error);
-      return null;
-    }
-  }
-
-
-  //Cash payment route
   router.post('/:referenceNumber/cash', async (req, res) => {
     const { referenceNumber } = req.params;
     const { amount, collectorName } = req.body;
@@ -35,91 +23,92 @@ module.exports = function (db) {
       const collection = await db.collection('collections').findOne({ referenceNumber });
       if (!collection) return res.status(404).json({ error: 'Collection not found' });
   
+      // Get all collections for the loan in order
+      const loanCollections = await db.collection('collections')
+        .find({ loanId: collection.loanId })
+        .sort({ collectionNumber: 1 })
+        .toArray();
+  
       let remainingAmount = amount;
-      let collectionNumber = collection.collectionNumber;
       const paymentLogs = [];
-      let runningTotal = collection.totalPaidAmount || 0; // cumulative total for this loan
   
-      while (remainingAmount > 0) {
-        const currentCol = await db.collection('collections').findOne({
-          loanId: collection.loanId,
-          collectionNumber
-        });
-        if (!currentCol) break;
+      for (let col of loanCollections) {
+        if (remainingAmount <= 0) break;
   
-        const alreadyPaid = currentCol.paidAmount || 0;
-        const due = currentCol.periodAmount || 0;
-        const remainingBalance = Math.max(due - alreadyPaid, 0);
-        const paymentToApply = Math.min(remainingAmount, remainingBalance);
+        // Apply overdue penalty if needed
+        const updatedCol = applyOverduePenalty(col);
+        if (updatedCol.status === 'Overdue' && col.status !== 'Overdue') {
+          await db.collection('collections').updateOne(
+            { referenceNumber: col.referenceNumber },
+            { $set: { status: 'Overdue', penalty: updatedCol.penalty, balance: updatedCol.balance } }
+          );
+          col = updatedCol;
+        }
   
-        // Update current collection
+        const due = (col.periodAmount || 0) + (col.penalty || 0);
+        const alreadyPaid = col.paidAmount || 0;
+        const balance = Math.max(due - alreadyPaid, 0);
+  
+        if (balance <= 0) continue;
+  
+        const paymentToApply = Math.min(remainingAmount, balance);
         const newPaidAmount = alreadyPaid + paymentToApply;
-        runningTotal += paymentToApply;
   
         await db.collection('collections').updateOne(
-          { referenceNumber: currentCol.referenceNumber },
+          { referenceNumber: col.referenceNumber },
           {
             $set: {
               paidAmount: newPaidAmount,
-              totalPaidAmount: runningTotal, // cumulative sum carried forward
-              balance: Math.max(due - newPaidAmount, 0),
               status: newPaidAmount >= due ? 'Paid' : 'Partial',
+              balance: Math.max(due - newPaidAmount, 0),
               mode: 'Cash',
+              paidAt: now
             }
           }
         );
   
-        // Forward cumulative total to the next collection
-        const nextCollection = await db.collection('collections').findOne({
-          loanId: collection.loanId,
-          collectionNumber: collectionNumber + 1
-        });
-  
-        if (nextCollection) {
-          await db.collection('collections').updateOne(
-            { referenceNumber: nextCollection.referenceNumber },
-            { $set: { totalPaidAmount: runningTotal, loanBalance: (nextCollection.loanBalance || nextCollection.periodAmount) - runningTotal } }
-          );
-        }
-  
-        // Log payment
         paymentLogs.push({
-          loanId: collection.loanId,
-          referenceNumber: currentCol.referenceNumber,
-          borrowersId: currentCol.borrowersId,
+          loanId: col.loanId,
+          referenceNumber: col.referenceNumber,
+          borrowersId: col.borrowersId,
           collector: collectorName || 'Cash Collector',
           amount: paymentToApply,
           balance: Math.max(due - newPaidAmount, 0),
-          paidToCollection: currentCol.collectionNumber,
+          paidToCollection: col.collectionNumber,
           mode: 'Cash',
           datePaid: now,
           createdAt: now
         });
   
         remainingAmount -= paymentToApply;
-        collectionNumber++;
       }
   
-      // Update loan totals
-      const loan = await db.collection('loans').findOne({ loanId: collection.loanId });
-      if (!loan) return res.status(404).json({ error: 'Loan not found' });
-  
       const totalApplied = amount - remainingAmount;
+  
+      // Update loan totals
       await db.collection('loans').updateOne(
-        { loanId: loan.loanId },
+        { loanId: collection.loanId },
         { $inc: { paidAmount: totalApplied, balance: -totalApplied } }
       );
   
-      // Insert into payments ledger
       if (paymentLogs.length > 0) {
         await db.collection('payments').insertMany(paymentLogs);
       }
   
       res.json({
-        message: 'Cash payment successful, cumulative total recorded for next months',
+        message: 'Cash payment successful, penalties applied if overdue',
         paymentLogs,
         remainingUnapplied: remainingAmount
       });
+  
+      // Update loan status after payment
+      const updatedLoanCollections = await db.collection('collections').find({ loanId: collection.loanId }).toArray();
+      const loanStatus = determineLoanStatus(updatedLoanCollections);
+  
+      await db.collection('loans').updateOne(
+        { loanId: collection.loanId },
+        { $set: { status: loanStatus } }
+      );
   
     } catch (err) {
       console.error('Error handling cash payment:', err);
@@ -128,16 +117,15 @@ module.exports = function (db) {
   });
   
 
-  // PayMongo GCash Payment (create intent + source)
+  // GCASH PAYMENT
   router.post('/paymongo/gcash', async (req, res) => {
     const { amount, collectionNumber, referenceNumber, borrowersId } = req.body;
 
     if (!referenceNumber || !borrowersId || !amount || amount <= 0) {
-      return res.status(400).json({ error: "Invalid request payload" });
+      return res.status(400).json({ error: 'Invalid request payload' });
     }
 
     try {
-      // 1️⃣ Create payment intent
       const paymentIntentRes = await axios.post(
         'https://api.paymongo.com/v1/payment_intents',
         {
@@ -147,16 +135,15 @@ module.exports = function (db) {
               currency: 'PHP',
               payment_method_allowed: ['gcash'],
               description: `Payment for collection ${collectionNumber}`,
-              metadata: { referenceNumber, borrowersId },
-            },
-          },
+              metadata: { referenceNumber, borrowersId }
+            }
+          }
         },
         { auth: { username: PAYMONGO_SECRET_KEY, password: '' } }
       );
 
       const paymentIntent = paymentIntentRes.data.data;
 
-      // 2️⃣ Create GCash source
       const sourceRes = await axios.post(
         'https://api.paymongo.com/v1/sources',
         {
@@ -167,20 +154,19 @@ module.exports = function (db) {
               currency: 'PHP',
               redirect: {
                 success: `http://localhost:3000/components/borrower/payment-success/${referenceNumber}`,
-                failed: `http://localhost:3000/borrower/payment-failed/${referenceNumber}`,
+                failed: `http://localhost:3000/borrower/payment-failed/${referenceNumber}`
               },
               payment_intent: paymentIntent.id,
               statement_descriptor: `Collection ${collectionNumber}`,
-              metadata: { referenceNumber, borrowersId },
-            },
-          },
+              metadata: { referenceNumber, borrowersId }
+            }
+          }
         },
         { auth: { username: PAYMONGO_SECRET_KEY, password: '' } }
       );
 
       const checkoutUrl = sourceRes.data.data.attributes.redirect.checkout_url;
 
-      // 3️⃣ Save pending record
       await db.collection('paymongo-payments').insertOne({
         referenceNumber,
         collectionNumber,
@@ -189,17 +175,18 @@ module.exports = function (db) {
         paymentIntentId: paymentIntent.id,
         sourceId: sourceRes.data.data.id,
         status: 'pending',
-        createdAt: new Date(),
+        createdAt: new Date()
       });
 
       res.json({ checkout_url: checkoutUrl });
+
     } catch (err) {
-      console.error("PayMongo error:", err.response?.data || err.message);
-      return res.status(500).json({ error: 'PayMongo payment failed' });
+      console.error('PayMongo error:', err.response?.data || err.message);
+      res.status(500).json({ error: 'PayMongo payment failed' });
     }
   });
 
-  // ✅ PayMongo success callback
+  // PayMongo success webhook
   router.post('/:referenceNumber/paymongo/success', async (req, res) => {
     const { referenceNumber } = req.params;
 
@@ -207,19 +194,16 @@ module.exports = function (db) {
       const collection = await db.collection('collections').findOne({ referenceNumber });
       if (!collection) return res.status(404).json({ error: 'Collection not found' });
 
-      // Update collection
       await db.collection('collections').updateOne(
         { referenceNumber },
-        { $set: { status: 'Paid', paidAt: new Date() } }
+        { $set: { status: 'Paid', paidAmount: collection.periodAmount, balance: 0, paidAt: new Date() } }
       );
 
-      // Update paymongo-payments
       await db.collection('paymongo-payments').updateOne(
         { referenceNumber },
         { $set: { status: 'paid', paidAt: new Date() } }
       );
 
-      // Update loan
       const loan = await db.collection('loans').findOne({ loanId: collection.loanId });
       if (!loan) return res.status(404).json({ error: 'Loan not found' });
 
@@ -231,35 +215,43 @@ module.exports = function (db) {
         { $set: { paidAmount: newPaidAmount, balance: newBalance } }
       );
 
-      // Insert into payments ledger
       await db.collection('payments').insertOne({
         loanId: collection.loanId,
         referenceNumber,
         borrowersId: collection.borrowersId,
-        collector: "PayMongo",
+        collector: 'PayMongo',
         amount: collection.periodAmount,
         balance: newBalance,
         datePaid: new Date(),
-        status: "Paid",
-        mode: "GCash",
+        status: 'Paid',
+        mode: 'GCash',
         createdAt: new Date()
       });
 
-      res.json({ message: 'Payment successful, records updated' });
+      res.json({ message: 'PayMongo payment applied successfully' });
+      
+      const loanCollections = await db.collection('collections').find({ loanId: collection.loanId }).toArray();
+      const loanStatus = determineLoanStatus(loanCollections);
+
+await db.collection('loans').updateOne(
+  { loanId: collection.loanId },
+  { $set: { status: loanStatus } }
+);
+
+
     } catch (err) {
       console.error('Error updating PayMongo payment:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
 
-
-  // ✅ Get payment ledger
+  // PAYMENT LEDGER
   router.get('/ledger/:loanId', async (req, res) => {
-    try {
-      const { loanId } = req.params;
+    const { loanId } = req.params;
 
+    try {
       const cashPayments = await db.collection('payments')
-        .find({ loanId: loanId })
+        .find({ loanId })
         .sort({ datePaid: -1 })
         .toArray();
 
@@ -268,26 +260,20 @@ module.exports = function (db) {
         .sort({ createdAt: -1 })
         .toArray();
 
-      const normalizedCash = cashPayments.map(p => ({
-        ...p,
-        _id: p._id ? p._id.toString() : null,
-        mode: p.mode || "Cash"
-      }));
-
+      const normalizedCash = cashPayments.map(p => ({ ...p, _id: p._id?.toString(), mode: 'Cash' }));
       const normalizedPaymongo = paymongoPayments.map(p => ({
         ...p,
-        _id: p._id ? p._id.toString() : null,
+        _id: p._id?.toString(),
         datePaid: p.paidAt || p.createdAt,
-        mode: "PayMongo"
+        mode: 'PayMongo'
       }));
 
-      const mergedPayments = [...normalizedCash, ...normalizedPaymongo].sort(
-        (a, b) => new Date(a.datePaid).getTime() - new Date(b.datePaid).getTime()
-      );
+      const mergedPayments = [...normalizedCash, ...normalizedPaymongo]
+        .sort((a, b) => new Date(a.datePaid) - new Date(b.datePaid));
 
       res.json({ success: true, payments: mergedPayments });
-    } catch (error) {
-      console.error('Ledger error:', error);
+    } catch (err) {
+      console.error('Ledger error:', err);
       res.status(500).json({ success: false, message: 'Failed to get ledger' });
     }
   });

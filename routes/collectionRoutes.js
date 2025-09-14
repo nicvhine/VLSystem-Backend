@@ -1,118 +1,90 @@
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
-
+const { applyOverduePenalty, determineLoanStatus } = require('../utils/collection');
 
 module.exports = (db) => {
+
+  // Save note
+  router.put('/:referenceNumber/note', async (req, res) => {
+    const { referenceNumber } = req.params;
+    const { note } = req.body;
+    console.log('PUT note called for', referenceNumber, note);
+
+    if (typeof note !== 'string') {
+      return res.status(400).json({ error: 'Note must be a string' });
+    }
+
+    try {
+      const result = await db.collection('collections').findOneAndUpdate(
+        { referenceNumber },
+        { $set: { note } },
+        { returnDocument: 'after' }
+      );
+
+      if (!result.value) return res.status(404).json({ error: 'Collection not found' });
+
+      res.json(result.value);
+    } catch (err) {
+      console.error('Failed to update note:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   // GET payment schedule for a borrower and loan
   router.get('/schedule/:borrowersId/:loanId', async (req, res) => {
     const { borrowersId, loanId } = req.params;
+
     try {
-      const collectionsCol = db.collection('collections');
-      const schedule = await collectionsCol.find({ borrowersId, loanId }).sort({ collectionNumber: 1 }).toArray();
+      let schedule = await db.collection('collections')
+        .find({ borrowersId, loanId })
+        .sort({ collectionNumber: 1 })
+        .toArray();
+
       if (!schedule || schedule.length === 0) {
         return res.status(404).json({ error: 'No payment schedule found for this borrower and loan.' });
       }
+
+      for (let col of schedule) {
+        const updated = applyOverduePenalty(col);
+        if (updated.status === 'Overdue' && col.status !== 'Overdue') {
+          await db.collection('collections').updateOne(
+            { referenceNumber: col.referenceNumber },
+            { $set: { status: 'Overdue', penalty: updated.penalty, balance: updated.balance } }
+          );
+        }
+      }
+
+      schedule = await db.collection('collections')
+        .find({ borrowersId, loanId })
+        .sort({ collectionNumber: 1 })
+        .toArray();
+
       res.json(schedule);
+
     } catch (err) {
       console.error('Error fetching payment schedule:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
 
-  // GET COLLECTIONS
+  // GET all collections (optionally by collector)
   router.get('/', async (req, res) => {
     try {
-      // due date notifications (within 3 days)
-      const now = new Date();
-      const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      const threeDaysLater = new Date(today);
-      threeDaysLater.setDate(today.getDate() + 3);
-
-      const collectionsCol = db.collection('collections');
-      const notificationsCol = db.collection('notifications');
-
-      const upcoming = await collectionsCol.find({
-        status: 'Unpaid',
-        dueDate: { $gte: today, $lte: threeDaysLater }
-      }).toArray();
-
-      const existingDueRefs = (
-        await notificationsCol.find({ type: 'due' }).toArray()
-      ).map(n => n.referenceNumber);
-
-      const newNotifs = upcoming
-        .filter(c => !existingDueRefs.includes(c.referenceNumber))
-        .map(c => ({
-          id: `due-${c.referenceNumber}`,
-          message: `📅 Payment due for Collection ${c.collectionNumber}`,
-          referenceNumber: c.referenceNumber,
-          borrowersId: c.borrowersId,
-          date: c.dueDate,
-          viewed: false,
-          type: 'due',
-          createdAt: new Date()
-        }));
-
-      if (newNotifs.length > 0) {
-        await notificationsCol.insertMany(newNotifs);
-      }
-
       const collectorName = req.query.collector;
       const query = collectorName ? { collector: collectorName } : {};
-
-      const collections = await collectionsCol.find(query).sort({ collectionNumber: 1 }).toArray();
-
-      const loanIds = [...new Set(collections.map(c => c.loanId))];
-      const loans = await db.collection('loans').find({ loanId: { $in: loanIds } }).toArray();
-
-      const loanMap = {};
-      loans.forEach(loan => {
-        loanMap[loan.loanId] = loan;
-      });
-
-      const groupedByLoan = {};
-      collections.forEach(c => {
-        if (!groupedByLoan[c.loanId]) {
-          groupedByLoan[c.loanId] = [];
-        }
-        groupedByLoan[c.loanId].push(c);
-      });
-
-      const enriched = [];
-
-      for (const loanId in groupedByLoan) {
-      const loanCollections = groupedByLoan[loanId];
-      const loan = loanMap[loanId];
-
-      if (!loan) {
-        console.warn(`Loan not found for loanId: ${loanId}, skipping collections.`);
-        continue;
-      }
-
-      let runningTotal = 0;
-
-      loanCollections.forEach((col, index) => {
-        const enrichedCol = {
-          ...col,
-          totalPayment: index === 0 ? 0 : runningTotal,
-          balance: loan.totalPayable - runningTotal,
-          loanBalance: loan.totalPayable - runningTotal,
-        };
-        runningTotal += col.paidAmount || 0;
-        enriched.push(enrichedCol);
-      });
-    }
-
-
-      res.json(enriched);
+      const collections = await db.collection('collections')
+        .find(query)
+        .sort({ collectionNumber: 1 })
+        .toArray();
+  
+      res.json(collections);
     } catch (err) {
       console.error("Error loading collections:", err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
 
-  // GET COLLECTORS
+  // GET collectors
   router.get('/collectors', async (req, res) => {
     try {
       const collectors = await db.collection('users').find({ role: 'collector' }).toArray();
@@ -124,101 +96,59 @@ module.exports = (db) => {
     }
   });
 
-  router.post('/:referenceNumber/paymongo', async (req, res) => {
-    const { referenceNumber } = req.params;
-    const { amount, currency } = req.body; // amount in pesos, currency e.g., 'PHP'
-
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: "Invalid amount." });
-    }
-
+  // GET collection stats
+  router.get("/collection-stats", async (req, res) => {
     try {
-      // Fetch collection and loan info
-      const collection = await db.collection('collections').findOne({ referenceNumber });
-      if (!collection) return res.status(404).json({ error: "Collection not found." });
+      const result = await db.collection("collections").aggregate([
+        { $group: { _id: null, totalCollectables: { $sum: "$periodAmount" }, totalCollected: { $sum: "$paidAmount" }, totalPenalty: { $sum: "$penalty" } } }
+      ]).toArray();
 
-      const loan = await db.collection('loans').findOne({ loanId: collection.loanId });
-      if (!loan) return res.status(404).json({ error: "Loan not found." });
+      const totalCollectables = result[0]?.totalCollectables || 0;
+      const totalCollected = result[0]?.totalCollected || 0;
+      const totalPenalty = result[0]?.totalPenalty || 0;
+      const totalUnpaid = totalCollectables + totalPenalty - totalCollected;
 
-      // PayMongo secret key from environment
-      const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
-      const authHeader = `Basic ${Buffer.from(PAYMONGO_SECRET_KEY + ':').toString('base64')}`;
-
-      // Create Payment Intent
-      const paymentIntentRes = await axios.post(
-        'https://api.paymongo.com/v1/payment_intents',
-        {
-          data: {
-            attributes: {
-              amount: Math.round(amount * 100), // in centavos
-              currency: currency.toLowerCase(),
-              payment_method_allowed: ['gcash'],
-              description: `Loan ${loan.loanId} - Collection ${collection.collectionNumber}`,
-            },
-          },
-        },
-        { headers: { Authorization: authHeader, 'Content-Type': 'application/json' } }
-      );
-
-      const paymentIntent = paymentIntentRes.data.data;
-
-      // Create GCash source for redirect
-      const sourceRes = await axios.post(
-        'https://api.paymongo.com/v1/sources',
-        {
-          data: {
-            attributes: {
-              type: 'gcash',
-              amount: Math.round(amount * 100),
-              currency: currency.toLowerCase(),
-              redirect: {
-                success: `http://localhost:3000/components/borrower/payment-success/${referenceNumber}`,
-                failed: `http://localhost:3000/borrower/payment-failed/${referenceNumber}`,
-              },
-              payment_intent: paymentIntent.id,
-              statement_descriptor: `Loan ${loan.loanId} - Collection ${collection.collectionNumber}`,
-            },
-          },
-        },
-        { headers: { Authorization: authHeader, 'Content-Type': 'application/json' } }
-      );
-
-      const checkoutUrl = sourceRes.data.data.attributes.redirect.checkout_url;
-
-      res.json({ checkout_url: checkoutUrl });
+      res.json({ totalCollectables, totalCollected, totalUnpaid, totalPenalty });
     } catch (err) {
-      console.error(err.response?.data || err.message);
-      res.status(500).json({ error: 'Failed to create PayMongo payment' });
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch collection stats" });
     }
   });
 
+  // -----------------------------
+  // GENERAL / DYNAMIC ROUTES LAST
+  // -----------------------------
 
-router.get("/collection-stats", async (req, res) => {
-  try {
-    const result = await db.collection("collections").aggregate([
-      {
-        $group: {
-          _id: null,
-          totalCollectables: { $sum: "$periodAmount" },
-          totalCollected: { $sum: "$totalPaidAmount" }
-        }
+  router.get('/:loanId', async (req, res) => {
+    const { loanId } = req.params;
+  
+    try {
+      const loan = await db.collection('loans').findOne({ loanId });
+      if (!loan) return res.status(404).json({ error: 'Loan not found' });
+  
+      const collections = await db.collection('collections').find({ loanId }).toArray();
+      const updatedCollections = collections.map(c => applyOverduePenalty(c));
+  
+      for (const c of updatedCollections) {
+        await db.collection('collections').updateOne(
+          { referenceNumber: c.referenceNumber },
+          { $set: { status: c.status, balance: c.balance, penalty: c.penalty || 0 } }
+        );
       }
-    ]).toArray();
-
-    const totalCollectables = result[0]?.totalCollectables || 0;
-    const totalCollected = result[0]?.totalCollected || 0;
-    const totalUnpaid = totalCollectables - totalCollected;
-
-    res.json({
-    totalCollectables,
-    totalCollected,
-    totalUnpaid,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch collection stats" });
-  }
-});
+  
+      const loanStatus = determineLoanStatus(updatedCollections);
+      if (loan.status !== loanStatus) {
+        await db.collection('loans').updateOne({ loanId }, { $set: { status: loanStatus } });
+        loan.status = loanStatus;
+      }
+  
+      res.json({ ...loan, collections: updatedCollections });
+  
+    } catch (err) {
+      console.error('Error fetching loan:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
 
   return router;
 };
