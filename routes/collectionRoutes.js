@@ -115,10 +115,6 @@ module.exports = (db) => {
     }
   });
 
-  // -----------------------------
-  // GENERAL / DYNAMIC ROUTES LAST
-  // -----------------------------
-
   router.get('/:loanId', async (req, res) => {
     const { loanId } = req.params;
   
