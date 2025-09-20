@@ -233,7 +233,7 @@ router.post("/", async (req, res) => {
 
 
 
-  // DELETE USER BY ID
+// DELETE USER BY ID
 router.delete('/:id', authenticateToken, async (req, res) => {
   try {
     const id = req.params.id;
@@ -385,47 +385,54 @@ router.put('/:userId/update-phoneNumber', async (req, res) => {
 });
 
 router.put('/:userId', async (req, res) => {
-    const { userId } = req.params;
-    const { name, email, phoneNumber, role } = req.body;
+  const { userId } = req.params;
+  const { name, email, phoneNumber, role } = req.body;
 
-    if (!name && !email && !phoneNumber && !role) {
-      return res.status(400).json({ message: 'At least one field must be provided for update.' });
-    }
+  if (!name && !email && !phoneNumber && !role) {
+    return res.status(400).json({ message: 'At least one field must be provided for update.' });
+  }
 
-    try {
-      console.log("Updating userId:", userId);
-
-      const updateFields = {
-        updatedAt: new Date(),
-      };
-
-      if (name) updateFields.name = name;
-      if (email) updateFields.email = email;
-      if (phoneNumber) updateFields.phoneNumber = phoneNumber;
-      if (role) updateFields.role = role;
-
-      const updateResult = await db.collection('users').updateOne(
-        { userId: userId }, 
-        { $set: updateFields }
-      );
-
-      if (updateResult.matchedCount === 0) {
-        console.log("No user found for ID:", userId);
-        return res.status(404).json({ message: 'User not found' });
+  try {
+    // Check for duplicate email if email is being updated
+    if (email) {
+      const normalizedEmail = email.trim().toLowerCase();
+      const existingEmailUser = await db.collection('users').findOne({ email: normalizedEmail });
+      if (existingEmailUser && existingEmailUser.userId !== userId) {
+        return res.status(409).json({ message: 'Email already in use by another user.' });
       }
-
-      const updatedUser = await db.collection('users').findOne({ userId: userId });
-
-      return res.status(200).json({
-        message: 'User updated successfully',
-        user: updatedUser,
-      });
-
-    } catch (error) {
-      console.error('Failed to update user:', error);
-      return res.status(500).json({ message: 'Server error' });
     }
-  });
+
+    // Check for duplicate phoneNumber if phoneNumber is being updated
+    if (phoneNumber) {
+      const existingPhoneUser = await db.collection('users').findOne({ phoneNumber });
+      if (existingPhoneUser && existingPhoneUser.userId !== userId) {
+        return res.status(409).json({ message: 'Phone number already in use by another user.' });
+      }
+    }
+
+    const updateFields = { updatedAt: new Date() };
+    if (name) updateFields.name = name;
+    if (email) updateFields.email = email.trim().toLowerCase();
+    if (phoneNumber) updateFields.phoneNumber = phoneNumber;
+    if (role) updateFields.role = role;
+
+    const updateResult = await db.collection('users').updateOne(
+      { userId }, 
+      { $set: updateFields }
+    );
+
+    if (updateResult.matchedCount === 0) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    const updatedUser = await db.collection('users').findOne({ userId });
+    res.status(200).json({ message: 'User updated successfully', user: updatedUser });
+
+  } catch (error) {
+    console.error('Failed to update user:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
 
   return router;
 };
