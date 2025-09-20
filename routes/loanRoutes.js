@@ -547,13 +547,7 @@ router.get('/:loanId', async (req, res) => {
         score: borrower.score || 0,
         activeLoan: isActive ? 'Yes' : 'No',
         numberOfLoans: borrower.numberOfLoans || 1,
-
-        // ✅ FIXED: return profilePic as a URL instead of raw object
-        profilePic: loan.profilePic
-          ? `${req.protocol}://${req.get('host')}/${loan.profilePic.filePath.replace(/\\/g, "/")}`
-          : borrower.profilePic
-            ? `${req.protocol}://${req.get('host')}/${borrower.profilePic.filePath.replace(/\\/g, "/")}`
-            : null,
+        profilePic: loan.profilePic || borrower.profilePic || null, 
       }),
       currentLoan: isActive ? {
         totalPayable: loan.totalPayable,
