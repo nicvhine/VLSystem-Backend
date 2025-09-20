@@ -167,6 +167,8 @@
       app.use('/notifications', notificationRoutes);
       app.use('/logs', logsRoute);
       app.use('/api', smsRoutes);
+      app.use('/uploads', express.static('uploads'));
+
       
       app.listen(PORT, () => {
         console.log(`Server running on port ${PORT}`);

@@ -516,18 +516,14 @@ router.get('/:loanId', async (req, res) => {
   const { loanId } = req.params;
 
   try {
-    // Fetch the main loan
     const loan = await db.collection('loans').findOne({ loanId });
     if (!loan) {
       return res.status(404).json({ error: 'Loan not found.' });
     }
 
-    // Fetch borrower info
     const borrower = await db.collection('borrowers_account').findOne({ borrowersId: loan.borrowersId });
 
     const isActive = loan.status === 'Active';
-
-    // Fetch previous loans (non-active)
     const pastLoans = await db.collection('loans')
       .find({ borrowersId: loan.borrowersId, status: { $ne: 'Active' } })
       .sort({ dateDisbursed: -1 })
@@ -551,21 +547,26 @@ router.get('/:loanId', async (req, res) => {
         score: borrower.score || 0,
         activeLoan: isActive ? 'Yes' : 'No',
         numberOfLoans: borrower.numberOfLoans || 1,
+
+        // ✅ FIXED: return profilePic as a URL instead of raw object
+        profilePic: loan.profilePic
+          ? `${req.protocol}://${req.get('host')}/${loan.profilePic.filePath.replace(/\\/g, "/")}`
+          : borrower.profilePic
+            ? `${req.protocol}://${req.get('host')}/${borrower.profilePic.filePath.replace(/\\/g, "/")}`
+            : null,
       }),
-      currentLoan: isActive
-        ? {
-            totalPayable: loan.totalPayable,
-            type: loan.loanType,
-            amount: loan.principal,
-            terms: loan.termsInMonths,
-            interestRate: loan.interestRate,
-            paymentSchedule: loan.paymentSchedule,
-            startDate: loan.dateReleased?.toISOString().split('T')[0],
-            maturityDate: loan.maturityDate || 'Auto-calculate this',
-            remainingBalance: loan.balance,
-            dateDisbursed: loan.dateDisbursed,
-          }
-        : undefined,
+      currentLoan: isActive ? {
+        totalPayable: loan.totalPayable,
+        type: loan.loanType,
+        amount: loan.principal,
+        terms: loan.termsInMonths,
+        interestRate: loan.interestRate,
+        paymentSchedule: loan.paymentSchedule,
+        startDate: loan.dateReleased?.toISOString().split('T')[0],
+        maturityDate: loan.maturityDate || 'Auto-calculate this',
+        remainingBalance: loan.balance,
+        dateDisbursed: loan.dateDisbursed,
+      } : undefined,
       previousLoans: pastLoans.map(l => ({
         type: l.loanType,
         amount: l.principal,
@@ -578,6 +579,7 @@ router.get('/:loanId', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 
