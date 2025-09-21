@@ -74,47 +74,18 @@ const upload = multer({
 
 async function validate2x2(req, res, next) {
   try {
-    if (req.files.profilePic && req.files.profilePic[0]) {
-      const filePath = req.files.profilePic[0].path;
+    if (!req.files?.profilePic?.[0]) return next();
 
-      const metadata = await sharp(filePath).metadata();
+    const filePath = req.files.profilePic[0].path;
+    const metadata = await sharp(filePath).metadata();
 
-      if (metadata.width !== 600 || metadata.height !== 600) {
-        return res.status(400).json({
-          error: "Profile picture must be 2x2 inches (600x600 pixels).",
-        });
-      }
-
-      if (!["png", "jpeg", "jpg"].includes(metadata.format)) {
-        return res.status(400).json({
-          error: "Profile picture must be in PNG or JPG format.",
-        });
-      }
-
-      const { data, info } = await sharp(filePath)
-        .resize(10, 10) 
-        .raw()
-        .toBuffer({ resolveWithObject: true });
-
-      let nonWhitePixels = 0;
-      for (let i = 0; i < data.length; i += info.channels) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-
-        if (r < 200 || g < 200 || b < 200) {
-          nonWhitePixels++;
-        }
-      }
-
-      const nonWhiteRatio = nonWhitePixels / (data.length / info.channels);
-
-      if (nonWhiteRatio > 0.1) {
-        return res.status(400).json({
-          error: "Profile picture must have a plain white background.",
-        });
-      }
+    // Check size: 2x2 inches = 600x600 pixels
+    if (metadata.width !== 600 || metadata.height !== 600) {
+      return res.status(400).json({
+        error: "Profile picture must be 2x2 inches (600x600 pixels).",
+      });
     }
+
 
     next();
   } catch (err) {
