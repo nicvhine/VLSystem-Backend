@@ -456,6 +456,11 @@ router.get('/active-loan/:borrowersId', async (req, res) => {
       balance: loan.balance,
       status: loan.status,
       interestRate: loan.interestRate,
+      dateDisbursed: loan.dateDisbursed,
+      termsInMonths: loan.termsInMonths,
+      loanType: loan.loanType,  
+      interestAmount: loan.interestAmount,
+      totalInterest: loan.totalInterest,
       paymentProgress
     });
   } catch (err) {
