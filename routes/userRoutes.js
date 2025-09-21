@@ -280,21 +280,14 @@ router.delete('/:id', authenticateToken, async (req, res) => {
     }
 
     try {
-      const user = await db.collection('users').findOne({ userId: id });
+      const user = await users.findOne({ userId: id });
       if (!user) {
         return res.status(404).json({ message: 'User not found' });
       }
 
       const hashedPassword = await bcrypt.hash(newPassword, 10);
-      await db.collection('users').updateOne(
-        { userId: id },
-        {
-          $set: {
-            password: hashedPassword,
-            isFirstLogin: false,
-          },
-        }
-      );
+      await users.updateOne({ userId: id }, { $set: { password: hashedPassword, isFirstLogin: false } });
+
 
       res.status(200).json({ message: 'Password updated successfully' });
     } catch (err) {
