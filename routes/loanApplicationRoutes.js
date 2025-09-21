@@ -81,10 +81,41 @@ async function validate2x2(req, res, next) {
 
       if (metadata.width !== 600 || metadata.height !== 600) {
         return res.status(400).json({
-          error: "Profile picture must be 2x2 inches (600x600 pixels) PNG format.",
+          error: "Profile picture must be 2x2 inches (600x600 pixels).",
+        });
+      }
+
+      if (!["png", "jpeg", "jpg"].includes(metadata.format)) {
+        return res.status(400).json({
+          error: "Profile picture must be in PNG or JPG format.",
+        });
+      }
+
+      const { data, info } = await sharp(filePath)
+        .resize(10, 10) 
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+
+      let nonWhitePixels = 0;
+      for (let i = 0; i < data.length; i += info.channels) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+
+        if (r < 200 || g < 200 || b < 200) {
+          nonWhitePixels++;
+        }
+      }
+
+      const nonWhiteRatio = nonWhitePixels / (data.length / info.channels);
+
+      if (nonWhiteRatio > 0.1) {
+        return res.status(400).json({
+          error: "Profile picture must have a plain white background.",
         });
       }
     }
+
     next();
   } catch (err) {
     console.error("Error validating profile picture:", err.message);
@@ -134,6 +165,17 @@ module.exports = (db) => {
     return padId(nextAppId);
   }
 
+  //fetch all loan applications
+  router.get("/", async (req, res) => {
+    try {
+      const applications = await loanApplications.find().toArray();
+      res.status(200).json(applications);
+    } catch (error) {
+      console.error("Error in GET /loan-applications:", error);
+      res.status(500).json({ error: "Failed to fetch loan applications." });
+    }
+  });
+  
   //fetch interview list
   router.get("/interviews", authenticateToken, async (req, res) => {
     try {
@@ -153,7 +195,7 @@ module.exports = (db) => {
   router.post(
     "/without",
     upload.fields([
-      { name: "documents", maxCount: 5 },
+      { name: "documents", maxCount: 4 },
       { name: "profilePic", maxCount: 1 }
     ]),
     validate2x2,
@@ -163,7 +205,7 @@ module.exports = (db) => {
           sourceOfIncome,
           appName, appDob, appContact, appEmail, appMarital, appChildren,
           appSpouseName, appSpouseOccupation, appAddress,
-          appTypeBusiness, appDateStarted, appBusinessLoc,
+          appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc,
           appMonthlyIncome,
           appOccupation, appEmploymentStatus, appCompanyName,
           appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
@@ -218,6 +260,12 @@ module.exports = (db) => {
         }
   
         const uploadedDocs = processUploadedDocs(req.files);
+
+        if (!uploadedDocs || uploadedDocs.length < 4) {
+          return res.status(400).json({
+            error: "4 supporting documents must be uploaded.",
+          });
+        }
   
         let uploadedPp = null;
         if (req.files.profilePic && req.files.profilePic[0]) {
@@ -233,7 +281,7 @@ module.exports = (db) => {
         }
   
         if (sourceOfIncome === "business") {
-          if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
+          if (!appTypeBusiness || !appBusinessName || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
             return res.status(400).json({ error: "Business fields are required for business income source." });
           }
         } else if (sourceOfIncome === "employed") {
@@ -290,7 +338,7 @@ module.exports = (db) => {
           newApplication = {
             ...newApplication,
             sourceOfIncome,
-            appTypeBusiness, appDateStarted, appBusinessLoc,
+            appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc,
           };
         } else {
           newApplication = {
@@ -382,6 +430,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
 
     if (latestLoan.sourceOfIncome === "business") {
       reloanApplication.appTypeBusiness = latestLoan.appTypeBusiness;
+      reloanApplication.appBusinessName = latestLoan.appBusinessName;
       reloanApplication.appDateStarted = latestLoan.appDateStarted;
       reloanApplication.appBusinessLoc = latestLoan.appBusinessLoc;
     } else if (latestLoan.sourceOfIncome === "employed") {
@@ -407,7 +456,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   router.post(
     "/with",
     upload.fields([
-      { name: "documents", maxCount: 5 },
+      { name: "documents", maxCount: 6 },
       { name: "profilePic", maxCount: 1 }
     ]),
   validate2x2,
@@ -417,7 +466,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         sourceOfIncome,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
         appSpouseName, appSpouseOccupation, appAddress,
-        appTypeBusiness, appDateStarted, appBusinessLoc,
+        appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
         appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
@@ -477,6 +526,12 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
       }
   
       const uploadedDocs = processUploadedDocs(req.files);
+
+      if (!uploadedDocs || uploadedDocs.length < 6) {
+        return res.status(400).json({
+          error: "6 supporting documents must be uploaded.",
+        });
+      }
   
       let uploadedPp = null;
       if (req.files.profilePic && req.files.profilePic[0]) {
@@ -496,7 +551,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
       }
   
       if (sourceOfIncome === "business") {
-        if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
+        if (!appTypeBusiness || !appBusinessName || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
           return res.status(400).json({ error: "Business fields are required for business income source." });
         }
       } else if (sourceOfIncome === "employed") {
@@ -564,7 +619,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
-          appTypeBusiness, appDateStarted, appBusinessLoc
+          appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc
         };
       } else {
         newApplication = {
@@ -585,7 +640,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
 
   //add application open-term
   router.post("/open-term", upload.fields([
-    { name: "documents", maxCount: 5 },
+    { name: "documents", maxCount: 6 },
     { name: "profilePic", maxCount: 1 }
   ]), async (req, res) => {
     try {
@@ -593,7 +648,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         sourceOfIncome,
         appName, appDob, appContact, appEmail, appMarital, appChildren,
         appSpouseName, appSpouseOccupation, appAddress,
-        appTypeBusiness, appDateStarted, appBusinessLoc,
+        appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc,
         appMonthlyIncome,
         appOccupation, appEmploymentStatus, appCompanyName,
         appLoanPurpose, appLoanAmount, appReferences,
@@ -662,6 +717,12 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   
       // Process uploaded documents
       const uploadedDocs = processUploadedDocs(req.files);
+
+      if (!uploadedDocs || uploadedDocs.length < 6) {
+        return res.status(400).json({
+          error: "6 supporting documents must be uploaded.",
+        });
+      }
   
       let uploadedPp = null;
       if (req.files.profilePic && req.files.profilePic[0]) {
@@ -679,7 +740,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
   
       // Source of income validation
       if (sourceOfIncome === "business") {
-        if (!appTypeBusiness || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
+        if (!appTypeBusiness || !appBusinessName || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
           return res.status(400).json({ error: "Business fields are required for business income source." });
         }
       } else if (sourceOfIncome === "employed") {
@@ -749,7 +810,7 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
         newApplication = {
           ...newApplication,
           sourceOfIncome,
-          appTypeBusiness, appDateStarted, appBusinessLoc
+          appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc
         };
       } else {
         newApplication = {
@@ -773,18 +834,6 @@ router.post("/without/reloan/:borrowersId", async (req, res) => {
     }
   });
   
-
-  //fetch all loan applications
-  router.get("/", async (req, res) => {
-    try {
-      const applications = await loanApplications.find().toArray();
-      res.status(200).json(applications);
-    } catch (error) {
-      console.error("Error in GET /loan-applications:", error);
-      res.status(500).json({ error: "Failed to fetch loan applications." });
-    }
-  });
-
   //fetch loan statistics
   router.get("/applicationStatus-stats", async (req, res) => {
     try {
