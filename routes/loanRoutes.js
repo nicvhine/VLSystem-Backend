@@ -9,6 +9,8 @@ function padId(num) {
 }
 
 module.exports = (db) => {
+  
+  //post loan
   router.post('/generate-loan/:applicationId', async (req, res) => {
     const { applicationId } = req.params;
   
@@ -73,8 +75,6 @@ module.exports = (db) => {
       const interestAmount = principal * (interestRate / 100);
       const totalInterest = interestAmount * termsInMonths;
   
-      const totalPayable = principal + totalInterest;
-      const monthlyDue = totalPayable / termsInMonths;
       const balance = totalPayable;
       const paidAmount = 0;
       const releasedAmount = principal;
@@ -82,41 +82,11 @@ module.exports = (db) => {
       const loan = {
         loanId,
         applicationId,
-        name: borrower.name,
-        dateOfBirth: application.appDob,
-        maritalStatus: application.appMarital,
-        spouseName: application.appSpouseName,
-        spouseOccupation: application.appSpouseOccupation,
-        noOfChildren: application.appChildren,
         borrowersId: borrower.borrowersId,
-        address: application.appAddress,
-        mobileNumber: application.appContact,
-        email: application.appEmail,
-        incomeSource: application.sourceOfIncome,
-        monthlyIncome: application.appMonthlyIncome,
-        //employed
-        occupation: application.appOccupation,
-        employmentStatus: application.appEmploymentStatus,
-        companyName: application.appCompanyName,
-        //business
-        businessType: application.appTypeBusiness,
-        dateStarted: application.appDateStarted,
-        businessLocation: application.appBusinessLoc,
-        borrowerUsername: borrower.username,
-        principal,
-        releasedAmount,
-        interestRate,
-        interestAmount,   
-        totalInterest,    
-        termsInMonths,
         profilePic: application.profilePic,
-        loanType: application.loanType,
-        totalPayable,
-        monthlyDue,
         paidAmount,
         balance,
         status: "Active",
-        dateReleased: new Date(),
         dateDisbursed: application.dateDisbursed || new Date(),
       };
   
@@ -168,8 +138,7 @@ module.exports = (db) => {
     }
   });
   
-  
-
+  //post reloan
  router.post('/generate-reloan/:borrowersId', async (req, res) => {
   const { borrowersId} = req.params;
 
@@ -347,8 +316,7 @@ if (previousLoan.length > 0) {
   }
 });
 
-
-   // Close loan by updating its status
+  // Close loan by updating its status
   router.put('/close/:loanId', async (req, res) => {
   const { loanId } = req.params;
   const dbLoans = db.collection("loans"); // FIXED
@@ -375,30 +343,27 @@ if (previousLoan.length > 0) {
   }
 });
 
-
-
-
-router.get("/loan-stats", async (req, res) => {
-  try {
-    const result = await db.collection("loans").aggregate([
-      {
-        $group: {
-          _id: null,
-          totalPrincipal: { $sum: "$principal" },
-          totalInterest: { $sum: "$totalInterest"}
+  router.get("/loan-stats", async (req, res) => {
+    try {
+      const result = await db.collection("loans").aggregate([
+        {
+          $group: {
+            _id: null,
+            totalPrincipal: { $sum: "$principal" },
+            totalInterest: { $sum: "$totalInterest"}
+          }
         }
-      }
-    ]).toArray();
+      ]).toArray();
 
-    res.json({
-    totalPrincipal: result[0]?.totalPrincipal || 0,
-    totalInterest: result[0]?.totalInterest || 0,
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "Failed to fetch loan stats" });
-  }
-});
+      res.json({
+      totalPrincipal: result[0]?.totalPrincipal || 0,
+      totalInterest: result[0]?.totalInterest || 0,
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch loan stats" });
+    }
+  });
 
 router.get("/loan-type-stats", async (req, res) => {
   try {
@@ -543,55 +508,72 @@ router.get('/:loanId', async (req, res) => {
 
   try {
     const loan = await db.collection('loans').findOne({ loanId });
-    if (!loan) {
-      return res.status(404).json({ error: 'Loan not found.' });
-    }
+    if (!loan) return res.status(404).json({ error: 'Loan not found.' });
 
-    const borrower = await db.collection('borrowers_account').findOne({ borrowersId: loan.borrowersId });
+    const application = await db.collection('loan_applications').findOne({ applicationId: loan.applicationId });
+    if (!application) return res.status(404).json({ error: 'Loan application not found.' });
 
     const isActive = loan.status === 'Active';
+
     const pastLoans = await db.collection('loans')
       .find({ borrowersId: loan.borrowersId, status: { $ne: 'Active' } })
       .sort({ dateDisbursed: -1 })
       .toArray();
 
+    // Map current loan to match frontend expectations
+    const currentLoan = isActive ? {
+      principal: application.appLoanAmount,
+      totalPayable: application.totalPayable,
+      type: application.loanType,
+      termsInMonths: application.appLoanTerms,
+      interestRate: application.appInterest,
+      paymentSchedule: loan.paymentSchedule,
+      startDate: loan.dateReleased?.toISOString().split('T')[0],
+      paidAmount: loan.paidAmount || 0,
+      remainingBalance: loan.balance || loan.totalPayable,
+      dateDisbursed: loan.dateDisbursed,
+      status: loan.status,
+    } : undefined;
+
     res.json({
-      ...loan,
-      ...(borrower && {
-        contactNumber: borrower.contactNumber,
-        emailAddress: borrower.emailAddress,
-        incomeSource: borrower.sourceOfIncome,
-        occupation: borrower.occupation,
-        monthlyIncome: loan.monthlyIncome,
-        businessType: loan.businessType,
-        dateStarted: loan.dateStarted,
-        businessLocation: loan.businessLocation,
-        dateOfBirth: borrower.dateOfBirth,
-        maritalStatus: borrower.maritalStatus,
-        numberOfChildren: borrower.numberOfChildren,
-        characterReferences: borrower.characterReferences || [],
-        score: borrower.score || 0,
-        activeLoan: isActive ? 'Yes' : 'No',
-        numberOfLoans: borrower.numberOfLoans || 1,
-        profilePic: loan.profilePic || borrower.profilePic || null, 
-      }),
-      currentLoan: isActive ? {
-        totalPayable: loan.totalPayable,
-        type: loan.loanType,
-        amount: loan.principal,
-        terms: loan.termsInMonths,
-        interestRate: loan.interestRate,
-        paymentSchedule: loan.paymentSchedule,
-        startDate: loan.dateReleased?.toISOString().split('T')[0],
-        maturityDate: loan.maturityDate || 'Auto-calculate this',
-        remainingBalance: loan.balance,
-        dateDisbursed: loan.dateDisbursed,
-      } : undefined,
+      loanId: loan.loanId,
+      borrowersId: loan.borrowersId,
+      name: application.appName,
+      dateOfBirth: application.appDob,
+      maritalStatus: application.appMarital,
+      spouseName: application.spouseName,
+      spouseOccupation: application.spouseOccupation,
+      numberOfChildren: application.appChildren,
+      contactNumber: application.appContact,
+      emailAddress: application.appEmail,
+      address: application.appAddress,
+      incomeSource: application.sourceOfIncome,
+      occupation: application.appOccupation,
+      employmentStatus: application.appEmploymentStatus,
+      businessType: application.appTypeBusiness,
+      dateStarted: application.appDateStarted,
+      businessLocation: application.appBusinessLoc,
+      totalPayable: application.totalPayable,
+      principal: application.appLoanAmount,
+      monthlyIncome: application.appMonthlyIncome,
+      score: application.score || 0,
+      activeLoan: isActive ? 'Yes' : 'No',
+      numberOfLoans: application.numberOfLoans || 1,
+      characterReferences: application.appReferences || [],
+      profilePic: loan.profilePic || application.profilePic || null,
+      collateralType: application.collateralType,
+      collateralValue: application.collateralValue,
+      collateralDescription: application.collateralDescription,
+      ownershipStatus: application.ownershipStatus,
+      currentLoan,
       previousLoans: pastLoans.map(l => ({
         type: l.loanType,
+        principal: l.principal,
         amount: l.principal,
         dateDisbursed: l.dateDisbursed,
         status: l.status,
+        interestRate: l.interestRate,
+        terms: l.termsInMonths,
       })),
     });
   } catch (error) {
@@ -599,6 +581,7 @@ router.get('/:loanId', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
 
 
 
