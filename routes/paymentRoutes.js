@@ -174,6 +174,102 @@ module.exports = function (db) {
     }
   });
 
+  // handle PayMongo success via POST
+  router.post('/:referenceNumber/paymongo/success', async (req, res) => {
+    const { referenceNumber } = req.params;
+
+    try {
+      const paymongoPayment = await db.collection('paymongo-payments').findOne({ referenceNumber });
+      if (!paymongoPayment) {
+        return res.status(404).json({ error: "PayMongo payment not found" });
+      }
+
+      await db.collection('paymongo-payments').updateOne(
+        { referenceNumber },
+        { $set: { status: 'success', paidAt: new Date() } }
+      );
+
+      const collection = await db.collection('collections').findOne({ referenceNumber });
+      if (!collection) {
+        return res.status(404).json({ error: "Collection not found" });
+      }
+
+      const now = new Date();
+      const amount = paymongoPayment.amount;
+      const loanId = collection.loanId;
+      const borrowersId = paymongoPayment.borrowersId;
+
+      const loanCollections = await db.collection('collections')
+        .find({ loanId: collection.loanId })
+        .sort({ collectionNumber: 1 })
+        .toArray();
+
+      let remainingAmount = amount;
+      const paymentLogs = [];
+
+      for (let col of loanCollections) {
+        if (remainingAmount <= 0) break;
+
+        const due = (col.periodAmount || 0) + (col.penalty || 0);
+        const alreadyPaid = col.paidAmount || 0;
+        const balance = Math.max(due - alreadyPaid, 0);
+
+        if (balance <= 0) continue;
+
+        const paymentToApply = Math.min(remainingAmount, balance);
+        const newPaidAmount = alreadyPaid + paymentToApply;
+
+        await db.collection('collections').updateOne(
+          { referenceNumber: col.referenceNumber },
+          {
+            $set: {
+              paidAmount: newPaidAmount,
+              status: newPaidAmount >= due ? 'Paid' : 'Partial',
+              balance: Math.max(due - newPaidAmount, 0),
+              mode: 'GCash',
+              paidAt: now
+            }
+          }
+        );
+
+        paymentLogs.push({
+          loanId: col.loanId,
+          referenceNumber: col.referenceNumber,
+          borrowersId: col.borrowersId,
+          amount: paymentToApply,
+          balance: Math.max(due - newPaidAmount, 0),
+          paidToCollection: col.collectionNumber,
+          mode: 'GCash',
+          datePaid: now,
+          createdAt: now
+        });
+
+        remainingAmount -= paymentToApply;
+      }
+
+      const totalApplied = amount - remainingAmount;
+
+      await db.collection('loans').updateOne(
+        { loanId },
+        { $inc: { paidAmount: totalApplied, balance: -totalApplied } }
+      );
+
+      if (paymentLogs.length > 0) {
+        await db.collection('payments').insertMany(paymentLogs);
+      }
+
+      const updatedLoanCollections = await db.collection('collections').find({ loanId }).toArray();
+      const loanStatus = determineLoanStatus(updatedLoanCollections);
+      await db.collection('loans').updateOne({ loanId }, { $set: { status: loanStatus } });
+
+      res.json({ success: true, message: `GCash payment successful for ${referenceNumber}`, paymentLogs });
+
+    } catch (err) {
+      console.error("Error handling PayMongo success:", err);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // PAYMENTS LEDGER BY LOAN
   router.get('/ledger/:loanId', async (req, res) => {
     const { loanId } = req.params;
@@ -185,7 +281,7 @@ module.exports = function (db) {
         .toArray();
 
       const paymongoPayments = await db.collection('paymongo-payments')
-        .find({ loanId }) // FIXED: use loanId, not borrowersId
+        .find({ loanId })
         .sort({ createdAt: -1 })
         .toArray();
 

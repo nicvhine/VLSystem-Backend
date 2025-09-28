@@ -428,7 +428,6 @@ router.get("/loan-type-stats", async (req, res) => {
 });
 
 
-
 router.get('/active-loan/:borrowersId', async (req, res) => {
   const { borrowersId } = req.params;
   
@@ -465,6 +464,27 @@ router.get('/active-loan/:borrowersId', async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching loan by borrower ID:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get latest loan for borrower
+router.get('/latest-loan/:borrowersId', async (req, res) => {
+  const { borrowersId } = req.params;
+  try {
+    const latestLoan = await db.collection('loans')
+      .find({ borrowersId })
+      .sort({ dateDisbursed: -1 }) 
+      .limit(1)
+      .toArray();
+
+    if (!latestLoan.length) {
+      return res.status(404).json({ error: 'No loans found for this borrower' });
+    }
+
+    res.json(latestLoan[0]);
+  } catch (err) {
+    console.error("Error fetching latest loan:", err);
     res.status(500).json({ error: 'Internal server error' });
   }
 });
