@@ -75,7 +75,7 @@ module.exports = (db) => {
       const interestAmount = principal * (interestRate / 100);
       const totalInterest = interestAmount * termsInMonths;
   
-      const balance = totalPayable;
+      const balance = application.totalPayable;
       const paidAmount = 0;
       const releasedAmount = principal;
   
@@ -95,7 +95,7 @@ module.exports = (db) => {
   
       // Step 8: Generate collection schedule
       const collections = [];
-      let runningBalance = totalPayable;
+      let runningBalance = application.totalPayable;
       const disbursedDate = new Date(application.dateDisbursed || new Date());
 
       for (let i = 0; i < termsInMonths; i++) {
