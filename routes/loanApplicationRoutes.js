@@ -6,6 +6,50 @@ const fs = require("fs");
 const jwt = require("jsonwebtoken");
 const cron = require("node-cron");
 const sharp = require("sharp"); 
+const crypto = require("crypto");
+
+const ALGORITHM = "aes-256-cbc";
+const SECRET_KEY = Buffer.from(
+  (process.env.ENCRYPTION_KEY || "").padEnd(32, "0").slice(0, 32)
+); // must be 32 bytes
+const IV_LENGTH = 16; // AES block size
+
+function encrypt(text) {
+  if (!text) return null;
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, SECRET_KEY, iv);
+  let encrypted = cipher.update(text, "utf8", "hex");
+  encrypted += cipher.final("hex");
+  return iv.toString("hex") + ":" + encrypted;
+}
+
+
+function decrypt(text) {
+  if (!text) return "";
+  try {
+    const [ivHex, encryptedHex] = text.split(":");
+    if (!ivHex || !encryptedHex) return text; // if not encrypted
+    const iv = Buffer.from(ivHex, "hex");
+    const encryptedText = Buffer.from(encryptedHex, "hex");
+    const decipher = crypto.createDecipheriv(ALGORITHM, SECRET_KEY, iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString("utf8");
+  } catch (err) {
+    console.error("Decryption failed:", err.message);
+    return text;
+  }
+}
+
+function safeDecrypt(value) {
+  try {
+    if (!value) return "";         
+    return decrypt(value);        
+  } catch (err) {
+    return value;               
+  }
+}
+
 
 
 //authenticator
@@ -136,16 +180,44 @@ module.exports = (db) => {
     return padId(nextAppId);
   }
 
-  //fetch all loan applications
   router.get("/", async (req, res) => {
     try {
       const applications = await loanApplications.find().toArray();
-      res.status(200).json(applications);
+  
+      const decryptedApps = applications.map(app => ({
+        ...app,
+        appName: decrypt(app.appName),
+        appDob: app.appDob,
+        appContact: decrypt(app.appContact),
+        appEmail: decrypt(app.appEmail),
+        appMarital: app.appMarital,
+        appChildren: app.appChildren,
+        appSpouseName: decrypt(app.appSpouseName),
+        appSpouseOccupation: app.appSpouseOccupation,
+        appAddress: decrypt(app.appAddress),
+        appMonthlyIncome: app.appMonthlyIncome,
+        appLoanPurpose: app.appLoanPurpose,
+        appLoanAmount: app.appLoanAmount,
+        appLoanTerms: app.appLoanTerms,
+        appInterest: app.appInterest,
+        appReferences: app.appReferences?.map(r => ({
+          name: decrypt(r.name),
+          contact: decrypt(r.contact),
+          relation: r.relation
+        })),
+        collateralType: app.collateralType,
+        collateralValue: app.collateralValue,
+        collateralDescription: app.collateralDescription,
+        ownershipStatus: app.ownershipStatus
+      }));
+  
+      res.status(200).json(decryptedApps);
     } catch (error) {
       console.error("Error in GET /loan-applications:", error);
       res.status(500).json({ error: "Failed to fetch loan applications." });
     }
   });
+  
   
   //fetch interview list
   router.get("/interviews", authenticateToken, async (req, res) => {
@@ -288,25 +360,40 @@ module.exports = (db) => {
         // Construct new application object
         let newApplication = {
           applicationId,
-          appName, appDob, appContact, appEmail, appMarital, appChildren,
-          appSpouseName, appSpouseOccupation, appAddress,
-          appMonthlyIncome,
-          appLoanPurpose,
-          appLoanAmount: principal,
-          appLoanTerms: terms || null,
-          appInterest: interestRate,
-          interestAmount,   
-          periodAmount,      
-          totalPayable,
-          appReferences: parsedReferences,
+          appName: encrypt(appName),
+          appDob: appDob,
+          appContact: encrypt(appContact),
+          appEmail: encrypt(appEmail),
+          appMarital: appMarital,
+          appChildren: appChildren,
+          appSpouseName: encrypt(appSpouseName),
+          appSpouseOccupation: appSpouseOccupation,
+          appAddress: encrypt(appAddress),
+          appMonthlyIncome: appMonthlyIncome?.toString(),
+          appLoanPurpose: appLoanPurpose,
+          appLoanAmount: principal.toString(),
+          appLoanTerms: terms.toString(),
+          appInterest: interestRate.toString(),
+        
+          appReferences: parsedReferences.map(r => ({
+            name: encrypt(r.name),
+            contact: encrypt(r.contact),
+            relation: r.relation
+          })),
+        
           hasCollateral: loanType !== "without",
-          collateralType, collateralValue, collateralDescription, ownershipStatus,
+          collateralType: collateralType,
+          collateralValue: collateralValue?.toString(),
+          collateralDescription: collateralDescription,
+          ownershipStatus: ownershipStatus,
+        
           loanType: loanType === "without" ? "Regular Loan Without Collateral" : loanType === "with" ? "Regular Loan With Collateral" : "Open-Term Loan",
           status: "Applied",
           dateApplied: new Date(),
-          documents: uploadedDocs,
-          profilePic: uploadedPp,
+          documents: uploadedDocs,  
+          profilePic: uploadedPp
         };
+        
 
   
         if (sourceOfIncome === "business") {
@@ -600,12 +687,36 @@ router.get("/:applicationId", async (req, res) => {
       return res.status(404).json({ error: "Application not found" });
     }
 
-    res.status(200).json(application);
+    // Decrypt sensitive fields
+    const decryptedApp = {
+      ...application,
+      appName: decrypt(application.appName),
+      appDob: application.appDob,
+      appContact: decrypt(application.appContact),
+      appEmail: decrypt(application.appEmail),
+      appAddress: decrypt(application.appAddress),
+      appLoanPurpose: application.appLoanPurpose,
+      appLoanAmount: application.appLoanAmount,
+      appLoanTerms: application.appLoanTerms,
+      appInterest: application.appInterest,
+      appReferences: application.appReferences?.map(r => ({
+        name: decrypt(r.name),
+        contact: decrypt(r.contact),
+        relation: r.relation
+      })),
+      collateralType: application.collateralType,
+      collateralValue: application.collateralValue,
+      collateralDescription: application.collateralDescription,
+      ownershipStatus: application.ownershipStatus
+    };
+
+    res.status(200).json(decryptedApp);
   } catch (error) {
     console.error("Error fetching application by ID:", error);
     res.status(500).json({ error: "Failed to fetch application." });
   }
 });
+
 
 //edit application by id
 router.put("/:applicationId", authenticateToken, async (req, res) => {
