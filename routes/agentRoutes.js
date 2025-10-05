@@ -11,7 +11,7 @@ function generateAgentId(num) {
 
 module.exports = (db) => {
   const agents = db.collection("agents");
-  const loans = db.collection("loans"); // Assuming your loans are stored here
+  const applications = db.collection("loan-applications"); 
 
   router.post("/", async (req, res) => {
     try {
@@ -83,28 +83,28 @@ module.exports = (db) => {
       const allAgents = await agents.find().toArray();
 
       for (const agent of allAgents) {
-        const assignedLoans = await loans.find({ agentId: agent.agentId }).toArray();
+        const assignedApplications = await applications
+          .find({ "appAgent.id": agent.agentId, status: "Disbursed" }) 
+          .toArray();
 
-        const totalLoanAmount = assignedLoans.reduce(
-          (sum, loan) => sum + (loan.appNetReleased || 0),
-          0
-        );
+        if (assignedApplications.length > 0) {
+          const totalLoanAmount = assignedApplications.reduce(
+            (sum, app) => sum + (app.appLoanAmount || 0),
+            0
+          );
 
-        const totalCommission = assignedLoans.reduce(
-          (sum, loan) => sum + (loan.appNetReleased ? loan.appNetReleased * 0.05 : 0),
-          0
-        );
+          const totalCommission = totalLoanAmount * 0.05;
+          const handledLoans = assignedApplications.length;
 
-        const handledLoans = assignedLoans.length;
+          await agents.updateOne(
+            { agentId: agent.agentId },
+            { $set: { handledLoans, totalLoanAmount, totalCommission } }
+          );
 
-        await agents.updateOne(
-          { agentId: agent.agentId },
-          { $set: { handledLoans, totalLoanAmount, totalCommission } }
-        );
-
-        agent.handledLoans = handledLoans;
-        agent.totalLoanAmount = totalLoanAmount;
-        agent.totalCommission = totalCommission;
+          agent.handledLoans = handledLoans;
+          agent.totalLoanAmount = totalLoanAmount;
+          agent.totalCommission = totalCommission;
+        }
       }
 
       return res.status(200).json({ agents: allAgents });
@@ -114,6 +114,7 @@ module.exports = (db) => {
     }
   });
 
+  // 📌 Get a specific agent
   router.get("/:agentId", async (req, res) => {
     try {
       const { agentId } = req.params;
@@ -121,27 +122,26 @@ module.exports = (db) => {
 
       if (!agent) return res.status(404).json({ message: "Agent not found" });
 
-      const assignedLoans = await loans.find({ agentId }).toArray();
+      const assignedApplications = await applications
+        .find({ "appAgent.id": agentId, status: "Disbursed" })
+        .toArray();
 
-      const totalLoanAmount = assignedLoans.reduce(
-        (sum, loan) => sum + (loan.appNetReleased || 0),
+      const totalLoanAmount = assignedApplications.reduce(
+        (sum, app) => sum + (app.appLoanAmount || 0),
         0
       );
 
-      const totalCommission = assignedLoans.reduce(
-        (sum, loan) => sum + (loan.appNetReleased ? loan.appNetReleased * 0.05 : 0),
-        0
-      );
+      const totalCommission = totalLoanAmount * 0.05;
+      const handledLoans = assignedApplications.length;
 
-      agent.handledLoans = assignedLoans.length;
-      agent.totalLoanAmount = totalLoanAmount;
-      agent.totalCommission = totalCommission;
-
-      // Update agent record
       await agents.updateOne(
         { agentId },
-        { $set: { handledLoans: agent.handledLoans, totalLoanAmount, totalCommission } }
+        { $set: { handledLoans, totalLoanAmount, totalCommission } }
       );
+
+      agent.handledLoans = handledLoans;
+      agent.totalLoanAmount = totalLoanAmount;
+      agent.totalCommission = totalCommission;
 
       return res.status(200).json({ agent });
     } catch (error) {
