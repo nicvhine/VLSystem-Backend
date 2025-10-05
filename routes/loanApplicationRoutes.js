@@ -238,210 +238,210 @@ module.exports = (db) => {
     }
   });
   
-  //add application
-  router.post(
-    "/apply/:loanType",
-    upload.fields([
-      { name: "documents", maxCount: 6 },
-      { name: "profilePic", maxCount: 1 }
-    ]),
-    validate2x2,
-    async (req, res) => {
-      try {
-        const { loanType } = req.params; // "with", "without", "open-term"
-        const {
-          sourceOfIncome,
-          appName, appDob, appContact, appEmail, appMarital, appChildren,
-          appSpouseName, appSpouseOccupation, appAddress,
-          appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc,
-          appMonthlyIncome,
-          appOccupation, appEmploymentStatus, appCompanyName,
-          appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences,
-          collateralType, collateralValue, collateralDescription, ownershipStatus
-        } = req.body;
-  
-        let parsedReferences = [];
-        if (appReferences) {
-          try {
-            parsedReferences = typeof appReferences === "string" ? JSON.parse(appReferences) : appReferences;
-          } catch (err) {
-            return res.status(400).json({ error: "Invalid format for character references." });
-          }
-        }
-  
-        if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3) {
-          return res.status(400).json({ error: "Three references must be provided." });
-        }
-  
-        // Check for duplicate names and numbers
-        const names = new Map();
-        const numbers = new Map();
-  
-        parsedReferences.forEach((r, idx) => {
-          const nameKey = (r.name || "").trim().toLowerCase();
-          const numKey = (r.contact || "").trim();
-          if (nameKey) names.set(nameKey, [...(names.get(nameKey) || []), idx]);
-          if (numKey) numbers.set(numKey, [...(numbers.get(numKey) || []), idx]);
-        });
-  
-        const dupNameIndices = [...names.values()].filter(arr => arr.length > 1).flat();
-        const dupNumberIndices = [...numbers.values()].filter(arr => arr.length > 1).flat();
-        if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
-          return res.status(400).json({
-            error: "Reference names and contact numbers must be unique.",
-            duplicates: { nameIndices: dupNameIndices, numberIndices: dupNumberIndices },
-          });
-        }
-  
-        // Validate required documents
-        const uploadedDocs = processUploadedDocs(req.files);
-        if (!uploadedDocs || (loanType === "without" && uploadedDocs.length < 4) || (loanType !== "without" && uploadedDocs.length < 6)) {
-          return res.status(400).json({
-            error: loanType === "without"
-              ? "4 supporting documents must be uploaded."
-              : "6 supporting documents must be uploaded.",
-          });
-        }
-  
-        let uploadedPp = req.files.profilePic?.[0] ? {
-          fileName: req.files.profilePic[0].originalname,
-          filePath: req.files.profilePic[0].path,
-          mimeType: req.files.profilePic[0].mimetype
-        } : null;
-  
-        // Required fields validation
-        if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || (loanType !== "open-term" && !appLoanTerms)) {
-          return res.status(400).json({ error: "All required fields must be provided." });
-        }
-  
-        // Collateral validation for "with" and "open-term"
-        if ((loanType === "with" || loanType === "open-term") && (!collateralType || !collateralValue || !collateralDescription || !ownershipStatus)) {
-          return res.status(400).json({ error: "All collateral fields are required." });
-        }
-  
-        // Source of income validation
-        if (sourceOfIncome === "business") {
-          if (!appTypeBusiness || !appBusinessName || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
-            return res.status(400).json({ error: "Business fields are required for business income source." });
-          }
-        } else if (sourceOfIncome === "employed") {
-          if (!appOccupation || !appEmploymentStatus || !appCompanyName || appMonthlyIncome == null) {
-            return res.status(400).json({ error: "Employment fields are required for employed income source." });
-          }
-        } else {
-          return res.status(400).json({ error: "Invalid source of income." });
-        }
-  
-        // Check for existing pending application
-        const existing = await loanApplications.findOne({
-          appName: appName.trim(),
-          appDob: appDob.trim(),
-          appContact: appContact.trim(),
-          appEmail: appEmail.trim(),
-          status: "Pending"
-        });
-        if (existing) {
-          return res.status(400).json({ error: "You already have a pending application with these details." });
-        }
-  
-        // Generate application ID
-        const applicationId = await generateApplicationId();
+ // Add application endpoint
+router.post(
+  "/apply/:loanType",
+  upload.fields([
+    { name: "documents", maxCount: 6 },
+    { name: "profilePic", maxCount: 1 }
+  ]),
+  validate2x2,
+  async (req, res) => {
+    try {
+      const { loanType } = req.params; // "with", "without", "open-term"
+      const {
+        sourceOfIncome,
+        appName, appDob, appContact, appEmail, appMarital, appChildren,
+        appSpouseName, appSpouseOccupation, appAddress,
+        appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc,
+        appMonthlyIncome,
+        appOccupation, appEmploymentStatus, appCompanyName,
+        appLoanPurpose, appLoanAmount, appLoanTerms, appInterest, appReferences, appAgent,
+        collateralType, collateralValue, collateralDescription, ownershipStatus
+      } = req.body;
 
-        // Compute totalPayable, interestAmount, and periodAmount
-        let principal = Number(appLoanAmount);
-        let interestRate = Number(appInterest);
-        let terms = Number(appLoanTerms) || 1; 
-        let interestAmount = 0;
-        let periodAmount = principal;
-
-        if (loanType !== "open-term") {
-          interestAmount = principal * (interestRate / 100) * terms;
-          periodAmount = (principal + interestAmount) / terms; 
-        }
-
-        let totalPayable = principal + interestAmount;
-
-        let appServiceFee = 0;
-        const loanAmt = Number(appLoanAmount);
-
-        if (loanAmt >= 10000 && loanAmt <= 20000) {
-          appServiceFee = loanAmt * 0.05; 
-        } else if (loanAmt >= 25000 && loanAmt <= 40000) {
-          appServiceFee = 1000;
-        } else if (loanAmt >= 50000 && loanAmt <= 500000) {
-          appServiceFee = loanAmt * 0.03; 
-        }
-
-        const appNetReleased = loanAmt - appServiceFee;
-
-        // Construct new application object
-        let newApplication = {
-          applicationId,
-          appName: encrypt(appName),
-          appDob: appDob,
-          appContact: encrypt(appContact),
-          appEmail: encrypt(appEmail),
-          appMarital: appMarital,
-          appChildren: appChildren,
-          appSpouseName: encrypt(appSpouseName),
-          appSpouseOccupation: appSpouseOccupation,
-          appAddress: encrypt(appAddress),
-          appMonthlyIncome: appMonthlyIncome?.toString(),
-          appLoanPurpose: appLoanPurpose,
-          appLoanAmount: principal.toString(),
-          appLoanTerms: terms.toString(),
-          appInterest: interestRate.toString(),
-          appTotalInterest: interestAmount,
-          appTotalPayable: totalPayable,
-          appMonthlyDue: periodAmount,
-          appServiceFee,
-          appNetReleased,
-
-        
-          appReferences: parsedReferences.map(r => ({
-            name: encrypt(r.name),
-            contact: encrypt(r.contact),
-            relation: r.relation
-          })),
-        
-          hasCollateral: loanType !== "without",
-          collateralType: collateralType,
-          collateralValue: collateralValue?.toString(),
-          collateralDescription: collateralDescription,
-          ownershipStatus: ownershipStatus,
-        
-          loanType: loanType === "without" ? "Regular Loan Without Collateral" : loanType === "with" ? "Regular Loan With Collateral" : "Open-Term Loan",
-          status: "Applied",
-          dateApplied: new Date(),
-          documents: uploadedDocs,  
-          profilePic: uploadedPp
-        };
-        
-
-  
-        if (sourceOfIncome === "business") {
-          newApplication = { ...newApplication, sourceOfIncome, appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc };
-        } else {
-          newApplication = { ...newApplication, sourceOfIncome, appOccupation, appEmploymentStatus, appCompanyName };
-        }
-  
-        await loanApplications.insertOne(newApplication);
-  
-        res.status(201).json({
-          message: loanType === "without"
-            ? "Loan application (no collateral) submitted successfully"
-            : loanType === "with"
-              ? "Loan application (with collateral) submitted successfully"
-              : "Open-term loan application submitted successfully",
-          application: newApplication
-        });
-  
-      } catch (error) {
-        console.error("Error in /loan-applications/apply/:loanType:", error);
-        res.status(500).json({ error: "Failed to submit loan application." });
+      if (!appAgent) {
+        return res.status(400).json({ error: "Agent must be selected for this application." });
       }
+      const assignedAgent = await db.collection("agents").findOne({ agentId: appAgent });
+      if (!assignedAgent) {
+        return res.status(400).json({ error: "Selected agent does not exist." });
+      }
+
+      let parsedReferences = [];
+      if (appReferences) {
+        try {
+          parsedReferences = typeof appReferences === "string" ? JSON.parse(appReferences) : appReferences;
+        } catch (err) {
+          return res.status(400).json({ error: "Invalid format for character references." });
+        }
+      }
+
+      if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3) {
+        return res.status(400).json({ error: "Three references must be provided." });
+      }
+
+      const names = new Map();
+      const numbers = new Map();
+
+      parsedReferences.forEach((r, idx) => {
+        const nameKey = (r.name || "").trim().toLowerCase();
+        const numKey = (r.contact || "").trim();
+        if (nameKey) names.set(nameKey, [...(names.get(nameKey) || []), idx]);
+        if (numKey) numbers.set(numKey, [...(numbers.get(numKey) || []), idx]);
+      });
+
+      const dupNameIndices = [...names.values()].filter(arr => arr.length > 1).flat();
+      const dupNumberIndices = [...numbers.values()].filter(arr => arr.length > 1).flat();
+      if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
+        return res.status(400).json({
+          error: "Reference names and contact numbers must be unique.",
+          duplicates: { nameIndices: dupNameIndices, numberIndices: dupNumberIndices },
+        });
+      }
+
+      const uploadedDocs = processUploadedDocs(req.files);
+      if (!uploadedDocs || (loanType === "without" && uploadedDocs.length < 4) || (loanType !== "without" && uploadedDocs.length < 6)) {
+        return res.status(400).json({
+          error: loanType === "without"
+            ? "4 supporting documents must be uploaded."
+            : "6 supporting documents must be uploaded.",
+        });
+      }
+
+      const uploadedPp = req.files.profilePic?.[0] ? {
+        fileName: req.files.profilePic[0].originalname,
+        filePath: req.files.profilePic[0].path,
+        mimeType: req.files.profilePic[0].mimetype
+      } : null;
+
+      if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount || (loanType !== "open-term" && !appLoanTerms)) {
+        return res.status(400).json({ error: "All required fields must be provided." });
+      }
+
+      if ((loanType === "with" || loanType === "open-term") && (!collateralType || !collateralValue || !collateralDescription || !ownershipStatus)) {
+        return res.status(400).json({ error: "All collateral fields are required." });
+      }
+
+      if (sourceOfIncome === "business") {
+        if (!appTypeBusiness || !appBusinessName || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
+          return res.status(400).json({ error: "Business fields are required for business income source." });
+        }
+      } else if (sourceOfIncome === "employed") {
+        if (!appOccupation || !appEmploymentStatus || !appCompanyName || appMonthlyIncome == null) {
+          return res.status(400).json({ error: "Employment fields are required for employed income source." });
+        }
+      } else {
+        return res.status(400).json({ error: "Invalid source of income." });
+      }
+
+      const existing = await loanApplications.findOne({
+        appName: appName.trim(),
+        appDob: appDob.trim(),
+        appContact: appContact.trim(),
+        appEmail: appEmail.trim(),
+        status: "Pending"
+      });
+      if (existing) {
+        return res.status(400).json({ error: "You already have a pending application with these details." });
+      }
+
+      const applicationId = await generateApplicationId();
+
+      let principal = Number(appLoanAmount);
+      let interestRate = Number(appInterest);
+      let terms = Number(appLoanTerms) || 1;
+      let interestAmount = 0;
+      let periodAmount = principal;
+
+      if (loanType !== "open-term") {
+        interestAmount = principal * (interestRate / 100) * terms;
+        periodAmount = (principal + interestAmount) / terms;
+      }
+
+      let totalPayable = principal + interestAmount;
+
+      let appServiceFee = 0;
+      if (principal >= 10000 && principal <= 20000) {
+        appServiceFee = principal * 0.05;
+      } else if (principal >= 25000 && principal <= 40000) {
+        appServiceFee = 1000;
+      } else if (principal >= 50000 && principal <= 500000) {
+        appServiceFee = principal * 0.03;
+      }
+
+      const appNetReleased = principal - appServiceFee;
+
+      let newApplication = {
+        applicationId,
+        appName: encrypt(appName),
+        appDob,
+        appContact: encrypt(appContact),
+        appEmail: encrypt(appEmail),
+        appMarital,
+        appChildren,
+        appSpouseName: encrypt(appSpouseName),
+        appSpouseOccupation,
+        appAddress: encrypt(appAddress),
+        appMonthlyIncome: appMonthlyIncome?.toString(),
+        appLoanPurpose,
+        appLoanAmount: principal.toString(),
+        appLoanTerms: terms.toString(),
+        appInterest: interestRate.toString(),
+        appTotalInterest: interestAmount,
+        appTotalPayable: totalPayable,
+        appMonthlyDue: periodAmount,
+        appServiceFee,
+        appNetReleased,
+
+        appReferences: parsedReferences.map(r => ({
+          name: encrypt(r.name),
+          contact: encrypt(r.contact),
+          relation: r.relation
+        })),
+
+        appAgent: {
+          id: assignedAgent.agentId,
+          name: assignedAgent.name  
+        },
+
+        hasCollateral: loanType !== "without",
+        collateralType,
+        collateralValue: collateralValue?.toString(),
+        collateralDescription,
+        ownershipStatus,
+
+        loanType: loanType === "without" ? "Regular Loan Without Collateral" : loanType === "with" ? "Regular Loan With Collateral" : "Open-Term Loan",
+        status: "Applied",
+        dateApplied: new Date(),
+        documents: uploadedDocs,
+        profilePic: uploadedPp
+      };
+
+      if (sourceOfIncome === "business") {
+        newApplication = { ...newApplication, sourceOfIncome, appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc };
+      } else {
+        newApplication = { ...newApplication, sourceOfIncome, appOccupation, appEmploymentStatus, appCompanyName };
+      }
+
+      await loanApplications.insertOne(newApplication);
+
+      res.status(201).json({
+        message: loanType === "without"
+          ? "Loan application (no collateral) submitted successfully"
+          : loanType === "with"
+            ? "Loan application (with collateral) submitted successfully"
+            : "Open-term loan application submitted successfully",
+        application: newApplication
+      });
+
+    } catch (error) {
+      console.error("Error in /loan-applications/apply/:loanType:", error);
+      res.status(500).json({ error: "Failed to submit loan application." });
     }
-  );
+  }
+);
+
   
 //add application reloan-without
 router.post("/without/reloan/:borrowersId", async (req, res) => {
@@ -740,8 +740,6 @@ router.get("/:applicationId", async (req, res) => {
   }
 });
 
-
-//edit application by id
 router.put("/:applicationId", authenticateToken, async (req, res) => {
   try {
     const { applicationId } = req.params;
@@ -756,38 +754,86 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
       updateData.dateDisbursed = new Date();
     }
 
-    //find existing app
     const existingApp = await loanApplications.findOne({ applicationId });
     if (!existingApp) {
       return res.status(404).json({ error: "Loan application not found." });
     }
 
     await loanApplications.updateOne({ applicationId }, { $set: updateData });
-
     const updatedDoc = await loanApplications.findOne({ applicationId });
+
+    if (
+      updateData.status &&
+      updateData.status.trim().toLowerCase() === "disbursed"
+    ) {
+      const appAgent = existingApp.appAgent || {};
+      const agentId = appAgent.agentId || appAgent.id; 
+      const agentName = appAgent.name;
+
+      const loanAmount = parseFloat(
+        String(existingApp.appNetReleased || existingApp.appLoanAmount || "0")
+          .replace(/[₱,]/g, "")
+      ) || 0;
+
+      const commission = loanAmount * 0.05;
+
+      console.log(
+        `[AGENT UPDATE] Updating agent stats for ${agentName} (${agentId}) with ₱${loanAmount}`
+      );
+
+      if (agentId || agentName) {
+        const agentCollection = db.collection("agents");
+        const filter = agentId ? { agentId } : { name: agentName };
+
+        const result = await agentCollection.updateOne(
+          filter,
+          {
+            $inc: {
+              handledLoans: 1,
+              totalLoanAmount: loanAmount,
+              totalCommission: commission,
+            },
+          },
+          { upsert: false }
+        );
+
+        console.log("[AGENT UPDATE RESULT]", result);
+
+        if (result.matchedCount === 0) {
+          console.warn(
+            `[AGENT UPDATE WARNING] No agent found for ${agentId}. Check agentId field.`
+          );
+        } else {
+          console.log(
+            `[AGENT UPDATE SUCCESS] ${agentName} +1 loan, +₱${loanAmount}, +₱${commission} commission`
+          );
+        }
+      } else {
+        console.warn(
+          "[AGENT UPDATE WARNING] appAgent info missing, skipping update."
+        );
+      }
+    }
 
     function normalizeRole(role) {
       return String(role || "")
         .trim()
         .toLowerCase()
-        .replace(/[_-]+/g, " "); 
+        .replace(/[_-]+/g, " ");
     }
 
     const rawRole =
-      (req.user && req.user.role) ||
-      req.headers["x-user-role"] ||
-      "";
+      (req.user && req.user.role) || req.headers["x-user-role"] || "";
 
     const actorRole = normalizeRole(rawRole);
-
     const prevStatus = String(existingApp.status || "");
     const nextStatus = String(updatedDoc.status || updateData.status || "");
     const changed =
       nextStatus.trim().toLowerCase() !== prevStatus.trim().toLowerCase();
 
     const roleToCollection = {
-      manager: "loanOfficer_notifications",       
-      "loan officer": "manager_notifications"   
+      manager: "loanOfficer_notifications",
+      "loan officer": "manager_notifications",
     };
 
     const targetCollectionName = roleToCollection[actorRole];
@@ -798,7 +844,7 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
       prevStatus,
       nextStatus,
       statusChanged: changed,
-      targetCollection: targetCollectionName
+      targetCollection: targetCollectionName,
     });
 
     if (changed && targetCollectionName) {
@@ -814,11 +860,10 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
         createdAt: new Date(),
         read: false,
         actorRole,
-        previousStatus: prevStatus
+        previousStatus: prevStatus,
       };
 
       await db.collection(targetCollectionName).insertOne(notificationDoc);
-
       console.log(
         "[NOTIFICATION DEBUG] Inserted into",
         targetCollectionName,
@@ -837,16 +882,16 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
         prevStatus,
         nextStatus,
         statusChanged: changed,
-        targetCollection: targetCollectionName
-      }
+        targetCollection: targetCollectionName,
+      },
     });
   } catch (error) {
     console.error("Error in PUT /loan-applications/:applicationId:", error);
-    res
-      .status(500)
-      .json({ error: "Failed to update loan application." });
+    res.status(500).json({ error: "Failed to update loan application." });
   }
 });
+
+
 
 //update interview schedule 
 router.put("/:applicationId/schedule-interview", authenticateToken, async (req, res) => {
