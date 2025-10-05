@@ -218,22 +218,26 @@ module.exports = (db) => {
     }
   });
   
-  
-  //fetch interview list
   router.get("/interviews", authenticateToken, async (req, res) => {
     try {
       const interviews = await db.collection("loan_applications")
         .find({ interviewDate: { $exists: true } })
         .project({ applicationId: 1, appName: 1, interviewDate: 1, interviewTime: 1, status: 1, appAddress: 1, _id: 0 })
         .toArray();
-      
-      res.status(200).json(interviews);
+  
+      const decryptedInterviews = interviews.map(i => ({
+        ...i,
+        appName: i.appName ? decrypt(i.appName) : "",
+        appAddress: i.appAddress ? decrypt(i.appAddress) : ""
+      }));
+  
+      res.status(200).json(decryptedInterviews);
     } catch (error) {
       console.error("Error fetching interviews:", error);
       res.status(500).json({ error: "Failed to fetch interviews" });
     }
   });
-
+  
   //add application
   router.post(
     "/apply/:loanType",
@@ -357,6 +361,19 @@ module.exports = (db) => {
 
         let totalPayable = principal + interestAmount;
 
+        let appServiceFee = 0;
+        const loanAmt = Number(appLoanAmount);
+
+        if (loanAmt >= 10000 && loanAmt <= 20000) {
+          appServiceFee = loanAmt * 0.05; 
+        } else if (loanAmt >= 25000 && loanAmt <= 40000) {
+          appServiceFee = 1000;
+        } else if (loanAmt >= 50000 && loanAmt <= 500000) {
+          appServiceFee = loanAmt * 0.03; 
+        }
+
+        const appNetReleased = loanAmt - appServiceFee;
+
         // Construct new application object
         let newApplication = {
           applicationId,
@@ -374,6 +391,12 @@ module.exports = (db) => {
           appLoanAmount: principal.toString(),
           appLoanTerms: terms.toString(),
           appInterest: interestRate.toString(),
+          appTotalInterest: interestAmount,
+          appTotalPayable: totalPayable,
+          appMonthlyDue: periodAmount,
+          appServiceFee,
+          appNetReleased,
+
         
           appReferences: parsedReferences.map(r => ({
             name: encrypt(r.name),
