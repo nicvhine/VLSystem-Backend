@@ -2,6 +2,7 @@
   const cors = require('cors');
   const { MongoClient } = require('mongodb');
   const path = require('path');
+const agentRoutes = require('./routes/agentRoutes');
 
   const app = express();
   const PORT = 3001;
@@ -157,6 +158,7 @@
       const notificationRoutes = require('./routes/notificationRoutes')(db);
       const logsRoute = require('./routes/logs')(db);
       const smsRoutes = require('./routes/sms');
+      const agentRoutes = require('./routes/agentRoutes')(db);
 
       app.use('/users', userRoutes);
       app.use('/loan-applications', loanApplicationRoutes);
@@ -168,6 +170,7 @@
       app.use('/logs', logsRoute);
       app.use('/api', smsRoutes);
       app.use('/uploads', express.static('uploads'));
+      app.use('/agents', agentRoutes)
 
       
       app.listen(PORT, () => {
