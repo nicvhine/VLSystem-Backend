@@ -11,8 +11,8 @@ const crypto = require("crypto");
 const ALGORITHM = "aes-256-cbc";
 const SECRET_KEY = Buffer.from(
   (process.env.ENCRYPTION_KEY || "").padEnd(32, "0").slice(0, 32)
-); // must be 32 bytes
-const IV_LENGTH = 16; // AES block size
+); 
+const IV_LENGTH = 16; 
 
 function encrypt(text) {
   if (!text) return null;
@@ -754,6 +754,9 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
       updateData.dateDisbursed = new Date();
     }
 
+    const loanApplications = db.collection("loan_applications");
+    const agents = db.collection("agents");
+
     const existingApp = await loanApplications.findOne({ applicationId });
     if (!existingApp) {
       return res.status(404).json({ error: "Loan application not found." });
@@ -763,55 +766,33 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
     const updatedDoc = await loanApplications.findOne({ applicationId });
 
     if (
-      updateData.status &&
+      typeof updateData.status === "string" &&
       updateData.status.trim().toLowerCase() === "disbursed"
     ) {
-      const appAgent = existingApp.appAgent || {};
-      const agentId = appAgent.agentId || appAgent.id; 
-      const agentName = appAgent.name;
+      const appAgent = existingApp.appAgent;
+      const loanAmount = parseFloat(existingApp.appLoanAmount || 0);
 
-      const loanAmount = parseFloat(
-        String(existingApp.appNetReleased || existingApp.appLoanAmount || "0")
-          .replace(/[₱,]/g, "")
-      ) || 0;
+      if (appAgent && (appAgent.agentId || appAgent.id)) {
+        const agentId = appAgent.agentId || appAgent.id;      
+        const commissionRate = 0.05; 
+        const commission = loanAmount * commissionRate;
 
-      const commission = loanAmount * 0.05;
-
-      console.log(
-        `[AGENT UPDATE] Updating agent stats for ${agentName} (${agentId}) with ₱${loanAmount}`
-      );
-
-      if (agentId || agentName) {
-        const agentCollection = db.collection("agents");
-        const filter = agentId ? { agentId } : { name: agentName };
-
-        const result = await agentCollection.updateOne(
-          filter,
+        await agents.updateOne(
+          { agentId },
           {
             $inc: {
               handledLoans: 1,
               totalLoanAmount: loanAmount,
               totalCommission: commission,
             },
-          },
-          { upsert: false }
+          }
         );
 
-        console.log("[AGENT UPDATE RESULT]", result);
-
-        if (result.matchedCount === 0) {
-          console.warn(
-            `[AGENT UPDATE WARNING] No agent found for ${agentId}. Check agentId field.`
-          );
-        } else {
-          console.log(
-            `[AGENT UPDATE SUCCESS] ${agentName} +1 loan, +₱${loanAmount}, +₱${commission} commission`
-          );
-        }
+        console.log(
+          `[AGENT UPDATE] Updated agent ${agentId}: +1 handledLoan, +₱${loanAmount}, +₱${commission} commission`
+        );
       } else {
-        console.warn(
-          "[AGENT UPDATE WARNING] appAgent info missing, skipping update."
-        );
+        console.warn(`[AGENT UPDATE] No agentId found for application ${applicationId}`);
       }
     }
 
@@ -823,9 +804,12 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
     }
 
     const rawRole =
-      (req.user && req.user.role) || req.headers["x-user-role"] || "";
+      (req.user && req.user.role) ||
+      req.headers["x-user-role"] ||
+      "";
 
     const actorRole = normalizeRole(rawRole);
+
     const prevStatus = String(existingApp.status || "");
     const nextStatus = String(updatedDoc.status || updateData.status || "");
     const changed =
@@ -864,6 +848,7 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
       };
 
       await db.collection(targetCollectionName).insertOne(notificationDoc);
+
       console.log(
         "[NOTIFICATION DEBUG] Inserted into",
         targetCollectionName,
@@ -891,8 +876,7 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
   }
 });
 
-
-
+   
 //update interview schedule 
 router.put("/:applicationId/schedule-interview", authenticateToken, async (req, res) => {
   const { applicationId } = req.params;
@@ -939,27 +923,6 @@ router.delete("/cleanup/unscheduled", async (req, res) => {
     res.status(500).json({ error: "Failed to clean up unscheduled applications." });
   }
 });
-
-// test delete if no sched after 1 minute
-// cron.schedule("* * * * *", async () => {
-//   try {
-//     const oneMinuteAgo = new Date();
-//     oneMinuteAgo.setMinutes(oneMinuteAgo.getMinutes() - 1);
-
-//     const result = await loanApplications.deleteMany({
-//       interviewDate: { $exists: false },
-//       dateApplied: { $lte: oneMinuteAgo },
-//     });
-
-//     if (result.deletedCount > 0) {
-//       console.log(`[CRON] Deleted ${result.deletedCount} unscheduled applications older than 1 minute.`);
-//     } else {
-//       console.log("[CRON] No unscheduled applications to delete.");
-//     }
-//   } catch (error) {
-//     console.error("[CRON] Cleanup job failed:", error);
-//   }
-// });
 
   return router;
 };
