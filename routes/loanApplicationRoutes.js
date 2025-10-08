@@ -832,28 +832,44 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
     });
 
     if (changed && targetCollectionName) {
-      const message =
-        actorRole === "manager"
-          ? `Manager has changed application ${applicationId} to "${nextStatus}"`
-          : `Loan Officer has changed application ${applicationId} to ${nextStatus}`;
+        // Debug: log req.user to verify JWT payload
+        console.log('[NOTIFICATION DEBUG] req.user:', JSON.stringify(req.user, null, 2));
+        // Get sender info from req.user with robust fallback
+        let actorName = req.user?.fullName || req.user?.name || req.user?.username || req.user?.email || "Unknown";
+        let actorProfilePic = req.user?.profilePic || req.user?.photo || req.user?.avatar || "";
+        // If still missing, log full req.user for diagnosis
+        if (actorName === "Unknown" || !actorProfilePic) {
+          console.warn('[NOTIFICATION DEBUG] Fallback triggered. req.user:', JSON.stringify(req.user, null, 2));
+          if (req.user) {
+            Object.keys(req.user).forEach(key => {
+              console.warn(`[NOTIFICATION DEBUG] req.user[${key}]:`, req.user[key]);
+            });
+          }
+        }
+        const message =
+          actorRole === "manager"
+            ? `${actorName} (Manager) has changed application ${applicationId} to "${nextStatus}"`
+            : `${actorName} (Loan Officer) has changed application ${applicationId} to ${nextStatus}`;
 
-      const notificationDoc = {
-        applicationId,
-        message,
-        status: nextStatus,
-        createdAt: new Date(),
-        read: false,
-        actorRole,
-        previousStatus: prevStatus,
-      };
+        const notificationDoc = {
+          applicationId,
+          message,
+          status: nextStatus,
+          createdAt: new Date(),
+          read: false,
+          actorRole,
+          actorName,
+          actorProfilePic,
+          previousStatus: prevStatus,
+        };
 
-      await db.collection(targetCollectionName).insertOne(notificationDoc);
+        await db.collection(targetCollectionName).insertOne(notificationDoc);
 
-      console.log(
-        "[NOTIFICATION DEBUG] Inserted into",
-        targetCollectionName,
-        notificationDoc
-      );
+        console.log(
+          "[NOTIFICATION DEBUG] Inserted into",
+          targetCollectionName,
+          notificationDoc
+        );
     } else if (!changed) {
       console.log("[NOTIFICATION DEBUG] No status change, skipping insert.");
     } else {
