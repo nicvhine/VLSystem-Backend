@@ -28,7 +28,7 @@ function decrypt(text) {
   if (!text) return "";
   try {
     const [ivHex, encryptedHex] = text.split(":");
-    if (!ivHex || !encryptedHex) return text; // if not encrypted
+    if (!ivHex || !encryptedHex) return text;
     const iv = Buffer.from(ivHex, "hex");
     const encryptedText = Buffer.from(encryptedHex, "hex");
     const decipher = crypto.createDecipheriv(ALGORITHM, SECRET_KEY, iv);
