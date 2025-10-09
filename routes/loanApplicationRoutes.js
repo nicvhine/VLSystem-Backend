@@ -51,7 +51,6 @@ function safeDecrypt(value) {
 }
 
 
-
 //authenticator
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
@@ -352,14 +351,16 @@ router.post(
       let interestRate = Number(appInterest);
       let terms = Number(appLoanTerms) || 1;
       let interestAmount = 0;
+      let totalInterestAmount = 0;
       let periodAmount = principal;
 
       if (loanType !== "open-term") {
-        interestAmount = principal * (interestRate / 100) * terms;
-        periodAmount = (principal + interestAmount) / terms;
+        interestAmount = principal * (interestRate / 100);
+        totalInterestAmount = interestAmount * terms;
+        periodAmount = (principal + totalInterestAmount) / terms;
       }
 
-      let totalPayable = principal + interestAmount;
+      let totalPayable = principal + totalInterestAmount;
 
       let appServiceFee = 0;
       if (principal >= 10000 && principal <= 20000) {
@@ -387,8 +388,12 @@ router.post(
         appLoanPurpose,
         appLoanAmount: principal.toString(),
         appLoanTerms: terms.toString(),
-        appInterest: interestRate.toString(),
-        appTotalInterest: interestAmount,
+
+        //interest
+        appInterestRate: interestRate.toString(),
+        appInterestAmount: interestAmount,
+        appTotalInterestAmount: totalInterestAmount,
+
         appTotalPayable: totalPayable,
         appMonthlyDue: periodAmount,
         appServiceFee,
