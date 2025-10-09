@@ -30,7 +30,7 @@ module.exports = (db) => {
     }
   });
 
-  // GET payment schedule for a borrower and loan
+  // GET COLLECTIONS
   router.get('/schedule/:borrowersId/:loanId', async (req, res) => {
     const { borrowersId, loanId } = req.params;
 
