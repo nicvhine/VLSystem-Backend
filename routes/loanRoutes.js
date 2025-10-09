@@ -10,133 +10,129 @@ function padId(num) {
 
 module.exports = (db) => {
   
-  //post loan
-  router.post('/generate-loan/:applicationId', async (req, res) => {
-    const { applicationId } = req.params;
-  
-    try {
-      // Step 1: Fetch the loan application
-      const application = await db.collection("loan_applications").findOne({ applicationId });
-  
-      if (!application) {
-        return res.status(404).json({ error: "Application not found" });
-      }
-  
-      // Step 2: Ensure status is Active
-      if (application.status !== "Active") {
-        return res.status(400).json({ error: "Loan can only be generated for applications with status 'Active'" });
-      }
-  
-      // Step 3: Check if the loan already exists
-      const existingLoan = await db.collection("loans").findOne({ applicationId });
-      if (existingLoan) {
-        return res.status(400).json({ error: "Loan already exists for this application" });
-      }
-  
-      // Step 4: Ensure borrower exists
-      if (!application.borrowersId) {
-        return res.status(400).json({ error: "BorrowersId missing. Borrower account must be created first." });
-      }
-  
-      const borrower = await db.collection("borrowers_account").findOne({ borrowersId: application.borrowersId });
-      if (!borrower) {
-        return res.status(404).json({ error: "Borrower not found for the given borrowersId." });
-      }
-  
-      // Step 5: Generate unique loanId
-      const maxLoan = await db.collection("loans").aggregate([
-        {
-          $addFields: {
-            loanIdNum: {
-              $convert: {
-                input: { $substrBytes: ["$loanId", 1, { $subtract: [{ $strLenBytes: "$loanId" }, 1] }] },
-                to: "int",
-                onError: 0,
-                onNull: 0
-              }
+// POST /generate-loan/:applicationId
+router.post('/generate-loan/:applicationId', async (req, res) => {
+  const { applicationId } = req.params;
+
+  try {
+    const application = await db.collection("loan_applications").findOne({ applicationId });
+
+    if (!application) {
+      return res.status(404).json({ error: "Application not found" });
+    }
+
+    if (application.status !== "Active") {
+      return res.status(400).json({ error: "Loan can only be generated for applications with status 'Active'" });
+    }
+
+    const existingLoan = await db.collection("loans").findOne({ applicationId });
+    if (existingLoan) {
+      return res.status(400).json({ error: "Loan already exists for this application" });
+    }
+
+    if (!application.borrowersId) {
+      return res.status(400).json({ error: "BorrowersId missing. Borrower account must be created first." });
+    }
+
+    const borrower = await db.collection("borrowers_account").findOne({ borrowersId: application.borrowersId });
+    if (!borrower) {
+      return res.status(404).json({ error: "Borrower not found for the given borrowersId." });
+    }
+
+    const maxLoan = await db.collection("loans").aggregate([
+      {
+        $addFields: {
+          loanIdNum: {
+            $convert: {
+              input: { $substrBytes: ["$loanId", 1, { $subtract: [{ $strLenBytes: "$loanId" }, 1] }] },
+              to: "int",
+              onError: 0,
+              onNull: 0
             }
           }
-        },
-        { $sort: { loanIdNum: -1 } },
-        { $limit: 1 }
-      ]).toArray();
-  
-      let nextId = 1;
-      if (maxLoan.length > 0 && !isNaN(maxLoan[0].loanIdNum)) {
-        nextId = maxLoan[0].loanIdNum + 1;
-      }
-      const loanId = 'L' + padId(nextId);
-  
-      // Step 6: Compute totals
-      const termsInMonths = application.appLoanTerms;
-      const principal = Number(application.appLoanAmount);
-      const interestRate = Number(application.appInterest);
-  
-      const interestAmount = principal * (interestRate / 100);
-      const totalInterest = interestAmount * termsInMonths;
-  
-      const balance = application.totalPayable;
-      const paidAmount = 0;
-      const releasedAmount = principal;
-  
-      const loan = {
-        loanId,
-        applicationId,
-        borrowersId: borrower.borrowersId,
-        profilePic: application.profilePic,
-        paidAmount,
-        balance,
-        status: "Active",
-        dateDisbursed: application.dateDisbursed || new Date(),
-      };
-  
-      // Step 7: Insert loan
-      await db.collection("loans").insertOne(loan);
-  
-      // Step 8: Generate collection schedule
-      const collections = [];
-      let runningBalance = application.totalPayable;
-      const disbursedDate = new Date(application.dateDisbursed || new Date());
-
-      for (let i = 0; i < termsInMonths; i++) {
-        const dueDate = new Date(disbursedDate);
-        dueDate.setMonth(dueDate.getMonth() + i + 1);
-
-        // Adjust for end-of-month cases
-        if (dueDate.getDate() !== disbursedDate.getDate()) {
-          dueDate.setDate(0);
         }
+      },
+      { $sort: { loanIdNum: -1 } },
+      { $limit: 1 }
+    ]).toArray();
 
-        collections.push({
-          referenceNumber: `${loanId}-C${i + 1}`,
-          loanId,
-          borrowersId: borrower.borrowersId,
-          name: borrower.name,
-          collectionNumber: i + 1,
-          dueDate,
-          periodAmount: monthlyDue,
-          paidAmount: 0,
-          balance: monthlyDue,
-          loanBalance: runningBalance,
-          status: 'Unpaid',
-          collector: borrower.assignedCollector,
-          note: '',
-          createdAt: new Date()
-        });
+    let nextId = 1;
+    if (maxLoan.length > 0 && !isNaN(maxLoan[0].loanIdNum)) {
+      nextId = maxLoan[0].loanIdNum + 1;
+    }
+    const loanId = 'L' + padId(nextId);
 
-        runningBalance -= monthlyDue;
+    // Compute totals
+    const termsInMonths = Number(application.appLoanTerms);
+    const principal = Number(application.appLoanAmount);
+    const interestRate = Number(application.appInterest);
+    const monthlyDue = Number(application.appMonthlyDue); 
+
+    const interestAmount = principal * (interestRate / 100);
+    const totalInterest = interestAmount * termsInMonths;
+
+    const totalPayable = Number(application.totalPayable || principal + totalInterest);
+    const paidAmount = 0;
+
+    const loan = {
+      loanId,
+      applicationId,
+      borrowersId: borrower.borrowersId,
+      profilePic: application.profilePic || "",
+      paidAmount,
+      balance: totalPayable,
+      releasedAmount: principal,
+      status: "Active",
+      dateDisbursed: application.dateDisbursed || new Date(),
+      createdAt: new Date(),
+    };
+
+    // Insert loan
+    await db.collection("loans").insertOne(loan);
+
+    const collections = [];
+    let runningBalance = totalPayable;
+    const disbursedDate = new Date(application.dateDisbursed || new Date());
+
+    for (let i = 0; i < termsInMonths; i++) {
+      const dueDate = new Date(disbursedDate);
+      dueDate.setMonth(dueDate.getMonth() + i + 1);
+
+      if (dueDate.getDate() !== disbursedDate.getDate()) {
+        dueDate.setDate(0);
       }
 
-  
-      await db.collection("collections").insertMany(collections);
-  
-      res.status(201).json({ message: "Loan created successfully", loan });
-  
-    } catch (error) {
-      console.error("Error generating loan:", error);
-      res.status(500).json({ error: "Internal server error" });
+      const periodBalance = monthlyDue;
+      runningBalance -= monthlyDue;
+
+      collections.push({
+        referenceNumber: `${loanId}-C${i + 1}`,
+        loanId,
+        borrowersId: borrower.borrowersId,
+        name: borrower.name,
+        collectionNumber: i + 1,
+        dueDate,
+        periodAmount: monthlyDue, 
+        paidAmount: 0,
+        periodBalance,
+        loanBalance: runningBalance > 0 ? runningBalance : 0,
+        status: 'Unpaid',
+        collector: borrower.assignedCollector || "",
+        note: '',
+        createdAt: new Date()
+      });
     }
-  });
+
+    await db.collection("collections").insertMany(collections);
+
+    res.status(201).json({ message: "Loan and collections created successfully", loan });
+
+  } catch (error) {
+    console.error("Error generating loan:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
   
   //post reloan
  router.post('/generate-reloan/:borrowersId', async (req, res) => {
@@ -185,7 +181,6 @@ if (previousLoan.length > 0) {
     );
   }
 }
-
 
     // Generate new loanId
     const maxLoan = await db.collection("loans").aggregate([
@@ -392,7 +387,7 @@ router.get("/loan-type-stats", async (req, res) => {
   }
 });
 
-
+// FETCH ACTIVE LOAN
 router.get('/active-loan/:borrowersId', async (req, res) => {
   const { borrowersId } = req.params;
   
@@ -413,18 +408,6 @@ router.get('/active-loan/:borrowersId', async (req, res) => {
     res.json({ 
       loanId: loan.loanId,
       borrowersId: loan.borrowersId,
-      principal: loan.principal,
-      totalPayable: loan.totalPayable,
-      monthlyDue: loan.monthlyDue,
-      paidAmount: loan.paidAmount,
-      balance: loan.balance,
-      status: loan.status,
-      interestRate: loan.interestRate,
-      dateDisbursed: loan.dateDisbursed,
-      termsInMonths: loan.termsInMonths,
-      loanType: loan.loanType,  
-      interestAmount: loan.interestAmount,
-      totalInterest: loan.totalInterest,
       paymentProgress
     });
   } catch (err) {
@@ -454,6 +437,72 @@ router.get('/latest-loan/:borrowersId', async (req, res) => {
   }
 });
 
+// Get full loan details with related application and collections
+router.get("/details/:loanId", async (req, res) => {
+  const { loanId } = req.params;
+
+  try {
+    // Step 1: Fetch the loan document
+    const loan = await db.collection("loans").findOne({ loanId });
+    if (!loan) {
+      return res.status(404).json({ error: "Loan not found." });
+    }
+
+    // Step 2: Fetch the related loan application
+    const application = await db.collection("loan_applications").findOne({
+      applicationId: loan.applicationId,
+    });
+
+    // Step 3: Fetch the collection schedule for this loan
+    const collections = await db
+      .collection("collections")
+      .find({ loanId })
+      .sort({ collectionNumber: 1 })
+      .toArray();
+
+    // Step 4: Compute payment progress
+    const paymentProgress =
+      loan.totalPayable > 0
+        ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
+        : 0;
+
+    const result = {
+      loanId: loan.loanId,
+      applicationId: loan.applicationId,
+      borrowersId: loan.borrowersId,
+      name: application?.appName || loan.name || "Unknown",
+      email: application?.appEmail || "N/A",
+      principal: loan.principal || application?.appLoanAmount || 0,
+      totalPayable: application?.appTotalPayable,
+      monthlyDue: loan.monthlyDue || application?.appMonthlyDue || 0,
+      termsInMonths: loan.termsInMonths || application?.appLoanTerms || 0,
+      interestRate: application?.appInterestRate,
+      interestAmount: application?.appInterestAmount,
+      totalInterestAmount: application?.appTotalInterestAmount,
+      dateDisbursed: loan.dateDisbursed,
+      status: loan.status,
+      balance: loan.balance,
+      paidAmount: loan.paidAmount,
+      paymentProgress,
+      type: loan.loanType || application?.loanType || "Regular",
+      collections, 
+      borrowerDetails: {
+        address: application?.appAddress,
+        contact: application?.appContact,
+        occupation: application?.appOccupation,
+        incomeSource: application?.sourceOfIncome,
+        monthlyIncome: application?.appMonthlyIncome,
+      },
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching loan details:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+
 
   // Get all loans for a borrower (for navigation)
   router.get('/borrower-loans/:borrowersId', async (req, res) => {
@@ -467,7 +516,7 @@ router.get('/latest-loan/:borrowersId', async (req, res) => {
       }
   
       const currentLoan = loans.find(l => l.status === 'Active') || null;
-      const pastLoans = loans.filter(l => l.status !== 'Active'); // includes closed loans
+      const pastLoans = loans.filter(l => l.status !== 'Active'); 
   
       const loansWithProgress = loans.map(loan => {
         const paymentProgress = loan.totalPayable > 0
