@@ -1,12 +1,60 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../middleware/auth');
+const authenticateToken = require('../../middleware/auth');
+const authorizeRole = require('../../middleware/authorizeRole');
+
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken'); 
+const JWT_SECRET = process.env.JWT_SECRET;
+
+const multer = require('multer');
+const fs = require('fs');
+const path = require('path');
+
+const uploadDir = path.join(__dirname, '..', 'uploads');
+if (!fs.existsSync(uploadDir)) {
+  fs.mkdirSync(uploadDir);
+}
+
+const storage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    cb(null, `profile_${Date.now()}${ext}`);
+  },
+});
+
+const upload = multer({ storage });
+
+function padId(num) {
+  return num.toString().padStart(5, '0');
+}
+
+async function generateUniqueUsername(name, role, users) {
+  const parts = name.trim().toLowerCase().split(" ");
+  if (parts.length < 1) return null;
+
+  const firstName = parts[0];
+  const baseUsername = `${role.toLowerCase()}${firstName}`;
+
+  let username = baseUsername;
+  let count = 1;
+
+  while (await users.findOne({ username })) {
+    count++;
+    username = baseUsername + count;
+  }
+
+  return username;
+}
 
 module.exports = (db) => {
-    const user = db.collection('users');
+    const users = db.collection('users');
 
     // Add new user
-    router.post("/", authenticateToken, async (req, res) => {
+    router.post("/", authenticateToken, authorizeRole("head"), async (req, res) => {
         try {
         const { name, email, phoneNumber, role } = req.body;
         const actor = req.user?.username;

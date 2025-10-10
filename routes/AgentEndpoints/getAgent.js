@@ -1,13 +1,14 @@
 const express = require("express");
-const authenticateToken = require("../../middleware/auth");
 const router = express.Router();
+const authenticateToken = require("../../middleware/auth");
+const authorizeRole = require("../../middleware/authorizeRole");
 
 module.exports = (db) => {
   const agents = db.collection("agents");
   const applications = db.collection("loan-applications");
 
   // Get all agents
-  router.get("/", authenticateToken, async (req, res) => {
+  router.get("/", authenticateToken, authorizeRole("head", "manager", "loan officer"), async (req, res) => {
     try {
       const allAgents = await agents.find().toArray();
 
@@ -43,7 +44,7 @@ module.exports = (db) => {
   });
 
   // Get specific agent
-  router.get("/:agentId", async (req, res) => {
+  router.get("/:agentId", authenticateToken, authorizeRole("head", "manager", "loan officer"), async (req, res) => {
     try {
       const { agentId } = req.params;
       const agent = await agents.findOne({ agentId });

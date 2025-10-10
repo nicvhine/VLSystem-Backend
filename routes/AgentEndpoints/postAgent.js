@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../middleware/auth");
+const authorizeRole = require("../../middleware/authorizeRole");
 
 function padId(num) {
   return num.toString().padStart(5, "0");
@@ -12,7 +13,7 @@ function generateAgentId(num) {
 module.exports = (db) => {
   const agents = db.collection("agents");
 
-  router.post("/", authenticateToken, async (req, res) => {
+  router.post("/", authenticateToken, authorizeRole("loan officer"), async (req, res) => {
     try {
       const { name, phoneNumber } = req.body;
 

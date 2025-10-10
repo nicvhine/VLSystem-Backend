@@ -1,12 +1,21 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../middleware/auth');
+const authenticateToken = require('../../middleware/auth');
+const authorizeRole = require('../../middleware/authorizeRole');
+
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');  
+require('dotenv').config();
+
+function padId(num) {
+    return num.toString().padStart(5, '0');
+  }
 
 module.exports = (db) => {
     const borrowers = db.collection("borrowers_account");
 
     //Add borrower
-    router.post("/", async (req, res) => {
+    router.post("/", authenticateToken, authorizeRole("manager"), async (req, res) => {
         try {
         const { name, role, applicationId, assignedCollector } = req.body;
         if (!name || !role || !applicationId) return res.status(400).json({ error: "Name, role, and applicationId are required" });

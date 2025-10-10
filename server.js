@@ -150,7 +150,7 @@
 
       const userRoutes = require('./routes/StaffEndpoints')(db);
       const loanApplicationRoutes = require('./routes/loanApplicationRoutes')(db, getNextSequence);
-      const borrowersRoutes = require('./routes/borrowersRoutes')(db);
+      const borrowersRoutes = require('./routes/BorrowerEndpoints')(db);
       const loanRoutes = require('./routes/loanRoutes')(db);
       const collectionRoutes = require('./routes/collectionRoutes')(db);
       const paymentRoutes = require('./routes/paymentRoutes')(db);
