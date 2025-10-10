@@ -2,7 +2,6 @@
   const cors = require('cors');
   const { MongoClient } = require('mongodb');
   const path = require('path');
-const agentRoutes = require('./routes/agentRoutes');
 
   const app = express();
   const PORT = 3001;
@@ -149,7 +148,7 @@ const agentRoutes = require('./routes/agentRoutes');
 
       console.log("Counter initialized to:", maxSeq);
 
-      const userRoutes = require('./routes/userRoutes')(db);
+      const userRoutes = require('./routes/StaffEndpoints')(db);
       const loanApplicationRoutes = require('./routes/loanApplicationRoutes')(db, getNextSequence);
       const borrowersRoutes = require('./routes/borrowersRoutes')(db);
       const loanRoutes = require('./routes/loanRoutes')(db);
@@ -158,7 +157,7 @@ const agentRoutes = require('./routes/agentRoutes');
       const notificationRoutes = require('./routes/notificationRoutes')(db);
       const logsRoute = require('./routes/logs')(db);
       const smsRoutes = require('./routes/sms');
-      const agentRoutes = require('./routes/agentRoutes')(db);
+      const agentRoutes = require('./routes/AgentEndpoints')(db);
 
       app.use('/users', userRoutes);
       app.use('/loan-applications', loanApplicationRoutes);

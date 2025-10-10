@@ -1,0 +1,82 @@
+const express = require("express");
+const authenticateToken = require("../../middleware/auth");
+const router = express.Router();
+
+module.exports = (db) => {
+  const agents = db.collection("agents");
+  const applications = db.collection("loan-applications");
+
+  // Get all agents
+  router.get("/", authenticateToken, async (req, res) => {
+    try {
+      const allAgents = await agents.find().toArray();
+
+      for (const agent of allAgents) {
+        const assignedApplications = await applications
+          .find({ "appAgent.id": agent.agentId, status: "Disbursed" })
+          .toArray();
+
+        if (assignedApplications.length > 0) {
+          const totalLoanAmount = assignedApplications.reduce(
+            (sum, app) => sum + (app.appLoanAmount || 0),
+            0
+          );
+          const totalCommission = totalLoanAmount * 0.05;
+          const handledLoans = assignedApplications.length;
+
+          await agents.updateOne(
+            { agentId: agent.agentId },
+            { $set: { handledLoans, totalLoanAmount, totalCommission } }
+          );
+
+          agent.handledLoans = handledLoans;
+          agent.totalLoanAmount = totalLoanAmount;
+          agent.totalCommission = totalCommission;
+        }
+      }
+
+      return res.status(200).json({ agents: allAgents });
+    } catch (error) {
+      console.error("Error fetching agents:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  // Get specific agent
+  router.get("/:agentId", async (req, res) => {
+    try {
+      const { agentId } = req.params;
+      const agent = await agents.findOne({ agentId });
+
+      if (!agent) return res.status(404).json({ message: "Agent not found" });
+
+      const assignedApplications = await applications
+        .find({ "appAgent.id": agentId, status: "Disbursed" })
+        .toArray();
+
+      const totalLoanAmount = assignedApplications.reduce(
+        (sum, app) => sum + (app.appLoanAmount || 0),
+        0
+      );
+
+      const totalCommission = totalLoanAmount * 0.05;
+      const handledLoans = assignedApplications.length;
+
+      await agents.updateOne(
+        { agentId },
+        { $set: { handledLoans, totalLoanAmount, totalCommission } }
+      );
+
+      agent.handledLoans = handledLoans;
+      agent.totalLoanAmount = totalLoanAmount;
+      agent.totalCommission = totalCommission;
+
+      return res.status(200).json({ agent });
+    } catch (error) {
+      console.error("Error fetching agent:", error);
+      return res.status(500).json({ message: "Server error" });
+    }
+  });
+
+  return router;
+};
