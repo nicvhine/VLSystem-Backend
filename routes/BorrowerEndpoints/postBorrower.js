@@ -2,35 +2,16 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../../middleware/auth');
 const authorizeRole = require('../../middleware/authorizeRole');
-
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');  
 require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const crypto = require("crypto");
-
-function decrypt(text) {
-    if (!text) return "";
-    try {
-      const [ivHex, encryptedHex] = text.split(":");
-      if (!ivHex || !encryptedHex) return text;
-      const iv = Buffer.from(ivHex, "hex");
-      const encryptedText = Buffer.from(encryptedHex, "hex");
-      const decipher = crypto.createDecipheriv(ALGORITHM, SECRET_KEY, iv);
-      let decrypted = decipher.update(encryptedText);
-      decrypted = Buffer.concat([decrypted, decipher.final()]);
-      return decrypted.toString("utf8");
-    } catch (err) {
-      console.error("Decryption failed:", err.message);
-      return text;
-    }
-  }
+const { encrypt, decrypt } = require('../../utils/crypto'); 
 
 function padId(num) {
-    return num.toString().padStart(5, '0');
-  }
-
+  return num.toString().padStart(5, '0');
+}
 module.exports = (db) => {
     const borrowers = db.collection("borrowers_account");
 
@@ -86,26 +67,13 @@ module.exports = (db) => {
         // Borrower object
         const borrower = {
             borrowersId,
-            name,
+            name: encrypt(name),
             role,
-            username,
+            username: encrypt(username),
             password: hashedPassword,
             isFirstLogin: true,
             assignedCollector,
-            dateOfBirth: application.appDob,
-            maritalStatus: application.appMarital,
-            numberOfChildren: application.appChildren,
-            contactNumber: application.appContact,
             email: application.appEmail,
-            address: application.appAdress,
-            barangay: application.appBarangay,
-            municipality: application.appMunicipality,
-            province: application.appProvince,
-            houseStatus: application.appHouseStatus,
-            sourceOfIncome: application.sourceOfIncome,
-            occupation: application.appOccupation,
-            monthlyIncome: application.appMonthlyIncome,
-            characterReferences: application.appReferences || [],
             score: application.score || 0,
             profilePic: profilePicUrl
         };
