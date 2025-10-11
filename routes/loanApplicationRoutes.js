@@ -259,13 +259,23 @@ router.post(
         collateralType, collateralValue, collateralDescription, ownershipStatus
       } = req.body;
 
+      console.log("appAgent received from frontend:", appAgent);
+
       if (!appAgent) {
         return res.status(400).json({ error: "Agent must be selected for this application." });
       }
-      const assignedAgent = await db.collection("agents").findOne({ agentId: appAgent });
-      if (!assignedAgent) {
-        return res.status(400).json({ error: "Selected agent does not exist." });
+      
+      let assignedAgent;
+      try {
+        assignedAgent = await db.collection("agents").findOne({ agentId: appAgent });
+        if (!assignedAgent) {
+          return res.status(400).json({ error: "Selected agent does not exist." });
+        }
+        } catch {
+        return res.status(400).json({ error: "Invalid agent ID format." });
       }
+      
+
 
       let parsedReferences = [];
       if (appReferences) {
