@@ -5,9 +5,22 @@ const authorizeRole = require("../../middleware/authorizeRole");
 
 module.exports = (db) => {
   const agents = db.collection("agents");
-  const applications = db.collection("loan-applications");
 
-  // Get all agents
+  router.get('/names', async (req, res) => {
+    try {
+      const agents = await db.collection('agents')
+        .find({}, { projection: { _id: 0, agentId: 1, name: 1 } })
+        .toArray();
+  
+      res.json({ agents }); 
+    } catch (err) {
+      console.error('Error fetching agents:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+  
+  
+  // Get all agents with loan stats
   router.get("/", authenticateToken, authorizeRole("head", "manager", "loan officer"), async (req, res) => {
     try {
       const allAgents = await agents.find().toArray();
@@ -43,7 +56,7 @@ module.exports = (db) => {
     }
   });
 
-  // Get specific agent
+  //  Get specific agent details
   router.get("/:agentId", authenticateToken, authorizeRole("head", "manager", "loan officer"), async (req, res) => {
     try {
       const { agentId } = req.params;

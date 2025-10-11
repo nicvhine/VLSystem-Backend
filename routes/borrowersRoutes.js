@@ -4,10 +4,29 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');  
 require('dotenv').config();
 
+const crypto = require("crypto");
+
 const JWT_SECRET = process.env.JWT_SECRET;
 const authenticateToken = require('../middleware/auth');
 
 const otpStore = {};  
+
+function decrypt(text) {
+  if (!text) return "";
+  try {
+    const [ivHex, encryptedHex] = text.split(":");
+    if (!ivHex || !encryptedHex) return text;
+    const iv = Buffer.from(ivHex, "hex");
+    const encryptedText = Buffer.from(encryptedHex, "hex");
+    const decipher = crypto.createDecipheriv(ALGORITHM, SECRET_KEY, iv);
+    let decrypted = decipher.update(encryptedText);
+    decrypted = Buffer.concat([decrypted, decipher.final()]);
+    return decrypted.toString("utf8");
+  } catch (err) {
+    console.error("Decryption failed:", err.message);
+    return text;
+  }
+}
 
 function generateUsername(fullName) {
   const parts = fullName.trim().toLowerCase().split(" ");
