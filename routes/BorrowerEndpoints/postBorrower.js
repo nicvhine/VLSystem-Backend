@@ -7,11 +7,10 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const { encrypt, decrypt } = require('../../utils/crypto'); 
+const { encrypt, decrypt } = require('../../utils/crypt'); 
 
-function padId(num) {
-  return num.toString().padStart(5, '0');
-}
+const { padId } = require("../../utils/generator");
+
 module.exports = (db) => {
     const borrowers = db.collection("borrowers_account");
 

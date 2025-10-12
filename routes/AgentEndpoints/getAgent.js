@@ -5,7 +5,8 @@ const authorizeRole = require("../../middleware/authorizeRole");
 
 module.exports = (db) => {
   const agents = db.collection("agents");
-
+  const applications = db.collection("loan_applications");
+  
   router.get('/names', async (req, res) => {
     try {
       const agents = await db.collection('agents')

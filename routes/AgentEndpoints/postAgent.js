@@ -3,12 +3,7 @@ const router = express.Router();
 const authenticateToken = require("../../middleware/auth");
 const authorizeRole = require("../../middleware/authorizeRole");
 
-function padId(num) {
-  return num.toString().padStart(5, "0");
-}
-function generateAgentId(num) {
-  return `AGT${padId(num)}`;
-}
+const { generateAgentId } = require("../../utils/generator");
 
 module.exports = (db) => {
   const agents = db.collection("agents");
