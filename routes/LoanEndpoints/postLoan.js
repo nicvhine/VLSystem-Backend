@@ -75,8 +75,12 @@ module.exports = (db) => {
         await db.collection("loans").insertOne(loan);
     
         const collections = [];
-        let runningBalance = appTotalPayable;
+        let runningBalance = application.appTotalPayable;
         const disbursedDate = new Date(application.dateDisbursed || new Date());
+
+        const termsInMonths = application.appLoanTerms; 
+        const monthlyDue = application.appMonthlyDue; 
+
     
         for (let i = 0; i < termsInMonths; i++) {
           const dueDate = new Date(disbursedDate);
