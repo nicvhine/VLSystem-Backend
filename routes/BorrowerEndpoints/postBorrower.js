@@ -11,6 +11,17 @@ const { encrypt, decrypt } = require('../../utils/crypt');
 
 const { padId } = require("../../utils/generator");
 
+async function updateCreditScore(borrowersId, deduction = 0, increment = 0) {
+    const borrower = await borrowers.findOne({ borrowersId });
+    if (!borrower) return;
+
+    let newScore = (borrower.score || 100) - deduction + increment;
+    if (newScore > 100) newScore = 100;
+    if (newScore < 0) newScore = 0;
+
+    await borrowers.updateOne({ borrowersId }, { $set: { score: newScore } });
+}
+
 module.exports = (db) => {
     const borrowers = db.collection("borrowers_account");
 
@@ -73,7 +84,7 @@ module.exports = (db) => {
             isFirstLogin: true,
             assignedCollector,
             email: application.appEmail,
-            score: application.score || 0,
+            score: 100,
             profilePic: profilePicUrl
         };
 
