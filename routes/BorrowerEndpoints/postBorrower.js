@@ -77,9 +77,9 @@ module.exports = (db) => {
         // Borrower object
         const borrower = {
             borrowersId,
-            name: encrypt(name),
+            name,
             role,
-            username: encrypt(username),
+            username,
             password: hashedPassword,
             isFirstLogin: true,
             assignedCollector,
@@ -120,7 +120,7 @@ module.exports = (db) => {
         res.json({
         message: "Login successful",
         name: borrower.name,
-        username: borrower.username,
+        username: decrypt(borrower.username),
         email: decrypt(borrower.email),
         role: "borrower",
         profilePic: borrower.profilePic || null,
