@@ -8,6 +8,8 @@ const cron = require("node-cron");
 const sharp = require("sharp"); 
 const crypto = require("crypto");
 
+const { computeApplicationAmounts } = require('../utils/loanCalculations');
+
 const ALGORITHM = "aes-256-cbc";
 const SECRET_KEY = Buffer.from(
   (process.env.ENCRYPTION_KEY || "").padEnd(32, "0").slice(0, 32)
@@ -274,7 +276,6 @@ router.post(
         } catch {
         return res.status(400).json({ error: "Invalid agent ID format." });
       }
-      
 
 
       let parsedReferences = [];
@@ -357,31 +358,13 @@ router.post(
 
       const applicationId = await generateApplicationId();
 
-      let principal = Number(appLoanAmount);
-      let interestRate = Number(appInterest);
-      let terms = Number(appLoanTerms) || 1;
-      let interestAmount = 0;
-      let totalInterestAmount = 0;
-      let periodAmount = principal;
+      const principal = Number(appLoanAmount);
+      const interestRate = Number(appInterest);
+      const terms = Number(appLoanTerms) || 1;
 
-      if (loanType !== "open-term") {
-        interestAmount = principal * (interestRate / 100);
-        totalInterestAmount = interestAmount * terms;
-        periodAmount = (principal + totalInterestAmount) / terms;
-      }
+      const { interestAmount, totalInterestAmount, totalPayable, appServiceFee, appNetReleased, appMonthlyDue } = 
+        computeApplicationAmounts(principal, interestRate, terms, loanType);
 
-      let totalPayable = principal + totalInterestAmount;
-
-      let appServiceFee = 0;
-      if (principal >= 10000 && principal <= 20000) {
-        appServiceFee = principal * 0.05;
-      } else if (principal >= 25000 && principal <= 40000) {
-        appServiceFee = 1000;
-      } else if (principal >= 50000 && principal <= 500000) {
-        appServiceFee = principal * 0.03;
-      }
-
-      const appNetReleased = principal - appServiceFee;
 
       let newApplication = {
         applicationId,
@@ -405,7 +388,7 @@ router.post(
         appTotalInterestAmount: totalInterestAmount,
 
         appTotalPayable: totalPayable,
-        appMonthlyDue: periodAmount,
+        appMonthlyDue,
         appServiceFee,
         appNetReleased,
 

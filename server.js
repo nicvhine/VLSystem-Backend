@@ -149,9 +149,9 @@
       console.log("Counter initialized to:", maxSeq);
 
       const userRoutes = require('./routes/StaffEndpoints')(db);
-      const loanApplicationRoutes = require('./routes/loanApplicationRoutes')(db, getNextSequence);
+      const loanApplicationRoutes = require('./routes/ApplicationEndpoints')(db, getNextSequence);
       const borrowersRoutes = require('./routes/BorrowerEndpoints')(db);
-      const loanRoutes = require('./routes/loanRoutes')(db);
+      const loanRoutes = require('./routes/LoanEndpoints')(db);
       const collectionRoutes = require('./routes/collectionRoutes')(db);
       const paymentRoutes = require('./routes/paymentRoutes')(db);
       const notificationRoutes = require('./routes/notificationRoutes')(db);
