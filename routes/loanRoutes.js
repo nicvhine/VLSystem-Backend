@@ -502,8 +502,6 @@ router.get("/details/:loanId", async (req, res) => {
   }
 });
 
-
-
   // Get all loans for a borrower (for navigation)
   router.get('/borrower-loans/:borrowersId', async (req, res) => {
     const { borrowersId } = req.params;

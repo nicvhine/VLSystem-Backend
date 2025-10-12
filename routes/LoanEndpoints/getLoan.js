@@ -93,7 +93,85 @@ module.exports = (db) => {
       res.status(500).json({ error: 'Internal server error' });
     }
   });
+
+//Fetch active loan
+router.get('/active-loan/:borrowersId', async (req, res) => {
+  const { borrowersId } = req.params;
   
+  try {
+    const loan = await db.collection('loans').findOne({
+      borrowersId,
+      status: 'Active'
+    });
+
+    if (!loan) {
+      return res.status(404).json({ error: 'No active loan found for this borrower.' });
+    }
+
+    const paymentProgress = loan.totalPayable > 0
+      ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
+      : 0;
+
+    res.json({ 
+      loanId: loan.loanId,
+      borrowersId: loan.borrowersId,
+      paymentProgress
+    });
+  } catch (err) {
+    console.error('Error fetching loan by borrower ID:', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Get full loan details with related application and collections
+router.get("/details/:loanId", async (req, res) => {
+  const { loanId } = req.params;
+
+  try {
+    // Step 1: Fetch the loan document
+    const loan = await db.collection("loans").findOne({ loanId });
+    if (!loan) {
+      return res.status(404).json({ error: "Loan not found." });
+    }
+
+    // Step 2: Fetch the related loan application
+    const application = await db.collection("loan_applications").findOne({
+      applicationId: loan.applicationId,
+    });
+
+    // Step 3: Fetch the collection schedule for this loan
+    const collections = await db
+      .collection("collections")
+      .find({ loanId })
+      .sort({ collectionNumber: 1 })
+      .toArray();
+
+    // Step 4: Compute payment progress
+    const paymentProgress =
+      loan.totalPayable > 0
+        ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
+        : 0;
+
+    const result = {
+      loanId: loan.loanId,
+      ...application,
+      collections, 
+      borrowerDetails: {
+        address: application?.appAddress,
+        contact: application?.appContact,
+        occupation: application?.appOccupation,
+        incomeSource: application?.sourceOfIncome,
+        monthlyIncome: application?.appMonthlyIncome,
+      },
+    };
+
+    res.json(result);
+  } catch (error) {
+    console.error("Error fetching loan details:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 
   return router;
 }
