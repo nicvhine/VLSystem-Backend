@@ -1,18 +1,53 @@
 const multer = require("multer");
 const path = require("path");
 const sharp = require("sharp");
+const fs = require("fs");
 
-// Multer storage configuration
+// Ensure base uploads directory exists
+const baseDir = path.join(__dirname, "..", "uploads");
+if (!fs.existsSync(baseDir)) {
+  fs.mkdirSync(baseDir, { recursive: true });
+}
+
+// ensure subfolder exists
+function ensureDirExists(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    fs.mkdirSync(dirPath, { recursive: true });
+  }
+}
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, "uploads/"); // save files in uploads folder
+    let subfolder;
+
+    if (file.fieldname === "documents") {
+      subfolder = "documents";
+    } else if (file.fieldname === "profilePic") {
+      subfolder = "userProfilePictures";
+    } else {
+      subfolder = "others";
+    }
+
+    const uploadPath = path.join(baseDir, subfolder);
+    ensureDirExists(uploadPath);
+    cb(null, uploadPath);
   },
+
   filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname));
+    const ext = path.extname(file.originalname);
+
+    const borrowerId =
+      req.body.borrowersId ||
+      req.params.borrowersId ||
+      req.body.applicationId ||
+      req.params.applicationId ||
+      "GEN"; 
+
+    const uniqueName = `${borrowerId}_${Date.now()}${ext}`;
+    cb(null, uniqueName);
   },
 });
 
-// File filter for docs and profile picture
 const fileFilter = (req, file, cb) => {
   const allowedDocs = ["application/pdf", "image/png"];
   const allowedPp = ["image/jpeg", "image/png"];
@@ -28,14 +63,12 @@ const fileFilter = (req, file, cb) => {
   }
 };
 
-// Multer upload instance
 const upload = multer({
   storage,
   fileFilter,
   limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
 });
 
-// Validate 2x2 profile picture
 async function validate2x2(req, res, next) {
   try {
     const file = req.files?.profilePic?.[0];
@@ -43,7 +76,6 @@ async function validate2x2(req, res, next) {
 
     const metadata = await sharp(file.path).metadata();
 
-    // 2x2 inches = 600x600 pixels
     if (metadata.width !== 600 || metadata.height !== 600) {
       return res.status(400).json({
         error: "Profile picture must be 2x2 inches (600x600 pixels).",
@@ -57,21 +89,17 @@ async function validate2x2(req, res, next) {
   }
 }
 
-//docs checker
 function processUploadedDocs(files) {
-    if (!files || Object.keys(files).length === 0) {
-      throw new Error("At least one document (PDF or PNG) is required.");
-    }
-  
-    // Flatten all file arrays into a single array
-    const allFiles = Object.values(files).flat();
-  
-    return allFiles.map((file) => ({
-      fileName: file.originalname,
-      filePath: file.path,
-      mimeType: file.mimetype,
-    }));
+  if (!files || Object.keys(files).length === 0) {
+    throw new Error("At least one document (PDF or PNG) is required.");
   }
-  
+
+  const allFiles = Object.values(files).flat();
+  return allFiles.map((file) => ({
+    fileName: file.originalname,
+    filePath: file.path,
+    mimeType: file.mimetype,
+  }));
+}
 
 module.exports = { upload, validate2x2, processUploadedDocs };
