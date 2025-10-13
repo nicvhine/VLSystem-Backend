@@ -1,7 +1,7 @@
 const { generateApplicationId } = require("../utils/generator");
 const { computeApplicationAmounts } = require("../utils/loanCalculations");
 const { encrypt } = require("../utils/crypt");
-const { processUploadedDocs } = require("../utils/upload");
+const { processUploadedDocs } = require("../utils/uploadConfig");
 
 async function createLoanApplication(req, loanType, repo, db) {
   const {

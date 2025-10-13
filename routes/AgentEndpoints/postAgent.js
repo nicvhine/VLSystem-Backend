@@ -5,7 +5,7 @@ const authorizeRole = require("../../middleware/authorizeRole");
 const { createAgent } = require("../../Services/agentService");
 
 module.exports = (db) => {
-  const agentRepo = require("../Repositories/agentRepository")(db);
+  const agentRepo = require("../../Repositories/agentRepository")(db);
 
   router.post("/", authenticateToken, authorizeRole("loan officer"), async (req, res) => {
     try {

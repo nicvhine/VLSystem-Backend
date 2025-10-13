@@ -34,4 +34,21 @@ async function generateApplicationId(loanApplications) {
   return `APL${padId(nextNumber)}`;
 }
 
-module.exports = { padId, generateAgentId, generateApplicationId };
+async function generateBorrowerId(borrowersCollection) {
+  const lastBorrower = await borrowersCollection
+    .find({})
+    .sort({ borrowersId: -1 })
+    .limit(1)
+    .toArray();
+
+  let nextNumber = 1;
+  if (lastBorrower.length > 0) {
+    const lastId = lastBorrower[0].borrowersId;
+    const numPart = parseInt(lastId.replace("B", ""), 10);
+    if (!isNaN(numPart)) nextNumber = numPart + 1;
+  }
+
+  return `B${padId(nextNumber)}`;
+}
+
+module.exports = { padId, generateAgentId, generateApplicationId, generateBorrowerId };
