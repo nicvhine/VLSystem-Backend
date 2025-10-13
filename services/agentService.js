@@ -1,4 +1,4 @@
-const { generateAgentIdFromNumber } = require("../utils/generator");
+const { generateAgentId } = require("../utils/generator");
 
 // ─── Helper function to calculate loan stats
 const calculateStats = (applications) => {
@@ -15,15 +15,15 @@ const calculateStats = (applications) => {
 };
 
 // ─── Service logic 
-const createAgent = async ({ name, phoneNumber }, agentRepo) => {
+const createAgent = async ({ name, phoneNumber }, agentRepo, db) => {
   if (!name || !phoneNumber) throw new Error("All fields are required");
   if (!name.trim().includes(" ")) throw new Error("Please enter a full name");
 
   const existing = await agentRepo.findAgentByNameAndPhone(name, phoneNumber);
-  if (existing) throw new Error("Agent with this name and phone number already exists");
+  if (existing)
+    throw new Error("Agent with this name and phone number already exists");
 
-  const maxId = await agentRepo.getMaxAgentIdNum();
-  const agentId = generateAgentIdFromNumber(maxId + 1);
+    const agentId = await generateAgentId(db);
 
   const newAgent = {
     agentId,
@@ -38,6 +38,7 @@ const createAgent = async ({ name, phoneNumber }, agentRepo) => {
   await agentRepo.insertAgent(newAgent);
   return newAgent;
 };
+
 
 // ─── Get All Agents with Computed Stats 
 const getAllAgentsWithStats = async (repo) => {

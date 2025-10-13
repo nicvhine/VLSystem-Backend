@@ -5,7 +5,7 @@ const authenticateToken = require("../../middleware/auth");
 const authorizeRole = require("../../middleware/authorizeRole");
 
 const userRepository = require("../../Repositories/staffRepository");
-const { createUser, login } = require("../../Services/staffService");
+const { createUser, loginUser } = require("../../Services/staffService");
 
 module.exports = (db) => {
   const repo = userRepository(db);
@@ -55,7 +55,7 @@ module.exports = (db) => {
       return res.status(400).json({ error: "Username and password are required" });
 
     try {
-      const result = await login(username, password, repo);
+      const result = await loginUser(username, password, repo);
       res.json({ message: "Login successful", ...result });
     } catch (err) {
       res.status(401).json({ error: err.message });

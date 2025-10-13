@@ -17,7 +17,7 @@ module.exports = (db) => {
     async (req, res) => {
       try {
         const { loanType } = req.params;
-        const application = await createLoanApplication(req, loanType, repo);
+        const application = await createLoanApplication(req, loanType, repo, db);
         res.status(201).json({
           message: "Loan application submitted successfully.",
           application,

@@ -3,6 +3,8 @@ module.exports = (db) => {
   const agents = db.collection("agents");
 
   return {
+    loanApplications, 
+    agents,  
     // ---------- APPLICATION CRUD ----------
     async insertLoanApplication(application) {
       return await loanApplications.insertOne(application);
