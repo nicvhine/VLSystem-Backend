@@ -44,7 +44,7 @@ async function generateBorrowerId(borrowersCollection) {
   let nextNumber = 1;
   if (lastBorrower.length > 0) {
     const lastId = lastBorrower[0].borrowersId;
-    const numPart = parseInt(lastId.replace("B", ""), 10);
+    const numPart = parseInt(lastId.replace("BWR", ""), 10);
     if (!isNaN(numPart)) nextNumber = numPart + 1;
   }
 
