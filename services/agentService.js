@@ -1,5 +1,20 @@
 const { generateAgentIdFromNumber } = require("../utils/generator");
 
+// ─── Helper function to calculate loan stats
+const calculateStats = (applications) => {
+  const totalLoanAmount = applications.reduce(
+    (sum, app) => sum + (app.appLoanAmount || 0),
+    0
+  );
+
+  return {
+    handledLoans: applications.length,
+    totalLoanAmount,
+    totalCommission: totalLoanAmount * 0.05,
+  };
+};
+
+// ─── Service logic 
 const createAgent = async ({ name, phoneNumber }, agentRepo) => {
   if (!name || !phoneNumber) throw new Error("All fields are required");
   if (!name.trim().includes(" ")) throw new Error("Please enter a full name");
@@ -7,8 +22,8 @@ const createAgent = async ({ name, phoneNumber }, agentRepo) => {
   const existing = await agentRepo.findAgentByNameAndPhone(name, phoneNumber);
   if (existing) throw new Error("Agent with this name and phone number already exists");
 
-  const maxId = await agentRepo.getMaxAgentIdNum(); 
-  const agentId = generateAgentIdFromNumber(maxId + 1); 
+  const maxId = await agentRepo.getMaxAgentIdNum();
+  const agentId = generateAgentIdFromNumber(maxId + 1);
 
   const newAgent = {
     agentId,
@@ -24,4 +39,38 @@ const createAgent = async ({ name, phoneNumber }, agentRepo) => {
   return newAgent;
 };
 
-module.exports = { createAgent };
+// ─── Get All Agents with Computed Stats 
+const getAllAgentsWithStats = async (repo) => {
+  const agents = await repo.getAllAgents();
+
+  for (const agent of agents) {
+    const assignedApplications = await repo.getAssignedApplications(agent.agentId);
+    if (assignedApplications.length > 0) {
+      const stats = calculateStats(assignedApplications);
+      await repo.updateAgentStats(agent.agentId, stats);
+      Object.assign(agent, stats);
+    }
+  }
+
+  return agents;
+};
+
+// ─── Get Single Agent Details with Computed Stats 
+const getAgentDetails = async (agentId, repo) => {
+  const agent = await repo.getAgentById(agentId);
+  if (!agent) throw new Error("Agent not found");
+
+  const assignedApplications = await repo.getAssignedApplications(agentId);
+  const stats = calculateStats(assignedApplications);
+
+  await repo.updateAgentStats(agentId, stats);
+  Object.assign(agent, stats);
+
+  return agent;
+};
+
+module.exports = {
+  createAgent,
+  getAllAgentsWithStats,
+  getAgentDetails,
+};
