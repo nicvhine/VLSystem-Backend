@@ -1,8 +1,53 @@
+const { decrypt } = require("../utils/crypt");
 const { generateApplicationId } = require("../utils/generator");
 const { computeApplicationAmounts } = require("../utils/loanCalculations");
 const { encrypt } = require("../utils/crypt");
 const { processUploadedDocs } = require("../utils/uploadConfig");
 
+// ---------- HELPERS ----------
+const decryptApplication = (app) => ({
+  ...app,
+  appName: decrypt(app.appName),
+  appContact: decrypt(app.appContact),
+  appEmail: decrypt(app.appEmail),
+  appSpouseName: decrypt(app.appSpouseName),
+  appAddress: decrypt(app.appAddress),
+  appReferences: app.appReferences?.map((r) => ({
+    name: decrypt(r.name),
+    contact: decrypt(r.contact),
+    relation: r.relation,
+  })),
+});
+
+const decryptInterview = (interview) => ({
+  ...interview,
+  appName: interview.appName ? decrypt(interview.appName) : "",
+  appAddress: interview.appAddress ? decrypt(interview.appAddress) : "",
+});
+
+// ---------- SERVICE FUNCTIONS ----------
+async function getAllApplications(repo) {
+  const applications = await repo.getAllApplications();
+  return applications.map(decryptApplication);
+}
+
+async function getInterviewList(repo) {
+  const interviews = await repo.getInterviewList();
+  return interviews.map(decryptInterview);
+}
+
+async function getStatusStats(repo) {
+  const applied = await repo.countByStatus(/^applied$/i);
+  const approved = await repo.countByStatus(/^approved$/i);
+  const denied = await repo.countByStatus(/^denied$/i);
+  return { applied, approved, denied };
+}
+
+async function getLoanTypeStats(repo) {
+  return await repo.getLoanTypeStats();
+}
+
+// ---------- CREATE LOAN APPLICATION ----------
 async function createLoanApplication(req, loanType, repo, db) {
   const {
     sourceOfIncome,
@@ -16,7 +61,6 @@ async function createLoanApplication(req, loanType, repo, db) {
   } = req.body;
 
   if (!appAgent) throw new Error("Agent must be selected for this application.");
-
   const assignedAgent = await repo.findAgentById(appAgent);
   if (!assignedAgent) throw new Error("Selected agent does not exist.");
 
@@ -28,10 +72,10 @@ async function createLoanApplication(req, loanType, repo, db) {
     throw new Error("Invalid format for character references.");
   }
 
-  if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3) {
+  if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3)
     throw new Error("Three references must be provided.");
-  }
 
+  // Ensure unique reference names & contacts
   const names = new Map();
   const numbers = new Map();
   parsedReferences.forEach((r, idx) => {
@@ -40,14 +84,14 @@ async function createLoanApplication(req, loanType, repo, db) {
     if (nameKey) names.set(nameKey, [...(names.get(nameKey) || []), idx]);
     if (numKey) numbers.set(numKey, [...(numbers.get(numKey) || []), idx]);
   });
-  const dupNameIndices = [...names.values()].filter(arr => arr.length > 1).flat();
-  const dupNumberIndices = [...numbers.values()].filter(arr => arr.length > 1).flat();
-  if (dupNameIndices.length > 0 || dupNumberIndices.length > 0) {
+  if ([...names.values(), ...numbers.values()].some(arr => arr.length > 1))
     throw new Error("Reference names and contact numbers must be unique.");
-  }
 
+  // Validate document uploads
   const uploadedDocs = processUploadedDocs(req.files);
-  if (!uploadedDocs || (loanType === "without" && uploadedDocs.length < 4) || (loanType !== "without" && uploadedDocs.length < 6)) {
+  if (!uploadedDocs || 
+      (loanType === "without" && uploadedDocs.length < 4) || 
+      (loanType !== "without" && uploadedDocs.length < 6)) {
     throw new Error(
       loanType === "without"
         ? "4 supporting documents must be uploaded."
@@ -63,43 +107,35 @@ async function createLoanApplication(req, loanType, repo, db) {
       }
     : null;
 
-  if (
-    !appName ||
-    !appDob ||
-    !appContact ||
-    !appEmail ||
-    !appAddress ||
-    !appLoanPurpose ||
-    !appLoanAmount ||
-    (loanType !== "open-term" && !appLoanTerms)
-  ) {
+  // Field validation
+  if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount)
     throw new Error("All required fields must be provided.");
-  }
 
-  if (
-    (loanType === "with" || loanType === "open-term") &&
-    (!collateralType || !collateralValue || !collateralDescription || !ownershipStatus)
-  ) {
+  if ((loanType !== "open-term" && !appLoanTerms))
+    throw new Error("Loan terms are required.");
+
+  if ((loanType === "with" || loanType === "open-term") &&
+      (!collateralType || !collateralValue || !collateralDescription || !ownershipStatus))
     throw new Error("All collateral fields are required.");
-  }
 
   if (sourceOfIncome === "business") {
-    if (!appTypeBusiness || !appBusinessName || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null) {
+    if (!appTypeBusiness || !appBusinessName || !appDateStarted || !appBusinessLoc || appMonthlyIncome == null)
       throw new Error("Business fields are required for business income source.");
-    }
   } else if (sourceOfIncome === "employed") {
-    if (!appOccupation || !appEmploymentStatus || !appCompanyName || appMonthlyIncome == null) {
+    if (!appOccupation || !appEmploymentStatus || !appCompanyName || appMonthlyIncome == null)
       throw new Error("Employment fields are required for employed income source.");
-    }
   } else {
     throw new Error("Invalid source of income.");
   }
 
+  // Prevent duplicate pending applications
   const existing = await repo.findPendingByApplicant(appName, appDob, appContact, appEmail);
   if (existing) throw new Error("You already have a pending application with these details.");
 
+  // Generate application ID
   const applicationId = await generateApplicationId(repo.loanApplications);
 
+  // Compute loan calculations
   const principal = Number(appLoanAmount);
   const interestRate = Number(appInterest);
   const terms = Number(appLoanTerms) || 1;
@@ -113,6 +149,7 @@ async function createLoanApplication(req, loanType, repo, db) {
     appMonthlyDue,
   } = computeApplicationAmounts(principal, interestRate, terms, loanType);
 
+  // Build new application
   let newApplication = {
     applicationId,
     appName: encrypt(appName),
@@ -140,10 +177,7 @@ async function createLoanApplication(req, loanType, repo, db) {
       contact: encrypt(r.contact),
       relation: r.relation,
     })),
-    appAgent: {
-      id: assignedAgent.agentId,
-      name: assignedAgent.name,
-    },
+    appAgent: { id: assignedAgent.agentId, name: assignedAgent.name },
     hasCollateral: loanType !== "without",
     collateralType,
     collateralValue: collateralValue?.toString(),
@@ -161,27 +195,21 @@ async function createLoanApplication(req, loanType, repo, db) {
     profilePic: uploadedPp,
   };
 
+  // Add source of income details
   if (sourceOfIncome === "business") {
-    newApplication = {
-      ...newApplication,
-      sourceOfIncome,
-      appTypeBusiness,
-      appBusinessName,
-      appDateStarted,
-      appBusinessLoc,
-    };
+    newApplication = { ...newApplication, sourceOfIncome, appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc };
   } else {
-    newApplication = {
-      ...newApplication,
-      sourceOfIncome,
-      appOccupation,
-      appEmploymentStatus,
-      appCompanyName,
-    };
+    newApplication = { ...newApplication, sourceOfIncome, appOccupation, appEmploymentStatus, appCompanyName };
   }
 
   await repo.insertLoanApplication(newApplication);
   return newApplication;
 }
 
-module.exports = { createLoanApplication };
+module.exports = {
+  getAllApplications,
+  getInterviewList,
+  getStatusStats,
+  getLoanTypeStats,
+  createLoanApplication,
+};

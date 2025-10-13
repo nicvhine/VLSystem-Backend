@@ -1,6 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { padId } = require("../utils/generator");
+const { generateStaffUsername } = require("../utils/username")
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
@@ -11,7 +12,7 @@ async function createUser({ name, email, phoneNumber, role }, actor, repo) {
   if (!name.trim().includes(" "))
     throw new Error("Please enter a full name with first and last name.");
 
-  const username = await generateUniqueUsername(name, role, repo);
+  const username = await generateStaffUsername(name, role, repo);
   if (!username) throw new Error("Cannot generate username.");
 
   const existingUser = await repo.findByEmail(email);
