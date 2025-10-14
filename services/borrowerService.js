@@ -6,10 +6,11 @@ const { generateBorrowerUsername } = require("../utils/username");
 const otpStore = require("../utils/otpStore");
 const {BACKEND_URL} = require("../config");
 const borrowerRepository = require("../repositories/borrowerRepository");
+const borrowerSchema = require("../schemas/borrowerSchema");
 
 //Create borrower
 async function createBorrower(data, db) {
-  const repo = borrowerRepoFactory(db);
+  const repo = borrowerRepository(db);
   const { name, role, applicationId, assignedCollector } = data;
 
   if (!name || !role || !applicationId)
@@ -46,7 +47,7 @@ async function createBorrower(data, db) {
     ? `${BACKEND_URL}/${application.profilePic.filePath.replace(/\\/g, "/")}`
     : null;
 
-  const borrower = {
+  const borrower = borrowerSchema.parse({
     borrowersId,
     name,
     role,
@@ -56,7 +57,7 @@ async function createBorrower(data, db) {
     assignedCollector,
     email: application.appEmail,
     profilePic: profilePicUrl,
-  };
+  });
 
   await repo.insertBorrower(borrower);
   await repo.updateApplicationWithBorrower(applicationId, borrowersId, username);

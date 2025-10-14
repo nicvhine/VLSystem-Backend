@@ -5,14 +5,12 @@ const client = new MongoClient(MONGODB_URI);
 
 async function connectToDatabase() {
     await client.connect();
-    const db = client.db('VLSystem');
-    return db;
+    return client.db('VLSystem');
 }
 
 function closeDatabase() {
     return client.close();
 }
-
 
 async function getNextSequence(db, name) {
     const counters = db.collection('counters');
