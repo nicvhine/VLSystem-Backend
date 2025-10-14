@@ -4,6 +4,7 @@ const { decrypt } = require("../utils/crypt");
 const { generateBorrowerId } = require("../utils/generator");
 const { generateBorrowerUsername } = require("../utils/username");
 const otpStore = require("../utils/otpStore");
+const {BACKEND_URL} = require("../config");
 
 //Create borrower
 async function createBorrower(data, db, repo) {
@@ -40,7 +41,7 @@ async function createBorrower(data, db, repo) {
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
   const profilePicUrl = application.profilePic
-    ? `http://localhost:3001/${application.profilePic.filePath.replace(/\\/g, "/")}`
+    ? `${BACKEND_URL}/${application.profilePic.filePath.replace(/\\/g, "/")}`
     : null;
 
   const borrower = {
@@ -147,7 +148,7 @@ async function getBorrowerById(borrowersId, repo) {
   const activeLoan = await repo.findActiveLoanByBorrowerId(borrowersId);
 
   const profilePicUrl = borrower.profilePic?.filePath
-    ? `http://localhost:3001/${borrower.profilePic.filePath.replace(/\\/g, "/")}`
+    ? `${BACKEND_URL}/${borrower.profilePic.filePath.replace(/\\/g, "/")}`
     : null;
 
   return {

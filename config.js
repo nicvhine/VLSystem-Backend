@@ -6,5 +6,6 @@ module.exports = {
         methods: ['GET', 'POST', 'PUT', 'DELETE'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,
-    }
+    },
+    BACKEND_URL: process.env.BACKEND_URL || 'http://localhost:3001',
 };

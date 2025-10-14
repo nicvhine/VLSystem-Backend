@@ -2,6 +2,7 @@
 import express from "express";
 import crypto from "crypto";
 import axios from "axios";
+const { BACKEND_URL } = require('../config');
 
 const router = express.Router();
 
@@ -42,7 +43,7 @@ router.post("/webhooks/paymongo", async (req, res) => {
       const paymentId = attrs?.data?.id || attrs?.id;
 
       // Update your Loans/CRM service
-      await axios.post("http://localhost:3001/internal/payments/mark-paid", {
+      await axios.post(`${BACKEND_URL}/internal/payments/mark-paid`, {
         loanId: meta.loan_id,
         installmentId: meta.installment_id,
         borrowerId: meta.borrower_id,

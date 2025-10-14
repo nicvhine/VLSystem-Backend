@@ -1,7 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');  
+const jwt = require('jsonwebtoken');
+const { BACKEND_URL } = require('../config');
 require('dotenv').config();
 
 const crypto = require("crypto");
@@ -148,7 +149,7 @@ module.exports = (db) => {
       if (!borrower) return res.status(404).json({ error: "Borrower not found" });
 
       const profilePicUrl = borrower.profilePic
-      ? `http://localhost:3001/${borrower.profilePic.filePath.replace(/\\/g, "/")}`
+      ? `${BACKEND_URL}/${borrower.profilePic.filePath.replace(/\\/g, "/")}`
       : null;
     
     
@@ -206,7 +207,7 @@ module.exports = (db) => {
       const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
       const profilePicUrl = application.profilePic
-      ? `http://localhost:3001/${application.profilePic.filePath.replace(/\\/g, "/")}`
+      ? `${BACKEND_URL}/${application.profilePic.filePath.replace(/\\/g, "/")}`
       : null;
 
       // Borrower object
