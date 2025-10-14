@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../middleware/auth");
+
 const { getBorrowerById } = require("../../Services/borrowerService");
 
 module.exports = (db) => {
