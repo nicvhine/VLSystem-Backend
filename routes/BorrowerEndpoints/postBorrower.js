@@ -9,7 +9,7 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 const { encrypt, decrypt } = require('../../utils/crypt'); 
 const { createBorrower, loginBorrower, forgotPassword, sendOtp, verifyOtp } = require('../../Services/borrowerService'); 
-const borrowerRepoFactory  = require('../../Repositories/borrowerRepository'); 
+const borrowerRepoFactory  = require('../../repositories/borrowerRepository');
 
 module.exports = (db) => {
     const repo = borrowerRepoFactory(db);

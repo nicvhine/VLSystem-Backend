@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../middleware/auth");
 
-const borrowerRepository = require("../../Repositories/borrowerRepository");
+const borrowerRepository = require("../../repositories/borrowerRepository");
 const { getBorrowerById } = require("../../Services/borrowerService");
 
 module.exports = (db) => {

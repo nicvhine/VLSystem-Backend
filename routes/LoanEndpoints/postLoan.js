@@ -1,7 +1,7 @@
 const express = require("express");
 const router = express.Router();
 
-const loanRepository = require("../../Repositories/loanRepository");
+const loanRepository = require("../../repositories/loanRepository");
 const { createLoan } = require("../../Services/loanService");
 
 module.exports = (db) => {

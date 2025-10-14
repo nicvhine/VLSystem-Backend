@@ -4,7 +4,7 @@ const { upload } = require("../../utils/uploadConfig");
 const authenticateToken = require("../../middleware/auth");
 const authorizeRole = require("../../middleware/authorizeRole");
 
-const userRepository = require("../../Repositories/staffRepository");
+const userRepository = require("../../repositories/staffRepository");
 const { createUser, loginUser } = require("../../Services/staffService");
 
 module.exports = (db) => {

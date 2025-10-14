@@ -3,7 +3,7 @@ const router = express.Router();
 const authenticateToken = require("../../middleware/auth");
 const authorizeRole = require("../../middleware/authorizeRole");
 const { createAgent } = require("../../Services/agentService");
-const agentRepository = require("../../Repositories/agentRepository");
+const agentRepository = require("../../repositories/agentRepository");
 
 module.exports = (db) => {
   const repo = agentRepository(db);

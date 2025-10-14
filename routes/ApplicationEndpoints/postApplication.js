@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const { upload, validate2x2 } = require("../../utils/uploadConfig");
 const { createLoanApplication } = require("../../Services/loanApplicationService");
-const loanApplicationRepository = require("../../Repositories/loanApplicationRepository");
+const loanApplicationRepository = require("../../repositories/loanApplicationRepository");
 
 module.exports = (db) => {
   const repo = loanApplicationRepository(db);
