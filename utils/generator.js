@@ -10,8 +10,10 @@ async function generateAgentId(db) {
   let nextNumber = 1;
   if (lastAgent.length > 0) {
     const lastId = lastAgent[0].agentId;
-    const numPart = parseInt(lastId.replace("AGT", ""), 10);
-    if (!isNaN(numPart)) nextNumber = numPart + 1;
+    const idString = typeof lastId === "string" ? lastId : String(lastId ?? "");
+    const sanitized = idString.replace(/[^0-9]/g, "");
+    const numPart = parseInt(sanitized, 10);
+    if (!Number.isNaN(numPart)) nextNumber = numPart + 1;
   }
 
   return `AGT${padId(nextNumber)}`;
