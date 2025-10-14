@@ -5,9 +5,11 @@ const { generateBorrowerId } = require("../utils/generator");
 const { generateBorrowerUsername } = require("../utils/username");
 const otpStore = require("../utils/otpStore");
 const {BACKEND_URL} = require("../config");
+const borrowerRepository = require("../repositories/borrowerRepository");
 
 //Create borrower
-async function createBorrower(data, db, repo) {
+async function createBorrower(data, db) {
+  const repo = borrowerRepoFactory(db);
   const { name, role, applicationId, assignedCollector } = data;
 
   if (!name || !role || !applicationId)
@@ -63,10 +65,10 @@ async function createBorrower(data, db, repo) {
 }
 
 //Login borrower
-async function loginBorrower(username, password, repo, jwtSecret) {
+async function loginBorrower(username, password, db, jwtSecret) {
   if (!username || !password)
     throw new Error("Username and password are required");
-
+  const repo = borrowerRepoFactory(db);
   const borrower = await repo.findByUsername(username);
   if (!borrower) throw new Error("Invalid credentials");
 
@@ -93,8 +95,9 @@ async function loginBorrower(username, password, repo, jwtSecret) {
 }
 
 //forgot password
-async function forgotPassword(username, email, repo) {
+async function forgotPassword(username, email, db) {
   if (!username || !email) throw new Error("Username and email are required");
+  const repo = borrowerRepoFactory(db);
 
   const borrower = await repo.findByUsernameAndEmail(username, email);
   if (!borrower)
@@ -109,7 +112,9 @@ async function forgotPassword(username, email, repo) {
 }
 
 //Send otp
-async function sendOtp(borrowersId, repo) {
+async function sendOtp(borrowersId, db) {
+  if (!borrowersId) throw new Error("borrowersId is required");
+  const repo = borrowerRepoFactory(db);
   if (!borrowersId) throw new Error("borrowersId is required");
 
   const borrower = await repo.findByBorrowersId(borrowersId);
@@ -141,7 +146,8 @@ async function verifyOtp(borrowersId, otp) {
 /**
  * 🔹 Get Borrower by ID
  */
-async function getBorrowerById(borrowersId, repo) {
+async function getBorrowerById(borrowersId, db) {
+  const repo = borrowerRepository(db);
   const borrower = await repo.findBorrowerById(borrowersId);
   if (!borrower) throw new Error("Borrower not found");
 
