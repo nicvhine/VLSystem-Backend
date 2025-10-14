@@ -2,7 +2,7 @@ const { connect, clear, close, getDb } = require('./testDB');
 const borrowerService = require('../services/borrowerService');
 const bcrypt = require('bcrypt');
 const borrowerSchema = require("../schemas/borrowerSchema");
-const {insertMockApplication} = require("./mocks");
+const {mockApplication} = require("./mocks");
 
 beforeAll(async () => await connect());
 afterEach(async () => await clear());
@@ -12,8 +12,8 @@ describe('Borrower Service', () => {
     test('should create and return borrower', async () => {
         const db = getDb();
         const applicationId = 'APP001';
-        const applicationData = await insertMockApplication(db, applicationId, null);
-        console.log(applicationData)
+        const applicationData = await mockApplication(db, applicationId, null);
+
         const data = {
             name: 'Brad Pitt',
             role: 'borrower',

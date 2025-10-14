@@ -11,4 +11,4 @@ async function mockApplication(db, applicationId, overrides = {}) {
     return { ...applicationData, _id: result.insertedId };
 }
 
-module.exports = { insertMockApplication: mockApplication };
+module.exports = { mockApplication };
