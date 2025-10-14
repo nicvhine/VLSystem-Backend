@@ -1,25 +1,21 @@
+require('dotenv').config();
   const express = require('express');
   const cors = require('cors');
   const { MongoClient } = require('mongodb');
   const path = require('path');
 
+  const {PORT, CORS_OPTIONS, MONGODB_URI} = require('./config');
+
   const app = express();
-  const PORT = 3001;
+
 
   app.use(express.json());
 
   app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-  app.use(cors({
-    origin: 'http://localhost:3000',  
-    methods: ['GET', 'POST', 'PUT', 'DELETE'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-  }));
+  app.use(cors(CORS_OPTIONS));
 
-
-  const uri = 'mongodb+srv://nichole:Nichole_25@cluster0.gxpgomv.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0';
-  const client = new MongoClient(uri);
+  const client = new MongoClient(MONGODB_URI);
 
   async function getNextSequence(db, name) {
     const counters = db.collection('counters');
