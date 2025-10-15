@@ -36,8 +36,8 @@ describe('Loan Service', () => {
     };
 
     const borrower = await mockBorrower(db, borrowersId, borrowerData);
-
     const loan = await loanService.createLoan(applicationId, db);
+    const collections = await db.collection('collections').find({ loanId: loan.loanId }).toArray();
 
     expect(application).toBeDefined();
     expect(application.applicationId).toBe(applicationId);
@@ -51,6 +51,7 @@ describe('Loan Service', () => {
     expect(loan.borrowersId).toBe(borrowersId);
     expect(loan.balance).toBe(balance);
 
-    console.log('loan', loan)
+    expect(collections).toBeDefined();
+
   });
 });
