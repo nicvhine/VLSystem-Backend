@@ -1,6 +1,20 @@
+async function mockBorrower(db, borrowersId, overrides = {}) {
+
+    let defaultData = {
+        borrowersId: borrowersId,
+        name: 'Brad Pitt',
+        role: 'borrower',
+        assignedCollector: 'COL001'
+    };
+
+    const borrowerData = { ...defaultData, ...overrides };
+    const result = await db.collection('borrowers').insertOne(borrowerData);
+    return { ...borrowerData, _id: result.insertedId };
+}
+
 async function mockApplication(db, applicationId, overrides = {}) {
     const defaultData = {
-        applicationId: 
+        applicationId: applicationId,
         appName: 'Nichole Alburo',
         appDob: '1990-05-15',
         appContact: '09153925728',
@@ -32,4 +46,4 @@ async function mockApplication(db, applicationId, overrides = {}) {
     return { ...applicationData, _id: result.insertedId };
 }
 
-module.exports = { mockApplication };
+module.exports = { mockApplication, mockBorrower };
