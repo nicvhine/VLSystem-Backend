@@ -25,6 +25,8 @@ function loadRoutes(app, db) {
     app.use('/uploads', express.static('uploads'));
     app.use('/agents', agentRoutes);
 
+    app.get("/ping", (req, res) => { res.json({ message: "pong from root" }); });
+
     console.log('Routes loaded');
 
 }
