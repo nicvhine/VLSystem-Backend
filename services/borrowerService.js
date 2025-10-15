@@ -55,7 +55,7 @@ async function createBorrower(data, db) {
     password: hashedPassword,
     isFirstLogin: true,
     assignedCollector,
-    email: application.appEmail,
+    email: decrypt(application.appEmail),
     profilePic: profilePicUrl,
   });
 
@@ -69,7 +69,7 @@ async function createBorrower(data, db) {
 async function loginBorrower(username, password, db, jwtSecret) {
   if (!username || !password)
     throw new Error("Username and password are required");
-  const repo = borrowerRepoFactory(db);
+  const repo = borrowerRepository(db);
   const borrower = await repo.findByUsername(username);
   if (!borrower) throw new Error("Invalid credentials");
 
@@ -98,7 +98,7 @@ async function loginBorrower(username, password, db, jwtSecret) {
 //forgot password
 async function forgotPassword(username, email, db) {
   if (!username || !email) throw new Error("Username and email are required");
-  const repo = borrowerRepoFactory(db);
+  const repo = borrowerRepository(db);
 
   const borrower = await repo.findByUsernameAndEmail(username, email);
   if (!borrower)
@@ -116,7 +116,7 @@ async function forgotPassword(username, email, db) {
 async function sendOtp(borrowersId, db) {
   if (!borrowersId) throw new Error("borrowersId is required");
 
-  const repo = borrowerRepoFactory(db);
+  const repo = borrowerRepository(db);
 
   const borrower = await repo.findByBorrowersId(borrowersId);
   if (!borrower) throw new Error("Borrower not found");
