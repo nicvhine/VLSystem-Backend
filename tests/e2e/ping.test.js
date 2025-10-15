@@ -4,7 +4,7 @@ const createApp = require("../../createApp");
 let app;
 
 beforeAll(async () => {
-    app = await createApp(); // ✅ wait for full setup
+    app = await createApp(); 
 });
 
 describe("Ping API", () => {

@@ -9,15 +9,23 @@ module.exports = (db) => {
   router.get("/", authenticateToken, async (req, res) => {
     try {
       const loans = await db.collection("loans").find().toArray();
-
-      const loansWithNames = await Promise.all(
+  
+      const loansWithDetails = await Promise.all(
         loans.map(async (loan) => {
           const borrower = await db.collection("borrowers_account").findOne({ borrowersId: loan.borrowersId });
-          return { ...loan, name: decrypt(borrower?.name) || "" };
+  
+          // Fetch related application info
+          const application = await db.collection("loan_applications").findOne({ applicationId: loan.applicationId });
+  
+          return {
+            ...loan,
+            ...application, 
+            name: borrower ? decrypt(borrower.name) : "",
+          };
         })
       );
-
-      res.status(200).json(loansWithNames);
+  
+      res.status(200).json(loansWithDetails);
     } catch (error) {
       console.error("Error in GET /loans:", error);
       res.status(500).json({ error: "Failed to fetch loans." });

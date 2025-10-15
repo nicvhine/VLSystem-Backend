@@ -1,13 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../../middleware/auth');
-const authorizeRole = require('../../middleware/authorizeRole');
-const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');  
 require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const { encrypt, decrypt } = require('../../utils/crypt'); 
 const { createBorrower, loginBorrower, forgotPassword, sendOtp, verifyOtp } = require('../../Services/borrowerService'); 
 
 module.exports = (db) => {

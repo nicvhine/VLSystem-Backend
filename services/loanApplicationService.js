@@ -3,6 +3,7 @@ const { generateApplicationId } = require("../utils/generator");
 const { computeApplicationAmounts } = require("../utils/loanCalculations");
 const { encrypt } = require("../utils/crypt");
 const { processUploadedDocs } = require("../utils/uploadConfig");
+const path = require("path");
 
 // ---------- HELPERS ----------
 const decryptApplication = (app) => ({
@@ -100,12 +101,13 @@ async function createLoanApplication(req, loanType, repo, db) {
   }
 
   const uploadedPp = req.files.profilePic?.[0]
-    ? {
-        fileName: req.files.profilePic[0].originalname,
-        filePath: path.relative(process.cwd(), req.files.profilePic[0].path).replace(/\\/g, "/"),
-        mimeType: req.files.profilePic[0].mimetype,
-      }
-    : null;
+  ? {
+      fileName: req.files.profilePic[0].originalname,
+      filePath: path.relative(process.cwd(), req.files.profilePic[0].path).replace(/\\/g, "/"),
+      mimeType: req.files.profilePic[0].mimetype,
+    }
+  : null;
+
 
   // Field validation
   if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount)
