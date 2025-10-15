@@ -22,7 +22,7 @@
     "express": "^5.1.0",
     "jest": "^30.2.0",
     "jsonwebtoken": "^9.0.2",
-    "mongodb": "^6.17.0",
+    "mongodb": "^6.20.0",
     "mongodb-memory-server": "^10.2.3",
     "multer": "^2.0.2",
     "node-cron": "^4.2.1",
