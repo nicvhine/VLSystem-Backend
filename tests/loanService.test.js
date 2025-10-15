@@ -15,9 +15,16 @@ afterAll(async () => await close());
 describe('Loan Service', () => {
   test('should generate loan', async () => {
     const applicationId = 'test-app-001';
-    const application = await mockApplication(db, applicationId, null);
-
     const borrowersId = 'BRW001'
+    const balance = 10000;
+
+    const applicationData = {
+      borrowersId: borrowersId,
+      appTotalPayable: balance
+    }
+
+    const application = await mockApplication(db, applicationId, applicationData);
+
     const borrowerData = {
       name: application.appName,
       dob: application.appDob,
@@ -32,14 +39,18 @@ describe('Loan Service', () => {
 
     const loan = await loanService.createLoan(applicationId, db);
 
-
     expect(application).toBeDefined();
     expect(application.applicationId).toBe(applicationId);
+    expect(application.appTotalPayable).toBe(balance);
 
     expect(borrower).toBeDefined();
     expect(borrower.borrowersId).toBe(borrowersId);
 
     expect(loan).toBeDefined();
+    expect(loan.applicationId).toBe(applicationId);
+    expect(loan.borrowersId).toBe(borrowersId);
+    expect(loan.balance).toBe(balance);
 
+    console.log('loan', loan)
   });
 });

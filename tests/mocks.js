@@ -8,8 +8,8 @@ async function mockBorrower(db, borrowersId, overrides = {}) {
     };
 
     const borrowerData = { ...defaultData, ...overrides };
-    const result = await db.collection('borrowers').insertOne(borrowerData);
-    return { ...borrowerData, _id: result.insertedId };
+    await db.collection('borrowers_account').insertOne(borrowerData);
+    return await db.collection('borrowers_account').findOne({ borrowersId: borrowersId });
 }
 
 async function mockApplication(db, applicationId, overrides = {}) {
@@ -42,8 +42,8 @@ async function mockApplication(db, applicationId, overrides = {}) {
     };
 
     const applicationData = { ...defaultData, ...overrides };
-    const result = await db.collection('loan_applications').insertOne(applicationData);
-    return { ...applicationData, _id: result.insertedId };
+    await db.collection('loan_applications').insertOne(applicationData);
+    return await db.collection('loan_applications').findOne({ applicationId: applicationId });
 }
 
 module.exports = { mockApplication, mockBorrower };
