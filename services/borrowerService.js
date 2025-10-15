@@ -115,8 +115,8 @@ async function forgotPassword(username, email, db) {
 //Send otp
 async function sendOtp(borrowersId, db) {
   if (!borrowersId) throw new Error("borrowersId is required");
+
   const repo = borrowerRepoFactory(db);
-  if (!borrowersId) throw new Error("borrowersId is required");
 
   const borrower = await repo.findByBorrowersId(borrowersId);
   if (!borrower) throw new Error("Borrower not found");

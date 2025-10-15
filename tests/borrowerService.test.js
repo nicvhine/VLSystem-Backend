@@ -1,5 +1,5 @@
 const { connect, clear, close, getDb } = require('./testDB');
-const borrowerService = require('../services/borrowerService');
+const borrowerService = require('../Services/borrowerService');
 const bcrypt = require('bcrypt');
 const borrowerSchema = require("../schemas/borrowerSchema");
 const {mockApplication} = require("./mocks");
@@ -20,7 +20,7 @@ describe('Borrower Service', () => {
             applicationId,
             assignedCollector: 'AG001'
         };
-
+         
         const { borrower, tempPassword } = await borrowerService.createBorrower(data, db);
 
         expect(() => borrowerSchema.parse(borrower)).not.toThrow();

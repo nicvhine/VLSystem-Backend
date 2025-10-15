@@ -1,6 +1,9 @@
 const { padId } = require("../utils/generator");
+const loanRepository = require("../repositories/loanRepository");
 
-const createLoan = async (applicationId, repo) => {
+const createLoan = async (applicationId, db) => {
+  const repo = loanRepository(db);
+
   const application = await repo.findApplicationById(applicationId);
   if (!application) throw new Error("Application not found");
 

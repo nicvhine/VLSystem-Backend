@@ -102,7 +102,7 @@ async function createLoanApplication(req, loanType, repo, db) {
   const uploadedPp = req.files.profilePic?.[0]
     ? {
         fileName: req.files.profilePic[0].originalname,
-        filePath: req.files.profilePic[0].path,
+        filePath: path.relative(process.cwd(), req.files.profilePic[0].path).replace(/\\/g, "/"),
         mimeType: req.files.profilePic[0].mimetype,
       }
     : null;
