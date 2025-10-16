@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { upload, validate2x2 } = require("../../utils/uploadConfig");
+const { upload, validate2x2, processUploadedDocs } = require("../../utils/uploadConfig");
 const { createLoanApplication } = require("../../Services/loanApplicationService");
 const loanApplicationRepository = require("../../repositories/loanApplicationRepository");
 
@@ -16,8 +16,12 @@ module.exports = (db) => {
     validate2x2,
     async (req, res) => {
       try {
+        const uploadedFiles = await processUploadedDocs(req.files);
         const { loanType } = req.params;
-        const application = await createLoanApplication(req, loanType, repo, db);
+
+        // pass uploadedFiles to your service
+        const application = await createLoanApplication(req, loanType, repo, db, uploadedFiles);
+
         res.status(201).json({
           message: "Loan application submitted successfully.",
           application,

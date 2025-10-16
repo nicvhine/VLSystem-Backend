@@ -4,6 +4,7 @@ const { computeApplicationAmounts } = require("../utils/loanCalculations");
 const { encrypt } = require("../utils/crypt");
 const { processUploadedDocs } = require("../utils/uploadConfig");
 const path = require("path");
+const fs = require("fs");
 
 // ---------- HELPERS ----------
 const decryptApplication = (app) => ({
@@ -76,7 +77,6 @@ async function createLoanApplication(req, loanType, repo, db) {
   if (!Array.isArray(parsedReferences) || parsedReferences.length !== 3)
     throw new Error("Three references must be provided.");
 
-  // Ensure unique reference names & contacts
   const names = new Map();
   const numbers = new Map();
   parsedReferences.forEach((r, idx) => {
@@ -88,41 +88,18 @@ async function createLoanApplication(req, loanType, repo, db) {
   if ([...names.values(), ...numbers.values()].some(arr => arr.length > 1))
     throw new Error("Reference names and contact numbers must be unique.");
 
-  const uploadedDocs = [];
-  if (req.files?.documents) {
-    for (const doc of req.files.documents) {
-      const result = await cloudinary.uploader.upload(doc.path, {
-        folder: "loan_documents",
-        resource_type: "auto",
-      });
+  // ✅ Upload documents and profile picture using Cloudinary helper
+  const uploadedFiles = await processUploadedDocs(req.files);
 
-      uploadedDocs.push({
-        fileName: doc.originalname,
-        fileUrl: result.secure_url,
-        mimeType: doc.mimetype,
-      });
+  const uploadedDocs = uploadedFiles.filter(
+    (f) => f.mimeType === "pdf" || f.mimeType === "png"
+  );
 
-      // Delete local temp file
-      fs.unlinkSync(doc.path);
-    }
-  }
+  const uploadedPp = uploadedFiles.find(
+    (f) => f.mimeType === "jpeg" || f.mimeType === "jpg" || f.mimeType === "png"
+  );
 
-  let uploadedPp = null;
-  if (req.files?.profilePic?.[0]) {
-    const pic = req.files.profilePic[0];
-    const result = await cloudinary.uploader.upload(pic.path, {
-      folder: "user_profile_pictures",
-    });
-
-    uploadedPp = {
-      fileName: pic.originalname,
-      fileUrl: result.secure_url,
-      mimeType: pic.mimetype,
-    };
-
-    fs.unlinkSync(pic.path);
-  }
-
+  // ✅ Validate required uploads
   if (
     !uploadedDocs ||
     (loanType === "without" && uploadedDocs.length < 4) ||
@@ -135,11 +112,10 @@ async function createLoanApplication(req, loanType, repo, db) {
     );
   }
 
-  // Field validation
   if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount)
     throw new Error("All required fields must be provided.");
 
-  if ((loanType !== "open-term" && !appLoanTerms))
+  if (loanType !== "open-term" && !appLoanTerms)
     throw new Error("Loan terms are required.");
 
   if ((loanType === "with" || loanType === "open-term") &&
@@ -156,14 +132,11 @@ async function createLoanApplication(req, loanType, repo, db) {
     throw new Error("Invalid source of income.");
   }
 
-  // Prevent duplicate pending applications
   const existing = await repo.findPendingByApplicant(appName, appDob, appContact, appEmail);
   if (existing) throw new Error("You already have a pending application with these details.");
 
-  // Generate application ID
   const applicationId = await generateApplicationId(repo.loanApplications);
 
-  // Compute loan calculations
   const principal = Number(appLoanAmount);
   const interestRate = Number(appInterest);
   const terms = Number(appLoanTerms) || 1;
@@ -177,7 +150,6 @@ async function createLoanApplication(req, loanType, repo, db) {
     appMonthlyDue,
   } = computeApplicationAmounts(principal, interestRate, terms, loanType);
 
-  // Build new application
   let newApplication = {
     applicationId,
     appName: encrypt(appName),
@@ -220,10 +192,9 @@ async function createLoanApplication(req, loanType, repo, db) {
     status: "Applied",
     dateApplied: new Date(),
     documents: uploadedDocs,
-    profilePic: uploadedPp,
+    profilePic: uploadedPp || null,
   };
 
-  // Add source of income details
   if (sourceOfIncome === "business") {
     newApplication = { ...newApplication, sourceOfIncome, appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc };
   } else {
