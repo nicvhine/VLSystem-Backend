@@ -61,7 +61,7 @@ module.exports = (db) => {
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       await borrowers.updateOne(
         { borrowersId: id },
-        { $set: { password: hashedPassword, isFirstLogin: false } }
+        { $set: { password: hashedPassword, isFirstLogin: false} }
       );
 
       res.status(200).json({ message: 'Password updated successfully' });
