@@ -88,26 +88,52 @@ async function createLoanApplication(req, loanType, repo, db) {
   if ([...names.values(), ...numbers.values()].some(arr => arr.length > 1))
     throw new Error("Reference names and contact numbers must be unique.");
 
-  // Validate document uploads
-  const uploadedDocs = processUploadedDocs(req.files);
-  if (!uploadedDocs || 
-      (loanType === "without" && uploadedDocs.length < 4) || 
-      (loanType !== "without" && uploadedDocs.length < 6)) {
+  const uploadedDocs = [];
+  if (req.files?.documents) {
+    for (const doc of req.files.documents) {
+      const result = await cloudinary.uploader.upload(doc.path, {
+        folder: "loan_documents",
+        resource_type: "auto",
+      });
+
+      uploadedDocs.push({
+        fileName: doc.originalname,
+        fileUrl: result.secure_url,
+        mimeType: doc.mimetype,
+      });
+
+      // Delete local temp file
+      fs.unlinkSync(doc.path);
+    }
+  }
+
+  let uploadedPp = null;
+  if (req.files?.profilePic?.[0]) {
+    const pic = req.files.profilePic[0];
+    const result = await cloudinary.uploader.upload(pic.path, {
+      folder: "user_profile_pictures",
+    });
+
+    uploadedPp = {
+      fileName: pic.originalname,
+      fileUrl: result.secure_url,
+      mimeType: pic.mimetype,
+    };
+
+    fs.unlinkSync(pic.path);
+  }
+
+  if (
+    !uploadedDocs ||
+    (loanType === "without" && uploadedDocs.length < 4) ||
+    (loanType !== "without" && uploadedDocs.length < 6)
+  ) {
     throw new Error(
       loanType === "without"
         ? "4 supporting documents must be uploaded."
         : "6 supporting documents must be uploaded."
     );
   }
-
-  const uploadedPp = req.files.profilePic?.[0]
-  ? {
-      fileName: req.files.profilePic[0].originalname,
-      filePath: path.relative(process.cwd(), req.files.profilePic[0].path).replace(/\\/g, "/"),
-      mimeType: req.files.profilePic[0].mimetype,
-    }
-  : null;
-
 
   // Field validation
   if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount)

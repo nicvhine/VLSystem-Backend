@@ -2,6 +2,7 @@ const multer = require("multer");
 const path = require("path");
 const sharp = require("sharp");
 const fs = require("fs");
+const cloudinary = require("../utils/cloudinary");
 
 // Ensure base uploads directory exists
 const baseDir = path.join(__dirname, "..", "uploads");
@@ -41,7 +42,7 @@ const storage = multer.diskStorage({
       req.params.borrowersId ||
       req.body.applicationId ||
       req.params.applicationId ||
-      "GEN"; 
+      "GEN";
 
     const uniqueName = `${borrowerId}_${Date.now()}${ext}`;
     cb(null, uniqueName);
@@ -66,7 +67,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
+  limits: { fileSize: 5 * 1024 * 1024 }, 
 });
 
 async function validate2x2(req, res, next) {
@@ -89,17 +90,45 @@ async function validate2x2(req, res, next) {
   }
 }
 
-function processUploadedDocs(files) {
+async function uploadToCloudinary(localPath, folder = "VLSystem/uploads") {
+  const result = await cloudinary.uploader.upload(localPath, {
+    folder,
+    use_filename: true,
+    unique_filename: true,
+    resource_type: "auto",
+  });
+
+  fs.unlink(localPath, (err) => {
+    if (err) console.error("Error deleting temp file:", err.message);
+  });
+
+  return {
+    fileName: result.public_id,
+    filePath: result.secure_url,
+    mimeType: result.format,
+  };
+}
+
+async function processUploadedDocs(files) {
   if (!files || Object.keys(files).length === 0) {
     throw new Error("At least one document (PDF or PNG) is required.");
   }
 
   const allFiles = Object.values(files).flat();
-  return allFiles.map((file) => ({
-    fileName: file.originalname,
-    filePath: file.path,
-    mimeType: file.mimetype,
-  }));
+
+  const uploadedFiles = [];
+
+  for (const file of allFiles) {
+    const folder =
+      file.fieldname === "profilePic"
+        ? "VLSystem/userProfilePictures"
+        : "VLSystem/documents";
+
+    const uploaded = await uploadToCloudinary(file.path, folder);
+    uploadedFiles.push(uploaded);
+  }
+
+  return uploadedFiles;
 }
 
 module.exports = { upload, validate2x2, processUploadedDocs };
