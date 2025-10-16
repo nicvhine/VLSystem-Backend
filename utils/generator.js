@@ -50,7 +50,8 @@ async function generateBorrowerId(borrowersCollection) {
     if (!isNaN(numPart)) nextNumber = numPart + 1;
   }
 
-  return `B${padId(nextNumber)}`;
+  return `BWR${padId(nextNumber)}`;
 }
+
 
 module.exports = { padId, generateAgentId, generateApplicationId, generateBorrowerId };

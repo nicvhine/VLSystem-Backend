@@ -91,6 +91,7 @@ async function loginBorrower(username, password, db, jwtSecret) {
     profilePic: borrower.profilePic || null,
     borrowersId: borrower.borrowersId,
     isFirstLogin: borrower.isFirstLogin !== false,
+    passwordChanged: borrower.passwordChanged === true,
     token,
   };
 }
@@ -144,9 +145,7 @@ async function verifyOtp(borrowersId, otp) {
   return { message: "OTP verified successfully" };
 }
 
-/**
- * 🔹 Get Borrower by ID
- */
+
 async function getBorrowerById(borrowersId, db) {
   const repo = borrowerRepository(db);
   const borrower = await repo.findBorrowerById(borrowersId);
