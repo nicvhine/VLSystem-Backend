@@ -1,53 +1,9 @@
 const multer = require("multer");
-const path = require("path");
 const sharp = require("sharp");
-const fs = require("fs");
 const cloudinary = require("../utils/cloudinary");
 
-// Ensure base uploads directory exists
-const baseDir = path.join(__dirname, "..", "uploads");
-if (!fs.existsSync(baseDir)) {
-  fs.mkdirSync(baseDir, { recursive: true });
-}
-
-// ensure subfolder exists
-function ensureDirExists(dirPath) {
-  if (!fs.existsSync(dirPath)) {
-    fs.mkdirSync(dirPath, { recursive: true });
-  }
-}
-
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    let subfolder;
-
-    if (file.fieldname === "documents") {
-      subfolder = "documents";
-    } else if (file.fieldname === "profilePic") {
-      subfolder = "userProfilePictures";
-    } else {
-      subfolder = "others";
-    }
-
-    const uploadPath = path.join(baseDir, subfolder);
-    ensureDirExists(uploadPath);
-    cb(null, uploadPath);
-  },
-
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-
-    const borrowerId =
-      req.body.borrowersId ||
-      req.params.borrowersId ||
-      req.body.applicationId ||
-      req.params.applicationId ||
-      "GEN";
-
-    const uniqueName = `${borrowerId}_${Date.now()}${ext}`;
-    cb(null, uniqueName);
-  },
-});
+// Memory storage (no local files)
+const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
   const allowedDocs = ["application/pdf", "image/png"];
@@ -67,15 +23,16 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
   storage,
   fileFilter,
-  limits: { fileSize: 5 * 1024 * 1024 }, 
+  limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+// ✅ Validate 2x2 picture (600x600)
 async function validate2x2(req, res, next) {
   try {
     const file = req.files?.profilePic?.[0];
     if (!file) return next();
 
-    const metadata = await sharp(file.path).metadata();
+    const metadata = await sharp(file.buffer).metadata();
 
     if (metadata.width !== 600 || metadata.height !== 600) {
       return res.status(400).json({
@@ -90,32 +47,37 @@ async function validate2x2(req, res, next) {
   }
 }
 
-async function uploadToCloudinary(localPath, folder = "VLSystem/uploads") {
-  const result = await cloudinary.uploader.upload(localPath, {
-    folder,
-    use_filename: true,
-    unique_filename: true,
-    resource_type: "auto",
-  });
+// ✅ Upload to Cloudinary directly from memory
+async function uploadToCloudinary(fileBuffer, folder, mimetype) {
+  const streamifier = require("streamifier");
 
-  fs.unlink(localPath, (err) => {
-    if (err) console.error("Error deleting temp file:", err.message);
-  });
+  return new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder,
+        resource_type: mimetype.startsWith("image") ? "image" : "raw",
+      },
+      (error, result) => {
+        if (error) return reject(error);
+        resolve({
+          fileName: result.public_id,
+          filePath: result.secure_url,
+          mimeType: result.format,
+        });
+      }
+    );
 
-  return {
-    fileName: result.public_id,
-    filePath: result.secure_url,
-    mimeType: result.format,
-  };
+    streamifier.createReadStream(fileBuffer).pipe(uploadStream);
+  });
 }
 
+// ✅ Handle multiple uploads
 async function processUploadedDocs(files) {
   if (!files || Object.keys(files).length === 0) {
     throw new Error("At least one document (PDF or PNG) is required.");
   }
 
   const allFiles = Object.values(files).flat();
-
   const uploadedFiles = [];
 
   for (const file of allFiles) {
@@ -124,7 +86,7 @@ async function processUploadedDocs(files) {
         ? "VLSystem/userProfilePictures"
         : "VLSystem/documents";
 
-    const uploaded = await uploadToCloudinary(file.path, folder);
+    const uploaded = await uploadToCloudinary(file.buffer, folder, file.mimetype);
     uploadedFiles.push(uploaded);
   }
 
