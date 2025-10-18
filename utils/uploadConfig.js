@@ -27,6 +27,8 @@ const upload = multer({
 });
 
 async function uploadToCloudinary(file, folder = "VLSystem/uploads") {
+  const start = performance.now(); // 🕒 Start timer
+
   const base64String = file.buffer.toString("base64");
   const dataUri = `data:${file.mimetype};base64,${base64String}`;
 
@@ -36,6 +38,11 @@ async function uploadToCloudinary(file, folder = "VLSystem/uploads") {
     use_filename: true,
     unique_filename: true,
   });
+
+  const end = performance.now(); // 🕒 End timer
+  console.log(
+    `✅ Uploaded "${file.originalname}" to Cloudinary in ${(end - start).toFixed(2)}ms`
+  );
 
   return {
     fileName: result.public_id,
@@ -64,21 +71,21 @@ async function validate2x2(req, res, next) {
 }
 
 async function processUploadedDocs(files) {
-  console.log("Uploading to Cloudinary..."); 
   const allFiles = Object.values(files).flat();
-  const uploadedFiles = [];
 
-  for (const file of allFiles) {
+  const uploadPromises = allFiles.map(async (file) => {
     const folder =
       file.fieldname === "profilePic"
         ? "VLSystem/userProfilePictures"
         : "VLSystem/documents";
 
     const uploaded = await uploadToCloudinary(file, folder);
-    uploadedFiles.push(uploaded);
-  }
+    return uploaded;
+  });
 
+  const uploadedFiles = await Promise.all(uploadPromises);
   return uploadedFiles;
 }
+
 
 module.exports = { upload, validate2x2, processUploadedDocs };
