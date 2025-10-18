@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { upload } = require("../../Utils/uploadConfig");
+const { upload, processUploadedDocs } = require("../../Utils/uploadConfig");
 const authenticateToken = require("../../Middleware/auth");
 const authorizeRole = require("../../Middleware/authorizeRole");
 
@@ -33,20 +33,30 @@ module.exports = (db) => {
     }
   });
 
-  // UPLOAD PROFILE
-  router.post("/:userId/upload-profile", upload.single("profilePic"), async (req, res) => {
-    const { userId } = req.params;
-    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-
-    try {
-      const profilePic = `/uploads/userProfilePictures/${req.file.filename}`;
-      await repo.updateProfilePic(userId, profilePic);
-      res.status(200).json({ message: "Profile uploaded successfully", profilePic });
-    } catch (err) {
-      console.error("Error saving profile pic:", err);
-      res.status(500).json({ error: "Server error" });
+  router.post(
+    "/:userId/upload-profile",
+    upload.single("profilePic"),
+    async (req, res) => {
+      const { userId } = req.params;
+      if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+  
+      try {
+        const uploaded = await processUploadedDocs({ profilePic: [req.file] });
+        const profilePic = uploaded[0];
+  
+        await repo.updateProfilePic(userId, profilePic.filePath);
+  
+        res.status(200).json({
+          message: "Profile uploaded successfully",
+          profilePic,
+        });
+      } catch (err) {
+        console.error("Error saving profile pic:", err);
+        res.status(500).json({ error: "Server error" });
+      }
     }
-  });
+  );
+  
 
   // LOGIN
   router.post("/login", async (req, res) => {

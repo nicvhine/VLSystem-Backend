@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../../Middleware/auth');
+const bcrypt = require('bcrypt');
 
 module.exports = (db) => {
     const users = db.collection('users');
