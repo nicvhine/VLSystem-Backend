@@ -26,23 +26,18 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-async function uploadToCloudinary(file, folder = "VLSystem/uploads") {
-  const start = performance.now(); // 🕒 Start timer
-
+async function uploadToCloudinary(file, folder = "VLSystem/uploads", options = {}) {
+  const { userId, applicationId } = options;
   const base64String = file.buffer.toString("base64");
   const dataUri = `data:${file.mimetype};base64,${base64String}`;
 
   const result = await cloudinary.uploader.upload(dataUri, {
     folder,
     resource_type: "auto",
-    use_filename: true,
-    unique_filename: true,
+    use_filename: false,
+    unique_filename: false,
+    public_id: applicationId || userId
   });
-
-  const end = performance.now(); // 🕒 End timer
-  console.log(
-    `✅ Uploaded "${file.originalname}" to Cloudinary in ${(end - start).toFixed(2)}ms`
-  );
 
   return {
     fileName: result.public_id,
@@ -50,6 +45,7 @@ async function uploadToCloudinary(file, folder = "VLSystem/uploads") {
     mimeType: result.format,
   };
 }
+
 
 async function validate2x2(req, res, next) {
   try {

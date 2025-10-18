@@ -44,8 +44,12 @@ async function createBorrower(data, db) {
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
   const profilePicUrl = application.profilePic
-    ? `${BACKEND_URL}/${application.profilePic.filePath.replace(/\\/g, "/")}`
-    : null;
+  ? 
+    application.profilePic.filePath
+      ? application.profilePic.filePath.replace(/\\/g, "/")
+      : application.profilePic
+  : null;
+
 
   const borrower = borrowerSchema.parse({
     borrowersId,
