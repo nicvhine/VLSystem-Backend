@@ -5,7 +5,7 @@ const jwt = require('jsonwebtoken');
 require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
 
-const authenticateToken = require('../../middleware/auth');
+const authenticateToken = require('../../Middleware/auth');
 
 module.exports = (db) => {
   const borrowers = db.collection("borrowers_account");

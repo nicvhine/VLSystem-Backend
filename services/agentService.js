@@ -1,4 +1,4 @@
-const { generateAgentId } = require("../utils/generator");
+const { generateAgentId } = require("../Utils/generator");
 
 // ─── Helper function to calculate loan stats
 const calculateStats = (applications) => {

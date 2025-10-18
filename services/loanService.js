@@ -1,5 +1,5 @@
-const { padId } = require("../utils/generator");
-const loanRepository = require("../repositories/loanRepository");
+const { padId } = require("../Utils/generator");
+const loanRepository = require("../Repositories/loanRepository");
 
 const createLoan = async (applicationId, db) => {
   const repo = loanRepository(db);

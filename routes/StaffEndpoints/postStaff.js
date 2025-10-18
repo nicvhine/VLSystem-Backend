@@ -1,10 +1,10 @@
 const express = require("express");
 const router = express.Router();
-const { upload } = require("../../utils/uploadConfig");
-const authenticateToken = require("../../middleware/auth");
-const authorizeRole = require("../../middleware/authorizeRole");
+const { upload } = require("../../Utils/uploadConfig");
+const authenticateToken = require("../../Middleware/auth");
+const authorizeRole = require("../../Middleware/authorizeRole");
 
-const userRepository = require("../../repositories/staffRepository");
+const userRepository = require("../../Repositories/staffRepository");
 const { createUser, loginUser } = require("../../Services/staffService");
 
 module.exports = (db) => {

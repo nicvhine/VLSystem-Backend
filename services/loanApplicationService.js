@@ -1,12 +1,10 @@
-const { decrypt } = require("../utils/crypt");
-const { generateApplicationId } = require("../utils/generator");
-const { computeApplicationAmounts } = require("../utils/loanCalculations");
-const { encrypt } = require("../utils/crypt");
-const { processUploadedDocs } = require("../utils/uploadConfig");
+const { decrypt } = require("../Utils/crypt");
+const { generateApplicationId } = require("../Utils/generator");
+const { computeApplicationAmounts } = require("../Utils/loanCalculations");
+const { encrypt } = require("../Utils/crypt");
 const path = require("path");
 const fs = require("fs");
 
-// ---------- HELPERS ----------
 const decryptApplication = (app) => ({
   ...app,
   appName: decrypt(app.appName),
@@ -27,7 +25,6 @@ const decryptInterview = (interview) => ({
   appAddress: interview.appAddress ? decrypt(interview.appAddress) : "",
 });
 
-// ---------- SERVICE FUNCTIONS ----------
 async function getAllApplications(repo) {
   const applications = await repo.getAllApplications();
   return applications.map(decryptApplication);
@@ -50,7 +47,7 @@ async function getLoanTypeStats(repo) {
 }
 
 // ---------- CREATE LOAN APPLICATION ----------
-async function createLoanApplication(req, loanType, repo, db) {
+async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   const {
     sourceOfIncome,
     appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -87,30 +84,26 @@ async function createLoanApplication(req, loanType, repo, db) {
   });
   if ([...names.values(), ...numbers.values()].some(arr => arr.length > 1))
     throw new Error("Reference names and contact numbers must be unique.");
-
-  // ✅ Upload documents and profile picture using Cloudinary helper
-  const uploadedFiles = await processUploadedDocs(req.files);
-
-  const uploadedDocs = uploadedFiles.filter(
-    (f) => f.mimeType === "pdf" || f.mimeType === "png"
-  );
-
-  const uploadedPp = uploadedFiles.find(
-    (f) => f.mimeType === "jpeg" || f.mimeType === "jpg" || f.mimeType === "png"
-  );
-
-  // ✅ Validate required uploads
-  if (
-    !uploadedDocs ||
-    (loanType === "without" && uploadedDocs.length < 4) ||
-    (loanType !== "without" && uploadedDocs.length < 6)
-  ) {
-    throw new Error(
-      loanType === "without"
-        ? "4 supporting documents must be uploaded."
-        : "6 supporting documents must be uploaded."
+ 
+    const profilePic = uploadedFiles.find(
+      (file) => file.fileName.includes("userProfilePictures")
     );
-  }
+    const documents = uploadedFiles.filter(
+      (file) => file.fileName.includes("documents")
+    );
+    
+    if (
+      !documents ||
+      (loanType === "without" && documents.length < 4) ||
+      (loanType !== "without" && documents.length < 6)
+    ) {
+      throw new Error(
+        loanType === "without"
+          ? "4 supporting documents must be uploaded."
+          : "6 supporting documents must be uploaded."
+      );
+    }
+    
 
   if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount)
     throw new Error("All required fields must be provided.");
@@ -191,8 +184,14 @@ async function createLoanApplication(req, loanType, repo, db) {
         : "Open-Term Loan",
     status: "Applied",
     dateApplied: new Date(),
-    documents: uploadedDocs,
-    profilePic: uploadedPp || null,
+    profilePic: profilePic
+  ? {
+      fileName: profilePic.fileName,
+      filePath: profilePic.filePath,
+      mimeType: profilePic.mimeType,
+    }
+  : null,
+  documents,
   };
 
   if (sourceOfIncome === "business") {

@@ -1,17 +1,17 @@
-const {getNextSequence} = require("./utils/database");
+const {getNextSequence} = require("./Utils/database");
 const express = require('express');
 
 function loadRoutes(app, db) {
-    const userRoutes = require('./routes/StaffEndpoints')(db);
-    const loanApplicationRoutes = require('./routes/ApplicationEndpoints')(db, getNextSequence);
-    const borrowersRoutes = require('./routes/BorrowerEndpoints')(db);
-    const loanRoutes = require('./routes/LoanEndpoints')(db);
-    const collectionRoutes = require('./routes/CollectionEndpoints')(db);
-    const paymentRoutes = require('./routes/paymentRoutes')(db);
-    const notificationRoutes = require('./routes/notificationRoutes')(db);
-    const logsRoute = require('./routes/logs')(db);
-    const smsRoutes = require('./routes/sms');
-    const agentRoutes = require('./routes/AgentEndpoints')(db);
+    const userRoutes = require('./Routes/StaffEndpoints')(db);
+    const loanApplicationRoutes = require('./Routes/ApplicationEndpoints')(db, getNextSequence);
+    const borrowersRoutes = require('./Routes/BorrowerEndpoints')(db);
+    const loanRoutes = require('./Routes/LoanEndpoints')(db);
+    const collectionRoutes = require('./Routes/CollectionEndpoints')(db);
+    const paymentRoutes = require('./Routes/paymentRoutes')(db);
+    const notificationRoutes = require('./Routes/notificationRoutes')(db);
+    const logsRoute = require('./Routes/logs')(db);
+    const smsRoutes = require('./Routes/sms');
+    const agentRoutes = require('./Routes/AgentEndpoints')(db);
 
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);

@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { applyOverduePenalty } = require('../../utils/collection');
+const { applyOverduePenalty } = require('../../Utils/collection');
 
 module.exports = (db) => {
 
