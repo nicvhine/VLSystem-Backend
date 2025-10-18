@@ -111,7 +111,6 @@ class PayMongoService {
     }
   }
 
-  // ✅ Fixed Create Checkout Session
   async createCheckoutSession(
     amount,
     currency = 'PHP',
