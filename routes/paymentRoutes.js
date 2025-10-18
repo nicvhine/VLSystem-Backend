@@ -2,7 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const axios = require('axios');
 const { ObjectId } = require('mongodb');
-const { applyOverduePenalty, determineLoanStatus } = require('../utils/collection');
+const { applyOverduePenalty, determineLoanStatus } = require('../Utils/collection');
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || 'sk_test_Q4rqE9GpwUrNxJeGXvdVCgY5';
 

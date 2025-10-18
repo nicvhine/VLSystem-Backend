@@ -1,7 +1,7 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { padId } = require("../utils/generator");
-const { generateStaffUsername } = require("../utils/username")
+const { padId } = require("../Utils/generator");
+const { generateStaffUsername } = require("../Utils/username")
 
 const JWT_SECRET = process.env.JWT_SECRET;
 

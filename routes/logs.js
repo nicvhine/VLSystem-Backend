@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../middleware/auth');
+const authenticateToken = require('../Middleware/auth');
 
 module.exports = (db) => {
   router.get('/', authenticateToken, async (req, res) => {

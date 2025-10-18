@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 
-const authenticateToken = require('../../middleware/auth'); 
-const { decrypt } = require('../../utils/crypt'); 
+const authenticateToken = require('../../Middleware/auth'); 
+const { decrypt } = require('../../Utils/crypt'); 
 
 module.exports = (db) => {
 const loanApplications = db.collection("loan_applications");

@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../../middleware/auth');
-const authorizeRole = require('../../middleware/authorizeRole');
+const authenticateToken = require('../../Middleware/auth');
+const authorizeRole = require('../../Middleware/authorizeRole');
 
 module.exports = (db) => {
     const users = db.collection('users');

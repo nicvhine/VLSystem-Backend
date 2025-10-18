@@ -5,7 +5,6 @@ module.exports = (db) => {
   return {
     loanApplications, 
     agents,  
-    // ---------- APPLICATION CRUD ----------
     async insertLoanApplication(application) {
       return await loanApplications.insertOne(application);
     },
@@ -24,12 +23,10 @@ module.exports = (db) => {
       });
     },
 
-    // ---------- AGENT RELATION ----------
     async findAgentById(agentId) {
       return await agents.findOne({ agentId });
     },
 
-    // ---------- INTERVIEW LIST ----------
     async getInterviewList() {
       return await loanApplications
         .find({ interviewDate: { $exists: true } })
@@ -45,7 +42,6 @@ module.exports = (db) => {
         .toArray();
     },
 
-    // ---------- STATISTICS 
     async countByStatus(statusRegex) {
       return await loanApplications.countDocuments({
         status: { $regex: statusRegex, $options: "i" },

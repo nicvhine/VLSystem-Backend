@@ -1,8 +1,8 @@
 const multer = require("multer");
 const sharp = require("sharp");
-const cloudinary = require("../utils/cloudinary");
+const cloudinary = require("./cloudinary");
 
-// Memory storage (no local files)
+// Memory storage for direct Cloudinary upload
 const storage = multer.memoryStorage();
 
 const fileFilter = (req, file, cb) => {
@@ -26,14 +26,30 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
-// ✅ Validate 2x2 picture (600x600)
+async function uploadToCloudinary(file, folder = "VLSystem/uploads") {
+  const base64String = file.buffer.toString("base64");
+  const dataUri = `data:${file.mimetype};base64,${base64String}`;
+
+  const result = await cloudinary.uploader.upload(dataUri, {
+    folder,
+    resource_type: "auto",
+    use_filename: true,
+    unique_filename: true,
+  });
+
+  return {
+    fileName: result.public_id,
+    filePath: result.secure_url,
+    mimeType: result.format,
+  };
+}
+
 async function validate2x2(req, res, next) {
   try {
     const file = req.files?.profilePic?.[0];
     if (!file) return next();
 
     const metadata = await sharp(file.buffer).metadata();
-
     if (metadata.width !== 600 || metadata.height !== 600) {
       return res.status(400).json({
         error: "Profile picture must be 2x2 inches (600x600 pixels).",
@@ -47,36 +63,8 @@ async function validate2x2(req, res, next) {
   }
 }
 
-// ✅ Upload to Cloudinary directly from memory
-async function uploadToCloudinary(fileBuffer, folder, mimetype) {
-  const streamifier = require("streamifier");
-
-  return new Promise((resolve, reject) => {
-    const uploadStream = cloudinary.uploader.upload_stream(
-      {
-        folder,
-        resource_type: mimetype.startsWith("image") ? "image" : "raw",
-      },
-      (error, result) => {
-        if (error) return reject(error);
-        resolve({
-          fileName: result.public_id,
-          filePath: result.secure_url,
-          mimeType: result.format,
-        });
-      }
-    );
-
-    streamifier.createReadStream(fileBuffer).pipe(uploadStream);
-  });
-}
-
-// ✅ Handle multiple uploads
 async function processUploadedDocs(files) {
-  if (!files || Object.keys(files).length === 0) {
-    throw new Error("At least one document (PDF or PNG) is required.");
-  }
-
+  console.log("Uploading to Cloudinary..."); 
   const allFiles = Object.values(files).flat();
   const uploadedFiles = [];
 
@@ -86,7 +74,7 @@ async function processUploadedDocs(files) {
         ? "VLSystem/userProfilePictures"
         : "VLSystem/documents";
 
-    const uploaded = await uploadToCloudinary(file.buffer, folder, file.mimetype);
+    const uploaded = await uploadToCloudinary(file, folder);
     uploadedFiles.push(uploaded);
   }
 
