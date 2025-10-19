@@ -5,6 +5,7 @@ const { generateStaffUsername } = require("../Utils/username")
 
 const JWT_SECRET = process.env.JWT_SECRET;
 
+// Create a staff user and return temp password
 async function createUser({ name, email, phoneNumber, role }, actor, repo) {
   if (!name || !email || !phoneNumber || !role)
     throw new Error("All fields are required.");
@@ -49,6 +50,7 @@ async function createUser({ name, email, phoneNumber, role }, actor, repo) {
   return { newUser, defaultPassword };
 }
 
+// Authenticate staff user and return JWT plus profile
 async function loginUser(username, password, repo) {
   const user = await repo.findByUsername(username);
   if (!user) throw new Error("Invalid credentials");

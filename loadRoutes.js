@@ -1,6 +1,7 @@
 const {getNextSequence} = require("./Utils/database");
 const express = require('express');
 
+// Register API routes and static assets
 function loadRoutes(app, db) {
     const userRoutes = require('./Routes/StaffEndpoints')(db);
     const loanApplicationRoutes = require('./Routes/ApplicationEndpoints')(db, getNextSequence);
