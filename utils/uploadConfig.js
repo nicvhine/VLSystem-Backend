@@ -42,7 +42,8 @@ async function uploadToCloudinary(file, folder = "VLSystem/uploads", options = {
   return {
     fileName: result.public_id,
     filePath: result.secure_url,
-    mimeType: result.format,
+    mimeType: result.format,  
+    folder
   };
 }
 
