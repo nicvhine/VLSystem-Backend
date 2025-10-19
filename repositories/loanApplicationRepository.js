@@ -3,8 +3,9 @@ module.exports = (db) => {
   const agents = db.collection("agents");
 
   return {
-    loanApplications, 
-    agents,  
+    loanApplications,
+    agents,
+
     async insertLoanApplication(application) {
       return await loanApplications.insertOne(application);
     },
@@ -66,6 +67,10 @@ module.exports = (db) => {
           },
         ])
         .toArray();
+    },
+
+    async getApplicationById(applicationId) {
+      return await loanApplications.findOne({ applicationId });
     },
   };
 };
