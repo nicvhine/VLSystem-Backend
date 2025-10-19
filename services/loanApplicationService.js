@@ -84,10 +84,10 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   });
   if ([...names.values(), ...numbers.values()].some(arr => arr.length > 1))
     throw new Error("Reference names and contact numbers must be unique.");
- 
-    const profilePic = uploadedFilesProcessed.find(f => f.fileName.includes("userProfilePictures"));
-    const documents = uploadedFilesProcessed.filter(f => f.fileName.includes("documents"));
-    
+  
+    const profilePic = uploadedFiles.find(f => f.folder.includes("userProfilePictures"));
+    const documents = uploadedFiles.filter(f => f.folder.includes("documents"));
+
     if (
       !documents ||
       (loanType === "without" && documents.length < 4) ||
