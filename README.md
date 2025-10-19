@@ -1,4 +1,4 @@
-# ⚡ VLSystem Backend
+<img width="512" height="512" alt="image" src="https://github.com/user-attachments/assets/e0412197-1f71-41b2-8e2a-df4e45ea4373" /># ⚡ VLSystem Backend
 
 This folder contains the **Node.js** backend for **VLSystem** — a robust REST API built with Express.js and MongoDB for a modern loan management system.
 
@@ -11,7 +11,8 @@ This folder contains the **Node.js** backend for **VLSystem** — a robust REST 
 - 🔐 **JWT Authentication** (jsonwebtoken)
 - 🔒 **bcrypt** for password hashing
 - 📁 **Multer** + **Cloudinary** for file uploads
-- 📱 **Vonage** for SMS notifications
+- 📱 **Semaphore** for SMS notifications
+- ✉️ **EmailJS** for email notifications
 - ⏰ **Cron** for scheduled tasks
 - ✅ **Zod** for validation
 - 🧪 **Jest** for testing
