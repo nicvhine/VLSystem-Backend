@@ -4,6 +4,7 @@ const authenticateToken = require('../../Middleware/auth');
 
 const { decrypt } = require('../../Utils/crypt'); 
 
+// Read loans: list, by id, active by borrower, and full details
 module.exports = (db) => {
 
   router.get("/", authenticateToken, async (req, res) => {
@@ -102,7 +103,7 @@ module.exports = (db) => {
     }
   });
 
-//Fetch active loan
+// Fetch active loan for a borrower
 router.get('/active-loan/:borrowersId', async (req, res) => {
   const { borrowersId } = req.params;
   

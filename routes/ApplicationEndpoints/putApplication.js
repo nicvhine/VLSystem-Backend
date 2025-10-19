@@ -4,10 +4,11 @@ const router = express.Router();
 const authenticateToken = require('../../Middleware/auth'); 
 const { decrypt } = require('../../Utils/crypt'); 
 
+// Update application status, schedule, and notify stakeholders
 module.exports = (db) => {
 const loanApplications = db.collection("loan_applications");
 
-//change status
+// Change application status and update related agent stats
 router.put("/:applicationId", authenticateToken, async (req, res) => {
     try {
       const { applicationId } = req.params;
@@ -157,7 +158,7 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
     }
   });
 
-//update interview schedule 
+// Update interview schedule for an application 
 router.put("/:applicationId/schedule-interview", authenticateToken, async (req, res) => {
     const { applicationId } = req.params;
     const { interviewDate, interviewTime } = req.body;

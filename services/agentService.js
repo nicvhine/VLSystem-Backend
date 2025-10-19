@@ -1,6 +1,6 @@
 const { generateAgentId } = require("../Utils/generator");
 
-// ─── Helper function to calculate loan stats
+// Compute aggregated loan stats for an agent
 const calculateStats = (applications) => {
   const totalLoanAmount = applications.reduce(
     (sum, app) => sum + (app.appLoanAmount || 0),
@@ -14,7 +14,7 @@ const calculateStats = (applications) => {
   };
 };
 
-// ─── Service logic 
+// Create a new agent with generated id
 const createAgent = async ({ name, phoneNumber }, agentRepo, db) => {
   if (!name || !phoneNumber) throw new Error("All fields are required");
   if (!name.trim().includes(" ")) throw new Error("Please enter a full name");
@@ -40,7 +40,7 @@ const createAgent = async ({ name, phoneNumber }, agentRepo, db) => {
 };
 
 
-// ─── Get All Agents with Computed Stats 
+// Get all agents and update their computed stats
 const getAllAgentsWithStats = async (repo) => {
   const agents = await repo.getAllAgents();
 
@@ -56,7 +56,7 @@ const getAllAgentsWithStats = async (repo) => {
   return agents;
 };
 
-// ─── Get Single Agent Details with Computed Stats 
+// Get one agent with computed stats
 const getAgentDetails = async (agentId, repo) => {
   const agent = await repo.getAgentById(agentId);
   if (!agent) throw new Error("Agent not found");

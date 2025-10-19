@@ -3,10 +3,11 @@ const router = express.Router();
 const authenticateToken = require('../../Middleware/auth');
 const bcrypt = require('bcrypt');
 
+// Update staff credentials and profile fields
 module.exports = (db) => {
     const users = db.collection('users');
 
-    //Change password
+    // Change password (staff)
     router.put('/:id/change-password', authenticateToken, async (req, res) => {
         const { id } = req.params;
         const { newPassword } = req.body;
@@ -36,7 +37,7 @@ module.exports = (db) => {
         }
     });
 
-    //Change email
+    // Update email
     router.put('/:userId/update-email', authenticateToken, async (req, res) => {
         const { userId } = req.params;
         const { email } = req.body;
@@ -65,7 +66,7 @@ module.exports = (db) => {
         }
     });
 
-    //Change phone number
+    // Update phone number
     router.put('/:userId/update-phoneNumber', authenticateToken, async (req, res) => {
         const { userId } = req.params;
         const { phoneNumber } = req.body;
@@ -92,7 +93,7 @@ module.exports = (db) => {
         }
     });
 
-    //Edit details (manager)
+    // Edit staff details
     router.put('/:userId', authenticateToken, async (req, res) => {
         const { userId } = req.params;
         const { name, email, phoneNumber, role } = req.body;

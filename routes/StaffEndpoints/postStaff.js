@@ -7,10 +7,11 @@ const authorizeRole = require("../../Middleware/authorizeRole");
 const userRepository = require("../../Repositories/staffRepository");
 const { createUser, loginUser } = require("../../Services/staffService");
 
+// Create staff users, upload profile, and login/check email
 module.exports = (db) => {
   const repo = userRepository(db);
 
-  // CREATE USER
+  // Create a staff user (head only)
   router.post("/", authenticateToken, authorizeRole("head"), async (req, res) => {
     try {
       const { user, credentials } = await createUser(req.body, req.user?.username, repo);
@@ -58,7 +59,7 @@ module.exports = (db) => {
   );
   
 
-  // LOGIN
+  // Staff login
   router.post("/login", async (req, res) => {
     const { username, password } = req.body;
     if (!username || !password)
@@ -72,7 +73,7 @@ module.exports = (db) => {
     }
   });
 
-  // CHECK EMAIL
+  // Check if staff email is available
   router.post("/check-email", async (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email is required" });
