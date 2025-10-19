@@ -2,9 +2,10 @@ const multer = require("multer");
 const sharp = require("sharp");
 const cloudinary = require("./cloudinary");
 
-// Memory storage for direct Cloudinary upload
+// Configure multer memory storage for Cloudinary uploads
 const storage = multer.memoryStorage();
 
+// Validate acceptable mime types per field
 const fileFilter = (req, file, cb) => {
   const allowedDocs = ["application/pdf", "image/png"];
   const allowedPp = ["image/jpeg", "image/png"];
@@ -26,6 +27,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+// Upload a single file buffer to Cloudinary
 async function uploadToCloudinary(file, folder = "VLSystem/uploads", options = {}) {
   const { userId, applicationId } = options;
   const base64String = file.buffer.toString("base64");
@@ -48,6 +50,7 @@ async function uploadToCloudinary(file, folder = "VLSystem/uploads", options = {
 }
 
 
+// Ensure profile picture is exactly 600x600 (2x2 inches)
 async function validate2x2(req, res, next) {
   try {
     const file = req.files?.profilePic?.[0];
@@ -67,6 +70,7 @@ async function validate2x2(req, res, next) {
   }
 }
 
+// Process and upload all received files to Cloudinary
 async function processUploadedDocs(files) {
   const allFiles = Object.values(files).flat();
 

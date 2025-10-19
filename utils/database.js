@@ -3,15 +3,18 @@ const { MONGODB_URI } = require('../config');
 
 const client = new MongoClient(MONGODB_URI);
 
+// Connect to MongoDB and return the database instance
 async function connectToDatabase() {
     await client.connect();
     return client.db('VLSystem');
 }
 
+// Close the MongoDB client connection
 function closeDatabase() {
     return client.close();
 }
 
+// Atomically increment and return a named counter
 async function getNextSequence(db, name) {
     const counters = db.collection('counters');
     const result = await counters.findOneAndUpdate(
@@ -26,6 +29,7 @@ async function getNextSequence(db, name) {
     return result.value.seq;
 }
 
+// Get the highest numeric id from a collection field
 async function getMaxNumericId(db, collectionName, fieldName, stripPrefix = false) {
     const collection = db.collection(collectionName);
     const pipeline = [
