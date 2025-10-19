@@ -46,6 +46,10 @@ async function getLoanTypeStats(repo) {
   return await repo.getLoanTypeStats();
 }
 
+async function getApplicationById(repo, applicationId) {
+  return await repo.getApplicationById(applicationId);
+}
+
 // ---------- CREATE LOAN APPLICATION ----------
 async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   const {
@@ -206,4 +210,5 @@ module.exports = {
   getStatusStats,
   getLoanTypeStats,
   createLoanApplication,
+  getApplicationById
 };
