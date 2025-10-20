@@ -1,3 +1,4 @@
+// Generate a unique borrower username from full name
 async function generateBorrowerUsername(name, borrowersCollection) {
     const parts = name.trim().toLowerCase().split(" ");
     if (parts.length < 2) return null;
@@ -15,6 +16,7 @@ async function generateBorrowerUsername(name, borrowersCollection) {
   }
 
 
+// Generate a unique staff username based on role and first name
 async function generateStaffUsername(name, role, usersRepo) {
   const parts = name.trim().toLowerCase().split(" ");
   const firstName = parts[0];

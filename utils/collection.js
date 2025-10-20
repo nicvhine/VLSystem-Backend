@@ -1,3 +1,4 @@
+// Apply overdue penalty after grace period to a collection item
 function applyOverduePenalty(collection, penaltyRate = 0.02, graceDays = 3) {
     const now = new Date();
     const due = new Date(collection.dueDate);
@@ -18,6 +19,7 @@ function applyOverduePenalty(collection, penaltyRate = 0.02, graceDays = 3) {
     return collection;
   }
   
+  // Determine overall loan status from collection items
   function determineLoanStatus(collections) {
     if (!collections || collections.length === 0) return 'Active';
     const allPaid = collections.every(c => c.status === 'Paid');

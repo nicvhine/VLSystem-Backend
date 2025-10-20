@@ -3,10 +3,11 @@ const router = express.Router();
 const authenticateToken = require('../../Middleware/auth');
 const authorizeRole = require('../../Middleware/authorizeRole');
 
+// Read staff list and collectors
 module.exports = (db) => {
     const users = db.collection('users');
 
-    //Get all users
+    // Get all users (head only)
     router.get('/', authenticateToken, authorizeRole("head"), async (req, res) => {
         try {
         const allUsers = await users.find().toArray();
@@ -26,7 +27,7 @@ module.exports = (db) => {
         }
     });
 
-    //Get collectors
+    // Get collector names
     router.get('/collectors', authenticateToken, async (req, res) => {
         try {
           const collectors = await db.collection('users').find({ role: 'collector' }).toArray();

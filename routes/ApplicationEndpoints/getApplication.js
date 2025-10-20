@@ -5,6 +5,7 @@ const authenticateToken = require("../../Middleware/auth");
 const loanAppRepository = require("../../Repositories/loanApplicationRepository");
 const loanAppService = require("../../Services/loanApplicationService");
 
+// Read application lists, interviews, stats, and single application
 module.exports = (db) => {
   const repo = loanAppRepository(db);
 

@@ -5,6 +5,7 @@ const authorizeRole = require("../../Middleware/authorizeRole");
 const agentRepository = require("../../Repositories/agentRepository");
 const agentService = require("../../Services/agentService");
 
+// Read agent names, list, and details
 module.exports = (db) => {
   const repo = agentRepository(db);
 

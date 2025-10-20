@@ -1,5 +1,7 @@
+// Left-pad numeric ids to 5 digits
 const padId = (num) => num.toString().padStart(5, "0");
 
+// Generate next agent id (AGTxxxxx)
 async function generateAgentId(db) {
   const lastAgent = await db.collection("agents")
     .find({})
@@ -19,6 +21,7 @@ async function generateAgentId(db) {
   return `AGT${padId(nextNumber)}`;
 }
 
+// Generate next application id (APLxxxxx)
 async function generateApplicationId(loanApplications) {
   const lastApplication = await loanApplications
     .find({})
@@ -36,6 +39,7 @@ async function generateApplicationId(loanApplications) {
   return `APL${padId(nextNumber)}`;
 }
 
+// Generate next borrower id (BWRxxxxx)
 async function generateBorrowerId(borrowersCollection) {
   const lastBorrower = await borrowersCollection
     .find({})

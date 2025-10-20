@@ -7,10 +7,11 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 const authenticateToken = require('../../Middleware/auth');
 
+// Reset and change borrower passwords
 module.exports = (db) => {
   const borrowers = db.collection("borrowers_account");
 
-  //Forgor password
+  // Reset password by id (forgot password flow)
   router.put("/reset-password/:id", async (req, res) => {
     const { id } = req.params;
     const { newPassword } = req.body;
@@ -35,7 +36,7 @@ module.exports = (db) => {
     }
   });
 
-  //Change password (only by logged in owner)
+  // Change password (only by logged-in borrower)
   router.put('/:id/change-password', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { newPassword, currentPassword } = req.body;

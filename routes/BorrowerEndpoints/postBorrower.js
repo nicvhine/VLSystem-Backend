@@ -5,8 +5,10 @@ const JWT_SECRET = process.env.JWT_SECRET;
 
 const { createBorrower, loginBorrower, forgotPassword, sendOtp, verifyOtp } = require('../../Services/borrowerService'); 
 
+// Register borrower, login, recovery, and OTP routes
 module.exports = (db) => {
 
+    // Create borrower account
     router.post("/", async (req, res) => {
         try {
           const newBorrower = await createBorrower(req.body, db);
@@ -17,6 +19,7 @@ module.exports = (db) => {
         }
     });
 
+    // Borrower login
     router.post("/login", async (req, res) => {
         try {
         const { username, password } = req.body;
@@ -28,6 +31,7 @@ module.exports = (db) => {
         }
     });
 
+    // Borrower forgot password
     router.post("/forgot-password", async (req, res) => {
         try {
           const { username, email } = req.body;
@@ -39,7 +43,7 @@ module.exports = (db) => {
         }
     });
 
-    // SEND OTP
+    // Send OTP
     router.post("/send-otp", async (req, res) => {
         try {
           const { borrowersId } = req.body;
@@ -51,7 +55,7 @@ module.exports = (db) => {
         }
       });
 
-    // // VERIFY OTP
+    // Verify OTP
     router.post("/verify-otp", async (req, res) => {
         try {
           const { borrowersId, otp } = req.body;

@@ -4,7 +4,7 @@ module.exports = (db) => {
   const loans = db.collection("loans");
 
   return {
-    // Borrower Queries
+    // Borrower queries
     findByUsername: (username) => borrowers.findOne({ username }),
     findByEmail: (email) => borrowers.findOne({ email }),
     findByUsernameAndEmail: (username, email) =>
@@ -13,7 +13,7 @@ module.exports = (db) => {
       borrowers.findOne({ borrowersId }),
     insertBorrower: (borrower) => borrowers.insertOne(borrower),
 
-    // Application Queries
+    // Application queries
     findApplicationById: (applicationId) =>
       applications.findOne({ applicationId }),
     updateApplicationWithBorrower: (applicationId, borrowersId, username) =>
@@ -22,7 +22,7 @@ module.exports = (db) => {
         { $set: { borrowersId, username } }
       ),
 
-    // Loan Queries
+    // Loan queries
     findBorrowerById: (borrowersId) =>
       borrowers.findOne({ borrowersId }),
     findActiveLoanByBorrowerId: (borrowersId) =>

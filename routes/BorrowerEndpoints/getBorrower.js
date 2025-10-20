@@ -4,6 +4,7 @@ const authenticateToken = require("../../Middleware/auth");
 
 const { getBorrowerById } = require("../../Services/borrowerService");
 
+// Read borrower profile by id
 module.exports = (db) => {
 
   router.get("/:id", authenticateToken, async (req, res) => {

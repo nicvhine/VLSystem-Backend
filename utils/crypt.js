@@ -7,6 +7,7 @@ const SECRET_KEY = Buffer.from(
   (process.env.ENCRYPTION_KEY || "").padEnd(32, "0").slice(0, 32)
 );
 
+// Encrypt a UTF-8 string into hex with IV prefix
 function encrypt(text) {
   if (!text) return null;
   const iv = crypto.randomBytes(IV_LENGTH);
@@ -16,6 +17,7 @@ function encrypt(text) {
   return iv.toString("hex") + ":" + encrypted;
 }
 
+// Decrypt a hex string with IV prefix back to UTF-8
 function decrypt(text) {
   if (!text) return "";
   try {
