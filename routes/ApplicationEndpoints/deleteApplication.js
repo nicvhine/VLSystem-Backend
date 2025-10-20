@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 
-
 module.exports = (db) => {
 const loanApplications = db.collection("loan_applications");
 

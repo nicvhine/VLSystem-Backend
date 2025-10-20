@@ -2,8 +2,6 @@ const { decrypt } = require("../Utils/crypt");
 const { generateApplicationId } = require("../Utils/generator");
 const { computeApplicationAmounts } = require("../Utils/loanCalculations");
 const { encrypt } = require("../Utils/crypt");
-const path = require("path");
-const fs = require("fs");
 
 const decryptApplication = (app) => ({
   ...app,

@@ -1,10 +1,7 @@
 const express = require('express');
 const router = express.Router();
-
 const authenticateToken = require('../../Middleware/auth'); 
-const { decrypt } = require('../../Utils/crypt'); 
 
-// Update application status, schedule, and notify stakeholders
 module.exports = (db) => {
 const loanApplications = db.collection("loan_applications");
 

@@ -3,7 +3,6 @@ const router = express.Router();
 const authenticateToken = require('../../Middleware/auth');
 const authorizeRole = require('../../Middleware/authorizeRole');
 
-// Delete a staff user and log the action
 module.exports = (db) => {
     const users = db.collection('users');
 

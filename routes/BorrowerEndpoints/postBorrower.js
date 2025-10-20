@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
-
 const { createBorrower, loginBorrower, forgotPassword, sendOtp, verifyOtp } = require('../../Services/borrowerService'); 
 
 // Register borrower, login, recovery, and OTP routes

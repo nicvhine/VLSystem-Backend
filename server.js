@@ -1,7 +1,6 @@
 require('dotenv').config();
 const createApp = require("./createApp");
 const { PORT } = require("./config");
-const { closeDatabase } = require("./utils/database");
 
 createApp()
     .then((app) => {

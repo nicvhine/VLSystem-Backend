@@ -1,12 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const { applyOverduePenalty } = require('../../Utils/collection');
 
-// Read collections and compute overdue penalties
 module.exports = (db) => {
 
-// Get all collections (optionally filtered by collector)
-router.get('/', async (req, res) => {
+  // Get all collections (optionally filtered by collector)
+  router.get('/', async (req, res) => {
     try {
       const collectorName = req.query.collector;
       const query = collectorName ? { collector: collectorName } : {};
@@ -14,7 +12,7 @@ router.get('/', async (req, res) => {
         .find(query)
         .sort({ collectionNumber: 1 })
         .toArray();
-  
+
       res.json(collections);
     } catch (err) {
       console.error("Error loading collections:", err);
@@ -22,12 +20,12 @@ router.get('/', async (req, res) => {
     }
   });
 
- // Get payment schedule by borrower and loan
- router.get('/schedule/:borrowersId/:loanId', async (req, res) => {
+  // Get payment schedule by borrower and loan
+  router.get('/schedule/:borrowersId/:loanId', async (req, res) => {
     const { borrowersId, loanId } = req.params;
 
     try {
-      let schedule = await db.collection('collections')
+      const schedule = await db.collection('collections')
         .find({ borrowersId, loanId })
         .sort({ collectionNumber: 1 })
         .toArray();
@@ -36,25 +34,57 @@ router.get('/', async (req, res) => {
         return res.status(404).json({ error: 'No payment schedule found for this borrower and loan.' });
       }
 
-      for (let col of schedule) {
-        const updated = applyOverduePenalty(col);
-        if (updated.status === 'Overdue' && col.status !== 'Overdue') {
-          await db.collection('collections').updateOne(
-            { referenceNumber: col.referenceNumber },
-            { $set: { status: 'Overdue', penalty: updated.penalty, balance: updated.balance } }
-          );
-        }
-      }
-
-      schedule = await db.collection('collections')
-        .find({ borrowersId, loanId })
-        .sort({ collectionNumber: 1 })
-        .toArray();
-
       res.json(schedule);
 
     } catch (err) {
       console.error('Error fetching payment schedule:', err);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // GET collectors
+  router.get('/collectors', async (req, res) => {
+    try {
+      const collectors = await db.collection('users').find({ role: 'collector' }).toArray();
+      const names = collectors.map(c => c.name);
+      res.json(names);
+    } catch (err) {
+      console.error('Failed to fetch collectors:', err);
+      res.status(500).json({ error: 'Failed to load collectors' });
+    }
+  });
+
+  // GET collection stats
+  router.get("/collection-stats", async (req, res) => {
+    try {
+      const result = await db.collection("collections").aggregate([
+        { $group: { _id: null, totalCollectables: { $sum: "$periodAmount" }, totalCollected: { $sum: "$paidAmount" } } }
+      ]).toArray();
+
+      const totalCollectables = result[0]?.totalCollectables || 0;
+      const totalCollected = result[0]?.totalCollected || 0;
+      const totalUnpaid = totalCollectables - totalCollected;
+
+      res.json({ totalCollectables, totalCollected, totalUnpaid });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to fetch collection stats" });
+    }
+  });
+
+  // Get loan by ID with collections (no overdue penalties)
+  router.get('/:loanId', async (req, res) => {
+    const { loanId } = req.params;
+
+    try {
+      const loan = await db.collection('loans').findOne({ loanId });
+      if (!loan) return res.status(404).json({ error: 'Loan not found' });
+
+      const collections = await db.collection('collections').find({ loanId }).toArray();
+      res.json({ ...loan, collections });
+
+    } catch (err) {
+      console.error('Error fetching loan:', err);
       res.status(500).json({ error: 'Internal server error' });
     }
   });
