@@ -58,20 +58,4 @@ Important folders
 - `services/` — business logic and external integrations
 - `utils/` — helpers (database connection, crypt, cloudinary, generators)
 
-Testing
-- Uses Jest and Supertest. Run `npm test` in this folder.
-- Some tests use `mongodb-memory-server` for in-memory MongoDB.
 
-Troubleshooting
-- `MongoNetworkError`: check `MONGODB_URI`, Atlas IP access, or local MongoDB status.
-- CORS errors: check `config.js` `CORS_OPTIONS.origin` (defaults to `http://localhost:3000`).
-- Upload failures: verify Cloudinary credentials.
-
-Security and best practices
-- Keep `.env` files out of version control. Add `.env.example` with placeholders for onboarding.
-- Rotate `JWT_SECRET`, `PAYMONGO_SECRET_KEY`, `CLOUDINARY_API_SECRET` regularly.
-
-If you'd like, I can additionally:
-- Add `VLSystem-Backend/.env.example` with placeholders.
-- Add a `docker-compose.yml` to run local MongoDB + backend.
-- Generate a short API reference for common endpoints.
