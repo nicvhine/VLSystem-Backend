@@ -7,7 +7,6 @@ const authorizeRole = require("../../Middleware/authorizeRole");
 const userRepository = require("../../Repositories/staffRepository");
 const { createUser, loginUser } = require("../../Services/staffService");
 
-// Create staff users, upload profile, and login/check email
 module.exports = (db) => {
   const repo = userRepository(db);
 

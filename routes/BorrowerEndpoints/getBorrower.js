@@ -1,7 +1,6 @@
 const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../Middleware/auth");
-
 const { getBorrowerById } = require("../../Services/borrowerService");
 
 // Read borrower profile by id

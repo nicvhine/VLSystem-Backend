@@ -3,7 +3,6 @@ const router = express.Router();
 const authenticateToken = require('../../Middleware/auth');
 const bcrypt = require('bcrypt');
 
-// Update staff credentials and profile fields
 module.exports = (db) => {
     const users = db.collection('users');
 

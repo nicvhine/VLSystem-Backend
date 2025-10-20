@@ -1,9 +1,7 @@
 const express = require("express");
 const router = express.Router();
-
 const { createLoan } = require("../../Services/loanService");
 
-// Generate a loan and its collection schedule from an application
 module.exports = (db) => {
   router.post("/generate-loan/:applicationId", async (req, res) => {
     const { applicationId } = req.params;

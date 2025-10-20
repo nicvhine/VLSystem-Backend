@@ -8,10 +8,9 @@ function loadRoutes(app, db) {
     const borrowersRoutes = require('./Routes/BorrowerEndpoints')(db);
     const loanRoutes = require('./Routes/LoanEndpoints')(db);
     const collectionRoutes = require('./Routes/CollectionEndpoints')(db);
-    const paymentRoutes = require('./Routes/paymentRoutes')(db);
-    const notificationRoutes = require('./Routes/notificationRoutes')(db);
-    const logsRoute = require('./Routes/logs')(db);
-    const smsRoutes = require('./Routes/sms');
+    const paymentRoutes = require('./Routes/PaymentEndpoints')(db);
+    const notificationRoutes = require('./Routes/NotificationEndpoints')(db);
+    const smsRoutes = require('./Routes/SemaphoreEndpoints');
     const agentRoutes = require('./Routes/AgentEndpoints')(db);
 
     app.use('/users', userRoutes);
@@ -21,7 +20,6 @@ function loadRoutes(app, db) {
     app.use('/collections', collectionRoutes);
     app.use('/payments', paymentRoutes);
     app.use('/notifications', notificationRoutes);
-    app.use('/logs', logsRoute);
     app.use('/api', smsRoutes);
     app.use('/uploads', express.static('uploads'));
     app.use('/agents', agentRoutes);

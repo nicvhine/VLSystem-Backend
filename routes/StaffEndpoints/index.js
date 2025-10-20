@@ -6,7 +6,6 @@ const getStaff = require("./getStaff");
 const deleteStaff = require("./deleteStaff");
 const putStaff = require("./putStaff");
 
-// Mount staff endpoints (create, read, delete, update)
 module.exports = (db) => {
   router.use("/", postStaff(db));
   router.use("/", getStaff(db));

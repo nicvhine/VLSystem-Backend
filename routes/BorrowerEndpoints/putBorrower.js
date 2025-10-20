@@ -1,13 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');  
 require('dotenv').config();
-const JWT_SECRET = process.env.JWT_SECRET;
-
 const authenticateToken = require('../../Middleware/auth');
 
-// Reset and change borrower passwords
 module.exports = (db) => {
   const borrowers = db.collection("borrowers_account");
 
