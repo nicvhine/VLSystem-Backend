@@ -3,6 +3,7 @@ const router = express.Router();
 const jwt = require("jsonwebtoken");
 const { ObjectId } = require("mongodb");
 
+// Authenticate requests for notifications routes
 function authenticateToken(req, res, next) {
   const authHeader = req.headers["authorization"];
   const token = authHeader && authHeader.split(" ")[1];
@@ -19,6 +20,7 @@ function authenticateToken(req, res, next) {
   });
 }
 
+// Read and update role-based notifications, plus borrower due alerts
 module.exports = (db) => {
   // GET: Loan Officer Notifications
   router.get("/loan-officer", authenticateToken, async (req, res) => {

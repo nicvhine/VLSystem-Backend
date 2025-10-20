@@ -5,6 +5,7 @@ const authorizeRole = require("../../Middleware/authorizeRole");
 const { createAgent } = require("../../Services/agentService");
 const agentRepository = require("../../Repositories/agentRepository");
 
+// Create a new agent (loan officer only)
 module.exports = (db) => {
   const repo = agentRepository(db);
 

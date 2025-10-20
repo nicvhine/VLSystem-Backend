@@ -14,6 +14,7 @@ async function createApp() {
     app.use("/uploads", express.static(path.join(__dirname, "uploads")));
     app.use(cors(CORS_OPTIONS));
 
+    // Initialize database and load routes
     const db = await connectToDatabase();
     await loadCounters(db);
     loadRoutes(app, db);

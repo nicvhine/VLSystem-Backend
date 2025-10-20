@@ -1,3 +1,4 @@
+// Authorize requests ensuring user role is in allowed roles
 function authorizeRole(...allowedRoles) {
     return (req, res, next) => {
       const userRole = req.user?.role;

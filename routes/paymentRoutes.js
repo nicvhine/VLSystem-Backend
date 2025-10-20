@@ -6,10 +6,11 @@ const { applyOverduePenalty, determineLoanStatus } = require('../Utils/collectio
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY || 'sk_test_Q4rqE9GpwUrNxJeGXvdVCgY5';
 
+// Handle cash and PayMongo payments, and provide payment ledgers
 module.exports = function (db) {
   const router = express.Router();
 
-  // CASH PAYMENT
+  // Cash payment endpoint (applies across schedule)
   router.post('/:referenceNumber/cash', async (req, res) => {
     const { referenceNumber } = req.params;
     const { amount, collectorName } = req.body;
@@ -105,7 +106,7 @@ module.exports = function (db) {
     }
   });
 
-  // GCASH PAYMENT
+  // PayMongo GCash: create intent and source
   router.post('/paymongo/gcash', async (req, res) => {
     const { amount, collectionNumber, referenceNumber, borrowersId } = req.body;
 
@@ -174,7 +175,7 @@ module.exports = function (db) {
     }
   });
 
-  // handle PayMongo success via POST
+  // Handle PayMongo success callback and apply payment
   router.post('/:referenceNumber/paymongo/success', async (req, res) => {
     const { referenceNumber } = req.params;
 
@@ -270,7 +271,7 @@ module.exports = function (db) {
     }
   });
 
-  // PAYMENTS LEDGER BY LOAN
+  // Get payments ledger by loan
   router.get('/ledger/:loanId', async (req, res) => {
     const { loanId } = req.params;
 
@@ -303,7 +304,7 @@ module.exports = function (db) {
     }
   });
 
- // Fetch payments for a borrower
+ // Get all payments for a borrower
   router.get('/:borrowersId', async (req, res) => {
     const { borrowersId } = req.params;
 

@@ -5,6 +5,7 @@ const authenticateToken = require("../../Middleware/auth");
 const loanAppRepository = require("../../Repositories/loanApplicationRepository");
 const loanAppService = require("../../Services/loanApplicationService");
 
+// Read application lists, interviews, stats, and single application
 module.exports = (db) => {
   const repo = loanAppRepository(db);
 
@@ -52,5 +53,21 @@ module.exports = (db) => {
     }
   });
 
+  // GET application by ID
+  router.get("/:applicationId", async (req, res) => {
+    try {
+      const { applicationId } = req.params;
+      const application = await loanAppService.getApplicationById(repo, applicationId);
+  
+      if (!application) {
+        return res.status(404).json({ error: "Application not found." });
+      }
+  
+      res.status(200).json(application);
+    } catch (error) {
+      console.error("Error fetching loan application by ID:", error);
+      res.status(500).json({ error: "Failed to fetch loan application." });
+    }
+  });
   return router;
 };

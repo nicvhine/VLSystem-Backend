@@ -25,16 +25,19 @@ const decryptInterview = (interview) => ({
   appAddress: interview.appAddress ? decrypt(interview.appAddress) : "",
 });
 
+// Fetch all applications with decrypted fields
 async function getAllApplications(repo) {
   const applications = await repo.getAllApplications();
   return applications.map(decryptApplication);
 }
 
+// Fetch interviews with partially decrypted fields
 async function getInterviewList(repo) {
   const interviews = await repo.getInterviewList();
   return interviews.map(decryptInterview);
 }
 
+// Count applications by status
 async function getStatusStats(repo) {
   const applied = await repo.countByStatus(/^applied$/i);
   const approved = await repo.countByStatus(/^approved$/i);
@@ -42,11 +45,17 @@ async function getStatusStats(repo) {
   return { applied, approved, denied };
 }
 
+// Aggregate loan type statistics
 async function getLoanTypeStats(repo) {
   return await repo.getLoanTypeStats();
 }
 
-// ---------- CREATE LOAN APPLICATION ----------
+// Retrieve a single application by id
+async function getApplicationById(repo, applicationId) {
+  return await repo.getApplicationById(applicationId);
+}
+
+// Create a new loan application with validation and encryption
 async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   const {
     sourceOfIncome,
@@ -206,4 +215,5 @@ module.exports = {
   getStatusStats,
   getLoanTypeStats,
   createLoanApplication,
+  getApplicationById
 };

@@ -4,6 +4,7 @@ const axios = require('axios');
 
 const SEMAPHORE_API_KEY = 'd5d9585a8d91b2a5bf7d8a4b3f8dc9ec';
 
+// Normalize phone number to international format
 const formatPhoneNumber = (number) => {
   if (number.startsWith('0')) {
     return '63' + number.slice(1);
@@ -11,6 +12,7 @@ const formatPhoneNumber = (number) => {
   return number;
 };
 
+// Send OTP SMS via Semaphore
 router.post('/send-sms', async (req, res) => {
   const { phoneNumber, code } = req.body;
 

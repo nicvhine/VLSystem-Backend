@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../Middleware/auth');
 
+// Read application logs (auth required)
 module.exports = (db) => {
   router.get('/', authenticateToken, async (req, res) => {
     try {

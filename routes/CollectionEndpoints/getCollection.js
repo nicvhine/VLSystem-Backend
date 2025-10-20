@@ -2,9 +2,10 @@ const express = require('express');
 const router = express.Router();
 const { applyOverduePenalty } = require('../../Utils/collection');
 
+// Read collections and compute overdue penalties
 module.exports = (db) => {
 
-// GET all collections (optionally by collector)
+// Get all collections (optionally filtered by collector)
 router.get('/', async (req, res) => {
     try {
       const collectorName = req.query.collector;
@@ -21,7 +22,7 @@ router.get('/', async (req, res) => {
     }
   });
 
- // GET COLLECTIONS
+ // Get payment schedule by borrower and loan
  router.get('/schedule/:borrowersId/:loanId', async (req, res) => {
     const { borrowersId, loanId } = req.params;
 

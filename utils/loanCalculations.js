@@ -6,6 +6,7 @@
  * @returns {object} 
  */
 
+// Compute loan amounts, dues, and fees based on type and terms
 function computeApplicationAmounts(principal, interestRate, terms, loanType) {
     let interestAmount = 0;
     let totalInterestAmount = 0;

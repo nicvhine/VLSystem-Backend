@@ -4,6 +4,7 @@ const { upload, validate2x2, processUploadedDocs } = require("../../Utils/upload
 const { createLoanApplication } = require("../../Services/loanApplicationService");
 const loanApplicationRepository = require("../../Repositories/loanApplicationRepository");
 
+// Submit a new loan application with file uploads
 module.exports = (db) => {
   const repo = loanApplicationRepository(db);
 

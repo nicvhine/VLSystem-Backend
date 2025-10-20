@@ -3,16 +3,20 @@ module.exports = (db) => {
   const agents = db.collection("agents");
 
   return {
-    loanApplications, 
-    agents,  
+    loanApplications,
+    agents,
+
+    // Insert a new loan application
     async insertLoanApplication(application) {
       return await loanApplications.insertOne(application);
     },
 
+    // Fetch all loan applications
     async getAllApplications() {
       return await loanApplications.find().toArray();
     },
 
+    // Check for existing pending application by applicant details
     async findPendingByApplicant(appName, appDob, appContact, appEmail) {
       return await loanApplications.findOne({
         appName: appName.trim(),
@@ -23,10 +27,12 @@ module.exports = (db) => {
       });
     },
 
+    // Find agent by id
     async findAgentById(agentId) {
       return await agents.findOne({ agentId });
     },
 
+    // Get interviews with minimal fields
     async getInterviewList() {
       return await loanApplications
         .find({ interviewDate: { $exists: true } })
@@ -42,12 +48,14 @@ module.exports = (db) => {
         .toArray();
     },
 
+    // Count applications by status
     async countByStatus(statusRegex) {
       return await loanApplications.countDocuments({
         status: { $regex: statusRegex, $options: "i" },
       });
     },
 
+    // Aggregate loan type counts
     async getLoanTypeStats() {
       return await loanApplications
         .aggregate([
@@ -66,6 +74,11 @@ module.exports = (db) => {
           },
         ])
         .toArray();
+    },
+
+    // Find one application by id
+    async getApplicationById(applicationId) {
+      return await loanApplications.findOne({ applicationId });
     },
   };
 };

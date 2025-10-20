@@ -3,7 +3,7 @@ module.exports = (db) => {
   const applications = db.collection("loan_applications");
 
   return {
-    // ─── GET METHODS
+    // Fetch agents and lookups
     async getAllAgents() {
       return await agents.find().toArray();
     },
@@ -28,7 +28,7 @@ module.exports = (db) => {
       await agents.updateOne({ agentId }, { $set: stats });
     },
 
-    // ─── CREATE & VALIDATION METHODS 
+    // Create and validation helpers
     async findAgentByNameAndPhone(name, phoneNumber) {
       return await agents.findOne({
         name: name.trim(),
