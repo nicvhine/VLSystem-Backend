@@ -193,8 +193,43 @@ const handlePaymongoSuccess = async (referenceNumber, db) => {
   return { message: `GCash payment successful for ${referenceNumber}`, paymentLogs };
 };
 
+// Get ledger/payments for a specific loan
+const getLoanLedger = async (loanId, db) => {
+  const repo = paymentRepository(db);
+  const collections = await repo.findLoanCollections(loanId);
+
+  // Map to frontend-friendly format
+  return collections.map(c => ({
+    referenceNumber: c.referenceNumber,
+    amount: c.paidAmount || 0,
+    datePaid: c.paidAt || null,
+    mode: c.mode || "Cash",
+    loanId: c.loanId,
+    borrowersId: c.borrowersId,
+    paidToCollection: c.collectionNumber,
+  }));
+};
+
+// Get all payments for a borrower
+const getBorrowerPayments = async (borrowersId, db) => {
+  const repo = paymentRepository(db);
+  const payments = await repo.findPaymentsByBorrower(borrowersId);
+
+  return payments.map(p => ({
+    referenceNumber: p.referenceNumber,
+    amount: p.amount || 0,
+    datePaid: p.datePaid || null,
+    mode: p.mode || "Cash",
+    loanId: p.loanId,
+    borrowersId: p.borrowersId,
+    paidToCollection: p.paidToCollection,
+  }));
+};
+
 module.exports = {
   handleCashPayment,
   createPaymongoGcash,
   handlePaymongoSuccess,
+  getBorrowerPayments,
+  getLoanLedger,
 };

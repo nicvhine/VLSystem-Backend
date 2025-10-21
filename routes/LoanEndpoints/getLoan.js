@@ -179,6 +179,34 @@ router.get("/details/:loanId", async (req, res) => {
   }
 });
 
+// All loan of a borrower
+router.get("/all/:borrowersId", async (req, res) => {
+  try {
+    const { borrowersId } = req.params;
+
+    const loans = await db.collection("loans").find({ borrowersId }).toArray();
+
+    const loansWithDetails = await Promise.all(
+      loans.map(async (loan) => {
+        const borrower = await db.collection("borrowers_account").findOne({ borrowersId: loan.borrowersId });
+
+        const application = await db.collection("loan_applications").findOne({ applicationId: loan.applicationId });
+
+        return {
+          ...loan,
+          ...application,
+          name: borrower ? decrypt(borrower.name) : "",
+        };
+      })
+    );
+
+    res.status(200).json(loansWithDetails);
+  } catch (error) {
+    console.error("Error in GET /loans/all/:borrowersId:", error);
+    res.status(500).json({ error: "Failed to fetch loans." });
+  }
+});
+
 
   return router;
 }

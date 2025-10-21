@@ -7,12 +7,12 @@ const storage = multer.memoryStorage();
 
 // Validate acceptable mime types per field
 const fileFilter = (req, file, cb) => {
-  const allowedDocs = ["application/pdf", "image/png"];
+  const allowedDocs = ["application/pdf", "image/png", "image/jpeg"];
   const allowedPp = ["image/jpeg", "image/png"];
 
   if (file.fieldname === "documents") {
     if (allowedDocs.includes(file.mimetype)) cb(null, true);
-    else cb(new Error("Only PDF and PNG allowed for documents"), false);
+    else cb(new Error("Only PDF, PNG, and JPEG are allowed for documents"), false);
   } else if (file.fieldname === "profilePic") {
     if (allowedPp.includes(file.mimetype)) cb(null, true);
     else cb(new Error("Only JPEG or PNG allowed for profile picture"), false);
