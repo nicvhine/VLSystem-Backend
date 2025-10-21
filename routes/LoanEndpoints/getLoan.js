@@ -101,35 +101,6 @@ module.exports = (db) => {
     }
   });
 
-// Fetch active loan for a borrower
-router.get('/active-loan/:borrowersId', async (req, res) => {
-  const { borrowersId } = req.params;
-  
-  try {
-    const loan = await db.collection('loans').findOne({
-      borrowersId,
-      status: 'Active'
-    });
-
-    if (!loan) {
-      return res.status(404).json({ error: 'No active loan found for this borrower.' });
-    }
-
-    const paymentProgress = loan.totalPayable > 0
-      ? Math.round((loan.paidAmount / loan.totalPayable) * 100)
-      : 0;
-
-    res.json({ 
-      loanId: loan.loanId,
-      borrowersId: loan.borrowersId,
-      paymentProgress
-    });
-  } catch (err) {
-    console.error('Error fetching loan by borrower ID:', err);
-    res.status(500).json({ error: 'Internal server error' });
-  }
-});
-
 // Get full loan details with related application and collections
 router.get("/details/:loanId", async (req, res) => {
   const { loanId } = req.params;
