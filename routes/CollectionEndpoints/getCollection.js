@@ -54,23 +54,6 @@ module.exports = (db) => {
     }
   });
 
-  // GET collection stats
-  router.get("/collection-stats", async (req, res) => {
-    try {
-      const result = await db.collection("collections").aggregate([
-        { $group: { _id: null, totalCollectables: { $sum: "$periodAmount" }, totalCollected: { $sum: "$paidAmount" } } }
-      ]).toArray();
-
-      const totalCollectables = result[0]?.totalCollectables || 0;
-      const totalCollected = result[0]?.totalCollected || 0;
-      const totalUnpaid = totalCollectables - totalCollected;
-
-      res.json({ totalCollectables, totalCollected, totalUnpaid });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to fetch collection stats" });
-    }
-  });
 
   // Get loan by ID with collections (no overdue penalties)
   router.get('/:loanId', async (req, res) => {
