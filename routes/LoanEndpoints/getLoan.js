@@ -13,7 +13,6 @@ module.exports = (db) => {
         loans.map(async (loan) => {
           const borrower = await db.collection("borrowers_account").findOne({ borrowersId: loan.borrowersId });
   
-          // Fetch related application info
           const application = await db.collection("loan_applications").findOne({ applicationId: loan.applicationId });
   
           return {
