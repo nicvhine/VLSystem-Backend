@@ -53,7 +53,7 @@ async function uploadToCloudinary(file, folder = "VLSystem/uploads", options = {
 // Ensure profile picture is exactly 600x600 (2x2 inches)
 async function validate2x2(req, res, next) {
   try {
-    const file = req.files?.profilePic?.[0];
+    const file = req.file; 
     if (!file) return next();
 
     const metadata = await sharp(file.buffer).metadata();
@@ -65,10 +65,11 @@ async function validate2x2(req, res, next) {
 
     next();
   } catch (err) {
-    console.error("Error validating profile picture:", err.message);
+    console.error("Error validating profile picture:", err);
     res.status(500).json({ error: "Failed to validate profile picture." });
   }
 }
+
 
 // Process and upload all received files to Cloudinary
 async function processUploadedDocs(files) {
