@@ -6,6 +6,7 @@ const authorizeRole = require("../../Middleware/authorizeRole");
 
 const userRepository = require("../../Repositories/staffRepository");
 const { createUser, loginUser } = require("../../Services/staffService");
+const sharp = require("sharp");
 
 module.exports = (db) => {
   const repo = userRepository(db);
@@ -35,15 +36,26 @@ module.exports = (db) => {
 
   router.post(
     "/:userId/upload-profile",
+    authenticateToken,
     upload.single("profilePic"),
     async (req, res) => {
       const { userId } = req.params;
       if (!req.file) return res.status(400).json({ error: "No file uploaded" });
   
       try {
+        // Validate 2x2 dimensions (optional, 600x600)
+        const metadata = await sharp(req.file.buffer).metadata();
+        if (metadata.width !== 600 || metadata.height !== 600) {
+          return res.status(400).json({
+            error: "Profile picture must be 2x2 inches (600x600 pixels).",
+          });
+        }
+  
+        // Upload to Cloudinary
         const uploaded = await processUploadedDocs({ profilePic: [req.file] });
         const profilePic = uploaded[0];
   
+        // Save path in DB
         await repo.updateProfilePic(userId, profilePic.filePath);
   
         res.status(200).json({
@@ -55,8 +67,7 @@ module.exports = (db) => {
         res.status(500).json({ error: "Server error" });
       }
     }
-  );
-  
+  );  
 
   // Staff login
   router.post("/login", async (req, res) => {
