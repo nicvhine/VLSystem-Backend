@@ -3,6 +3,15 @@ const { generateApplicationId } = require("../Utils/generator");
 const { computeApplicationAmounts } = require("../Utils/loanCalculations");
 const { encrypt } = require("../Utils/crypt");
 
+function safeDecrypt(value) {
+  if (!value) return "";
+  try {
+    return decrypt(value);
+  } catch {
+    return value; 
+  }
+}
+
 const decryptApplication = (app) => ({
   ...app,
   appName: decrypt(app.appName),
@@ -213,5 +222,6 @@ module.exports = {
   getStatusStats,
   getLoanTypeStats,
   createLoanApplication,
-  getApplicationById
+  getApplicationById, 
+  decryptApplication
 };
