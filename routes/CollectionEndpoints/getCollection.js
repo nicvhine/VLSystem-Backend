@@ -43,6 +43,7 @@ module.exports = (db) => {
   router.get(
     '/schedule/:borrowersId/:loanId',
     authenticateToken,
+    authorizeRole("manager", "head", "borrower", "collector"),
     async (req, res) => {
       try {
         const { role, borrowersId: jwtBorrowerId, username } = req.user;
