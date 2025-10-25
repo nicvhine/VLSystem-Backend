@@ -3,12 +3,12 @@ const router = express.Router();
 require('dotenv').config();
 const JWT_SECRET = process.env.JWT_SECRET;
 const { createBorrower, loginBorrower, forgotPassword, sendOtp, verifyOtp } = require('../../Services/borrowerService'); 
-
-// Register borrower, login, recovery, and OTP routes
+const authenticateToken = require('../../Middleware/auth');
+const authorizeRole = require('../../Middleware/authorizeRole')
 module.exports = (db) => {
 
     // Create borrower account
-    router.post("/", async (req, res) => {
+    router.post("/", authenticateToken, authorizeRole("manager"), async (req, res) => {
         try {
           const newBorrower = await createBorrower(req.body, db);
           res.status(201).json(newBorrower);

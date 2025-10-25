@@ -1,12 +1,37 @@
 const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../../Middleware/auth'); 
+const authorizeRole = require('../../Middleware/authorizeRole');
+const { computeLoanFields } = require('../../Services/loanApplicationService');
+
+const loanOptions = {
+  withCollateral: [
+    { amount: 20000, months: 8, interest: 7 },
+    { amount: 50000, months: 10, interest: 5 },
+    { amount: 100000, months: 18, interest: 4 },
+    { amount: 200000, months: 24, interest: 3 },
+    { amount: 300000, months: 36, interest: 2 },
+    { amount: 500000, months: 60, interest: 1.5 },
+  ],
+  withoutCollateral: [
+    { amount: 10000, months: 5, interest: 10 },
+    { amount: 15000, months: 6, interest: 10 },
+    { amount: 20000, months: 8, interest: 10 },
+    { amount: 30000, months: 10, interest: 10 },
+  ],
+  openTerm: [
+    { amount: 50000, interest: 6 },
+    { amount: 100000, interest: 5 },
+    { amount: 200000, interest: 4 },
+    { amount: 500000, interest: 3 },
+  ],
+};
 
 module.exports = (db) => {
 const loanApplications = db.collection("loan_applications");
 
 // Change application status and update related agent stats
-router.put("/:applicationId", authenticateToken, async (req, res) => {
+router.put("/:applicationId", authenticateToken, authorizeRole("manager", "loan officer"), async (req, res) => {
     try {
       const { applicationId } = req.params;
       const updateData = req.body;
@@ -156,7 +181,7 @@ router.put("/:applicationId", authenticateToken, async (req, res) => {
   });
 
 // Update interview schedule for an application 
-router.put("/:applicationId/schedule-interview", authenticateToken, async (req, res) => {
+router.put("/:applicationId/schedule-interview", authenticateToken, authorizeRole("loan officer"), async (req, res) => {
     const { applicationId } = req.params;
     const { interviewDate, interviewTime } = req.body;
   
@@ -187,6 +212,51 @@ router.put("/:applicationId/schedule-interview", authenticateToken, async (req, 
     }
   });
   
+  router.put("/:applicationId/principal", authenticateToken, authorizeRole("loan officer"), async (req, res) => {
+    try {
+      const { applicationId } = req.params;
+      const { newPrincipal } = req.body;
+  
+      const existingApp = await loanApplications.findOne({ applicationId });
+      if (!existingApp) return res.status(404).json({ error: "Loan not found" });
+  
+      // Determine the loan type key
+      let optionKey = "";
+      if (existingApp.loanType?.includes("With Collateral")) optionKey = "withCollateral";
+      else if (existingApp.loanType?.includes("Without Collateral")) optionKey = "withoutCollateral";
+      else optionKey = "openTerm";
+  
+      const options = loanOptions[optionKey] || [];
+  
+      // Select the appropriate loan option
+      let selectedOption;
+      if (optionKey === "openTerm") {
+        selectedOption = options.find(opt => opt.amount >= newPrincipal) || options[options.length - 1];
+      } else {
+        selectedOption =
+          options.find(opt => opt.amount === newPrincipal) ||
+          options.slice().sort((a, b) => b.amount - a.amount).find(opt => opt.amount <= newPrincipal) ||
+          options[0];
+      }
+  
+      // Use selectedOption months and interest
+      const months = selectedOption?.months || Number(existingApp.appLoanTerms) || 12;
+      const interestRate = selectedOption?.interest || Number(existingApp.appInterestRate) || 0;
+  
+      const updatedFields = computeLoanFields(Number(newPrincipal), months, interestRate);
+  
+      await loanApplications.updateOne({ applicationId }, { $set: updatedFields });
+      const updatedApp = await loanApplications.findOne({ applicationId });
+  
+      res.json({ updatedApp });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ error: "Failed to update principal" });
+    }
+  });
+  
+  
 
-return router;
-}
+  return router;
+};
+  

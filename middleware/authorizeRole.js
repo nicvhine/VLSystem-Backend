@@ -1,4 +1,5 @@
-// Authorize requests ensuring user role is in allowed roles
+require('dotenv').config();
+
 function authorizeRole(...allowedRoles) {
     return (req, res, next) => {
       const userRole = req.user?.role;

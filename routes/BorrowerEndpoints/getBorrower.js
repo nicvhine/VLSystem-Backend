@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../Middleware/auth");
+const authorizeRole = require("../../Middleware/authorizeRole");
 const { getBorrowerById } = require("../../Services/borrowerService");
 const { decryptApplication } = require("../../Services/loanApplicationService");
 
 module.exports = (db) => {
-  router.get("/:id", async (req, res) => {
+  router.get("/:id", authenticateToken, authorizeRole("borrower"), async (req, res) => {
     try {
       const { id } = req.params;
 

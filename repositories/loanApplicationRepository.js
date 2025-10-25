@@ -80,5 +80,10 @@ module.exports = (db) => {
     async getApplicationById(applicationId) {
       return await loanApplications.findOne({ applicationId });
     },
+
+    async deleteMany(filter) {
+      const result = await loanApplications.deleteMany(filter);
+      return result.deletedCount; 
+    },
   };
 };

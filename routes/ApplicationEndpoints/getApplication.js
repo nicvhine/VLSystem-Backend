@@ -1,16 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../Middleware/auth");
-
+const authorizeRole = require("../../Middleware/authorizeRole");
 const loanAppRepository = require("../../Repositories/loanApplicationRepository");
 const loanAppService = require("../../Services/loanApplicationService");
 
-// Read application lists, interviews, stats, and single application
 module.exports = (db) => {
   const repo = loanAppRepository(db);
 
   // GET all applications
-  router.get("/", async (req, res) => {
+  router.get("/", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
     try {
       const apps = await loanAppService.getAllApplications(repo);
       res.status(200).json(apps);
@@ -21,7 +20,7 @@ module.exports = (db) => {
   });
 
   // GET interviews
-  router.get("/interviews", authenticateToken, async (req, res) => {
+  router.get("/interviews", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
     try {
       const interviews = await loanAppService.getInterviewList(repo);
       res.status(200).json(interviews);
@@ -32,7 +31,7 @@ module.exports = (db) => {
   });
 
   // GET application status stats
-  router.get("/applicationStatus-stats", async (req, res) => {
+  router.get("/applicationStatus-stats", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
     try {
       const stats = await loanAppService.getStatusStats(repo);
       res.status(200).json(stats);
@@ -43,7 +42,7 @@ module.exports = (db) => {
   });
 
   // GET loan type stats
-  router.get("/loan-type-stats", async (req, res) => {
+  router.get("/loan-type-stats", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
     try {
       const stats = await loanAppService.getLoanTypeStats(repo);
       res.status(200).json(stats);
@@ -53,7 +52,7 @@ module.exports = (db) => {
     }
   });
 
-  // GET application by ID
+  // GET application by ID for tracking
   router.get("/:applicationId", async (req, res) => {
     try {
       const { applicationId } = req.params;
