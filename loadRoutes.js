@@ -14,6 +14,8 @@ function loadRoutes(app, db) {
     const agentRoutes = require('./Routes/AgentEndpoints')(db);
     const statRoutes = require('./Routes/StatsEndpoints')(db);
 
+    require('./Routes/ApplicationEndpoints/cleanup');
+
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);
     app.use('/borrowers', borrowersRoutes);

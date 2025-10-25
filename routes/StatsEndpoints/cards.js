@@ -1,10 +1,12 @@
 const express = require('express');
+const authenticateToken = require('../../Middleware/auth');
+const authorizeRole = require('../../Middleware/authorizeRole');
 const router = express.Router();
 
 module.exports = (db) => {
   const loans = db.collection('loans');
 
-  router.get("/loan-stats", async (req, res) => {
+  router.get("/loan-stats", authenticateToken, authorizeRole("head", "loan officer", "manager"), async (req, res) => {
     try {
       const result = await db.collection("loan_applications").aggregate([
         {
@@ -31,7 +33,7 @@ module.exports = (db) => {
     }
   });
   
-  router.get("/loan-type-stats", async (req, res) => {
+  router.get("/loan-type-stats", authenticateToken, authorizeRole("manager", "head"), async (req, res) => {
     try {
       const collection = db.collection("loans");
   
@@ -58,7 +60,7 @@ module.exports = (db) => {
     }
   });  
 
-  router.get("/applicationStatus-stats", async (req, res) => {
+  router.get("/applicationStatus-stats", authenticateToken, authorizeRole("manager", "head", "loan officer"), async (req, res) => {
     try {
       const collection = db.collection("loan_applications");
   
@@ -82,25 +84,45 @@ module.exports = (db) => {
   
 
    // GET collection stats
-   router.get("/collection-stats", async (req, res) => {
-    try {
-      const result = await db.collection("collections").aggregate([
-        { $group: { _id: null, totalCollectables: {  $sum: "$periodAmount" }, totalCollected: { $sum: "$paidAmount" }, totalPenalty: { $sum: "$penalty" } } }
-      ]).toArray();
-
-      const totalCollectables = result[0]?.totalCollectables || 0;
-      const totalCollected = result[0]?.totalCollected || 0;
-      const totalPenalty = result[0]?.totalPenalty || 0;
-      const totalUnpaid = totalCollectables + totalPenalty - totalCollected;
-
-      res.json({ totalCollectables, totalCollected, totalUnpaid, totalPenalty });
-    } catch (err) {
-      console.error(err);
-      res.status(500).json({ error: "Failed to fetch collection stats" });
+   router.get(
+    "/collection-stats",
+    authenticateToken,
+    authorizeRole("manager", "head", "collector"),
+    async (req, res) => {
+      try {
+        const { role, username } = req.user;
+  
+        const matchStage = role === "collector" ? { $match: { collector: username } } : { $match: {} };
+  
+        const result = await db
+          .collection("collections")
+          .aggregate([
+            matchStage,
+            {
+              $group: {
+                _id: null,
+                totalCollectables: { $sum: "$periodAmount" },
+                totalCollected: { $sum: "$paidAmount" },
+                totalPenalty: { $sum: "$penalty" },
+              },
+            },
+          ])
+          .toArray();
+  
+        const totalCollectables = result[0]?.totalCollectables || 0;
+        const totalCollected = result[0]?.totalCollected || 0;
+        const totalPenalty = result[0]?.totalPenalty || 0;
+        const totalUnpaid = totalCollectables + totalPenalty - totalCollected;
+  
+        res.json({ totalCollectables, totalCollected, totalUnpaid, totalPenalty });
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch collection stats" });
+      }
     }
-  });
+  );  
 
-  router.get("/applied-loan-type-stats", async (req, res) => {
+  router.get("/applied-loan-type-stats", authenticateToken, authorizeRole("manager", "head", "loan officer"), async (req, res) => {
     try {
       const collection = db.collection("loan_applications");
   

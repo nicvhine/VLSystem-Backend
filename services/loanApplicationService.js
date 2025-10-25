@@ -3,15 +3,6 @@ const { generateApplicationId } = require("../Utils/generator");
 const { computeApplicationAmounts } = require("../Utils/loanCalculations");
 const { encrypt } = require("../Utils/crypt");
 
-function safeDecrypt(value) {
-  if (!value) return "";
-  try {
-    return decrypt(value);
-  } catch {
-    return value; 
-  }
-}
-
 const decryptApplication = (app) => ({
   ...app,
   appName: decrypt(app.appName),
@@ -216,6 +207,36 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   return newApplication;
 }
 
+function computeLoanFields(principal, months = 12, interestRate = 0) {
+  principal = Number(principal || 0);
+  months = Number(months || 12);
+  interestRate = Number(interestRate || 0);
+
+  let serviceFee = 0;
+
+  if (principal <= 20000) serviceFee = principal * 0.05;
+  else if (principal <= 45000) serviceFee = 1000;
+  else serviceFee = principal * 0.03;
+
+  const interestAmount = principal * (interestRate / 100);
+  const totalInterestAmount = interestAmount * months;
+  const totalPayable = principal + totalInterestAmount;
+  const monthlyDue = totalPayable / months;
+  const netReleased = principal - serviceFee;
+
+  return {
+    appLoanAmount: principal,
+    appLoanTerms: months,
+    appInterestRate: interestRate,
+    appServiceFee: serviceFee,
+    appInterestAmount: interestAmount,
+    appTotalInterestAmount: totalInterestAmount,
+    appTotalPayable: totalPayable,
+    appMonthlyDue: monthlyDue,
+    appNetReleased: netReleased,
+  };
+}
+
 module.exports = {
   getAllApplications,
   getInterviewList,
@@ -223,5 +244,6 @@ module.exports = {
   getLoanTypeStats,
   createLoanApplication,
   getApplicationById, 
-  decryptApplication
+  decryptApplication,
+  computeLoanFields
 };
