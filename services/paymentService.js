@@ -4,8 +4,8 @@ const axios = require("axios");
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY; 
 
-//Apply cash payment
-const handleCashPayment = async ({ referenceNumber, amount, collectorName }, db) => {
+// Unified payment handler for Cash and GCash
+const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db) => {
   if (!amount || isNaN(amount) || amount <= 0) throw new Error("Invalid payment amount");
 
   const repo = paymentRepository(db);
@@ -23,17 +23,19 @@ const handleCashPayment = async ({ referenceNumber, amount, collectorName }, db)
 
     const due = col.periodAmount || 0;
     const alreadyPaid = col.paidAmount || 0;
-    const balance = Math.max(due - alreadyPaid, 0);
-    if (balance <= 0) continue;
+    const periodRemaining = Math.max(due - alreadyPaid, 0);
+    if (periodRemaining <= 0) continue;
 
-    const paymentToApply = Math.min(remainingAmount, balance);
+    const paymentToApply = Math.min(remainingAmount, periodRemaining);
     const newPaidAmount = alreadyPaid + paymentToApply;
 
+    // Update collection
     await repo.updateCollection(col.referenceNumber, {
       paidAmount: newPaidAmount,
+      periodBalance: Math.max(due - newPaidAmount, 0),
       status: newPaidAmount >= due ? "Paid" : "Partial",
-      balance: Math.max(due - newPaidAmount, 0),
-      mode: "Cash",
+      loanBalance: Math.max((col.loanBalance || col.periodAmount) - paymentToApply, 0),
+      mode,
       paidAt: now,
     });
 
@@ -45,7 +47,7 @@ const handleCashPayment = async ({ referenceNumber, amount, collectorName }, db)
       amount: paymentToApply,
       balance: Math.max(due - newPaidAmount, 0),
       paidToCollection: col.collectionNumber,
-      mode: "Cash",
+      mode,
       datePaid: now,
       createdAt: now,
     });
@@ -54,20 +56,41 @@ const handleCashPayment = async ({ referenceNumber, amount, collectorName }, db)
   }
 
   const totalApplied = amount - remainingAmount;
+
+  // Update loan's overall paidAmount and balance
   await repo.incrementLoan(collection.loanId, { paidAmount: totalApplied, balance: -totalApplied });
 
+  // Insert payment logs
   if (paymentLogs.length > 0) await repo.insertPayments(paymentLogs);
 
+  // Update loan status
   const updatedLoanCollections = await repo.findLoanCollections(collection.loanId);
   const loanStatus = determineLoanStatus(updatedLoanCollections);
   await repo.updateLoan(collection.loanId, { status: loanStatus });
 
-  return { message: "Cash payment applied successfully", paymentLogs, remainingUnapplied: remainingAmount };
+  return { message: `${mode} payment applied successfully`, paymentLogs, remainingUnapplied: remainingAmount };
 };
 
-/**
- * Create PayMongo GCash intent & source
- */
+// Cash payment
+const handleCashPayment = async (payload, db) => applyPayment({ ...payload, mode: "Cash" }, db);
+
+// Handle PayMongo GCash success callback
+const handlePaymongoSuccess = async (referenceNumber, db) => {
+  const repo = paymentRepository(db);
+  const paymongoPayment = await repo.findPaymongoPayment(referenceNumber);
+  if (!paymongoPayment) throw new Error("PayMongo payment not found");
+
+  const now = new Date();
+  await repo.updatePaymongoPayment(referenceNumber, { status: "success", paidAt: now });
+
+  return applyPayment({
+    referenceNumber,
+    amount: paymongoPayment.amount,
+    mode: "GCash",
+  }, db);
+};
+
+// Create PayMongo GCash intent & source
 const createPaymongoGcash = async ({ amount, collectionNumber, referenceNumber, borrowersId }, db) => {
   if (!referenceNumber || !borrowersId || !amount || amount <= 0) {
     throw new Error("Invalid request payload");
@@ -128,77 +151,11 @@ const createPaymongoGcash = async ({ amount, collectionNumber, referenceNumber, 
   return { checkout_url: checkoutUrl };
 };
 
-/**
- * Handle PayMongo success callback
- */
-const handlePaymongoSuccess = async (referenceNumber, db) => {
-  const repo = paymentRepository(db);
-  const now = new Date();
-
-  const paymongoPayment = await repo.findPaymongoPayment(referenceNumber);
-  if (!paymongoPayment) throw new Error("PayMongo payment not found");
-
-  await repo.updatePaymongoPayment(referenceNumber, { status: "success", paidAt: now });
-
-  const collection = await repo.findCollection(referenceNumber);
-  if (!collection) throw new Error("Collection not found");
-
-  const loanCollections = await repo.findLoanCollections(collection.loanId);
-  let remainingAmount = paymongoPayment.amount;
-  const paymentLogs = [];
-
-  for (let col of loanCollections) {
-    if (remainingAmount <= 0) break;
-
-    const due = col.periodAmount || 0;
-    const alreadyPaid = col.paidAmount || 0;
-    const balance = Math.max(due - alreadyPaid, 0);
-    if (balance <= 0) continue;
-
-    const paymentToApply = Math.min(remainingAmount, balance);
-    const newPaidAmount = alreadyPaid + paymentToApply;
-
-    await repo.updateCollection(col.referenceNumber, {
-      paidAmount: newPaidAmount,
-      status: newPaidAmount >= due ? "Paid" : "Partial",
-      balance: Math.max(due - newPaidAmount, 0),
-      mode: "GCash",
-      paidAt: now,
-    });
-
-    paymentLogs.push({
-      loanId: col.loanId,
-      referenceNumber: col.referenceNumber,
-      borrowersId: col.borrowersId,
-      amount: paymentToApply,
-      balance: Math.max(due - newPaidAmount, 0),
-      paidToCollection: col.collectionNumber,
-      mode: "GCash",
-      datePaid: now,
-      createdAt: now,
-    });
-
-    remainingAmount -= paymentToApply;
-  }
-
-  const totalApplied = paymongoPayment.amount - remainingAmount;
-  await repo.incrementLoan(collection.loanId, { paidAmount: totalApplied, balance: -totalApplied });
-
-  if (paymentLogs.length > 0) await repo.insertPayments(paymentLogs);
-
-  const updatedLoanCollections = await repo.findLoanCollections(collection.loanId);
-  const loanStatus = determineLoanStatus(updatedLoanCollections);
-  await repo.updateLoan(collection.loanId, { status: loanStatus });
-
-  return { message: `GCash payment successful for ${referenceNumber}`, paymentLogs };
-};
-
 // Get ledger/payments for a specific loan
 const getLoanLedger = async (loanId, db) => {
   const repo = paymentRepository(db);
   const collections = await repo.findLoanCollections(loanId);
 
-  // Map to frontend-friendly format
   return collections.map(c => ({
     referenceNumber: c.referenceNumber,
     amount: c.paidAmount || 0,
