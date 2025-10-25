@@ -2,7 +2,14 @@ const paymentRepository = require("../Repositories/paymentRepository");
 const { determineLoanStatus } = require("../Utils/collection");
 const axios = require("axios");
 
-const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY; 
+const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
+
+// Helper to generate unique payment reference
+const generatePaymentRef = (collectionRef) => {
+  const timestamp = Date.now();
+  const random = Math.floor(Math.random() * 1000);
+  return `${collectionRef}-P-${timestamp}-${random}`;
+};
 
 // Unified payment handler for Cash and GCash
 const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db) => {
@@ -39,9 +46,10 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
       paidAt: now,
     });
 
+    // Push payment log with unique payment reference
     paymentLogs.push({
       loanId: col.loanId,
-      referenceNumber: col.referenceNumber,
+      referenceNumber: generatePaymentRef(col.referenceNumber), // unique reference
       borrowersId: col.borrowersId,
       collector: collectorName || "Cash Collector",
       amount: paymentToApply,
@@ -154,23 +162,23 @@ const createPaymongoGcash = async ({ amount, collectionNumber, referenceNumber, 
 // Get ledger/payments for a specific loan
 const getLoanLedger = async (loanId, db) => {
   const repo = paymentRepository(db);
-  const collections = await repo.findLoanCollections(loanId);
+  const payments = await repo.getPaymentsByLoan(loanId);  
 
-  return collections.map(c => ({
-    referenceNumber: c.referenceNumber,
-    amount: c.paidAmount || 0,
-    datePaid: c.paidAt || null,
-    mode: c.mode || "Cash",
-    loanId: c.loanId,
-    borrowersId: c.borrowersId,
-    paidToCollection: c.collectionNumber,
+  return payments.map(p => ({
+    referenceNumber: p.referenceNumber,
+    amount: p.amount || 0,
+    datePaid: p.datePaid || null,
+    mode: p.mode || "Cash",
+    loanId: p.loanId,
+    borrowersId: p.borrowersId,
+    paidToCollection: p.paidToCollection,
   }));
 };
 
 // Get all payments for a borrower
 const getBorrowerPayments = async (borrowersId, db) => {
   const repo = paymentRepository(db);
-  const payments = await repo.findPaymentsByBorrower(borrowersId);
+  const payments = await repo.getPaymentsByBorrower(borrowersId);
 
   return payments.map(p => ({
     referenceNumber: p.referenceNumber,
