@@ -56,6 +56,8 @@ async function getApplicationById(repo, applicationId) {
 // Create a new loan application with validation and encryption
 async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   const {
+    borrowersId,
+    isReloan,
     sourceOfIncome,
     appName, appDob, appContact, appEmail, appMarital, appChildren,
     appSpouseName, appSpouseOccupation, appAddress,
@@ -66,6 +68,9 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     collateralType, collateralValue, collateralDescription, ownershipStatus
   } = req.body;
 
+  const isReloanBool = isReloan === "true" || isReloan === true;
+
+  // Validate agent
   if (!appAgent) throw new Error("Agent must be selected for this application.");
   const assignedAgent = await repo.findAgentById(appAgent);
   if (!assignedAgent) throw new Error("Selected agent does not exist.");
@@ -91,22 +96,21 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   });
   if ([...names.values(), ...numbers.values()].some(arr => arr.length > 1))
     throw new Error("Reference names and contact numbers must be unique.");
-  
-    const profilePic = uploadedFiles.find(f => f.folder.includes("userProfilePictures"));
-    const documents = uploadedFiles.filter(f => f.folder.includes("documents"));
 
-    if (
-      !documents ||
-      (loanType === "without" && documents.length < 4) ||
-      (loanType !== "without" && documents.length < 6)
-    ) {
-      throw new Error(
-        loanType === "without"
-          ? "4 supporting documents must be uploaded."
-          : "6 supporting documents must be uploaded."
-      );
-    }
-    
+  const profilePic = uploadedFiles.find(f => f.folder.includes("userProfilePictures"));
+  const documents = uploadedFiles.filter(f => f.folder.includes("documents"));
+
+  if (
+    !documents ||
+    (loanType === "without" && documents.length < 4) ||
+    (loanType !== "without" && documents.length < 6)
+  ) {
+    throw new Error(
+      loanType === "without"
+        ? "4 supporting documents must be uploaded."
+        : "6 supporting documents must be uploaded."
+    );
+  }
 
   if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount)
     throw new Error("All required fields must be provided.");
@@ -128,8 +132,10 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     throw new Error("Invalid source of income.");
   }
 
-  const existing = await repo.findPendingByApplicant(appName, appDob, appContact, appEmail);
-  if (existing) throw new Error("You already have a pending application with these details.");
+  if (!isReloan) {
+    const existing = await repo.findPendingByApplicant(appName, appDob, appContact, appEmail);
+    if (existing) throw new Error("You already have a pending application with these details.");
+  }
 
   const applicationId = await generateApplicationId(repo.loanApplications);
 
@@ -148,6 +154,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
 
   let newApplication = {
     applicationId,
+    borrowersId: borrowersId || null, 
     appName: encrypt(appName),
     appDob,
     appContact: encrypt(appContact),
@@ -186,15 +193,16 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
         ? "Regular Loan With Collateral"
         : "Open-Term Loan",
     status: "Applied",
+    isReloan: isReloanBool,
     dateApplied: new Date(),
     profilePic: profilePic
-  ? {
-      fileName: profilePic.fileName,
-      filePath: profilePic.filePath,
-      mimeType: profilePic.mimeType,
-    }
-  : null,
-  documents,
+      ? {
+          fileName: profilePic.fileName,
+          filePath: profilePic.filePath,
+          mimeType: profilePic.mimeType,
+        }
+      : null,
+    documents,
   };
 
   if (sourceOfIncome === "business") {
@@ -206,6 +214,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   await repo.insertLoanApplication(newApplication);
   return newApplication;
 }
+
 
 function computeLoanFields(principal, months = 12, interestRate = 0) {
   principal = Number(principal || 0);
