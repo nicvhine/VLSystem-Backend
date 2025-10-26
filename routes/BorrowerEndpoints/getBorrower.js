@@ -4,8 +4,10 @@ const authenticateToken = require("../../Middleware/auth");
 const authorizeRole = require("../../Middleware/authorizeRole");
 const { getBorrowerById } = require("../../Services/borrowerService");
 const { decryptApplication } = require("../../Services/loanApplicationService");
+const loanRepository = require("../../Repositories/loanRepository");
 
 module.exports = (db) => {
+  // Get borrower details + latest loan application
   router.get("/:id", authenticateToken, authorizeRole("borrower"), async (req, res) => {
     try {
       const { id } = req.params;
@@ -35,26 +37,23 @@ module.exports = (db) => {
     }
   });
 
-  router.get("/:id/balance", async (req, res) => {
+  // Get active loan balance
+  router.get("/:borrowersId/balance", async (req, res) => {
     try {
-      const { id } = req.params;
+      const { borrowersId } = req.params;
 
-      const loans = await db
-        .collection("loans")
-        .find({ borrowersId: id })
-        .toArray();
+      // Use repository method to fetch all active loans
+      const activeLoans = await loanRepository(db).findActiveLoansByBorrowerId(borrowersId);
 
-      const totalBalance = loans.reduce((sum, loan) => sum + (loan.balance || 0), 0);
+      // If multiple active loans exist, pick the most recent one (optional)
+      const activeLoan = activeLoans.length > 0 ? activeLoans[0] : null;
 
-      res.json({
-        hasBalance: totalBalance > 0,
-        totalBalance,
-      });
+      const balance = activeLoan ? activeLoan.balance : 0;
+
+      res.json({ balance });
     } catch (error) {
-      console.error("Error checking borrower balance:", error);
-      res.status(500).json({
-        error: error.message || "Failed to check borrower balance",
-      });
+      console.error("Error fetching balance:", error);
+      res.status(500).json({ error: "Failed to fetch balance" });
     }
   });
 
