@@ -55,8 +55,9 @@ module.exports = (db) => {
       return await loans.find({ borrowersId, status: "Active" }).toArray();
     },
 
+    // Update loan status
     updateLoanStatus: async (loanId, status) => {
-      await loans.updateOne({loanId}, {$set: { status }});
+      await loans.updateOne({ loanId }, { $set: { status } });
     },
 
     // Find collections by loanId
@@ -64,7 +65,7 @@ module.exports = (db) => {
       return await collections.find({ loanId }).toArray();
     },
 
-    // Update collection status using referenceNumber
+    // Update collection status
     updateCollectionStatus: async (loanId, status) => {
       await collections.updateOne(
         { loanId },
