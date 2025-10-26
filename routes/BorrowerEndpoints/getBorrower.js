@@ -35,5 +35,28 @@ module.exports = (db) => {
     }
   });
 
+  router.get("/:id/balance", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const loans = await db
+        .collection("loans")
+        .find({ borrowersId: id })
+        .toArray();
+
+      const totalBalance = loans.reduce((sum, loan) => sum + (loan.balance || 0), 0);
+
+      res.json({
+        hasBalance: totalBalance > 0,
+        totalBalance,
+      });
+    } catch (error) {
+      console.error("Error checking borrower balance:", error);
+      res.status(500).json({
+        error: error.message || "Failed to check borrower balance",
+      });
+    }
+  });
+
   return router;
 };

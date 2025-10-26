@@ -68,5 +68,29 @@ module.exports = (db) => {
     }
   });
 
+  router.put('/:id/assign-collector', async (req, res) => {
+    const { id } = req.params;
+    const { assignedCollector } = req.body;
+
+    if (!assignedCollector) {
+      return res.status(400).json({ message: "assignedCollector is required." });
+    }
+
+    try {
+      const borrower = await borrowers.findOne({ borrowersId: id });
+      if (!borrower) return res.status(404).json({ message: "Borrower not found." });
+
+      await borrowers.updateOne(
+        { borrowersId: id },
+        { $set: { assignedCollector } }
+      );
+
+      res.status(200).json({ message: `Collector updated successfully to ${assignedCollector}` });
+    } catch (err) {
+      console.error("Error updating assigned collector:", err);
+      res.status(500).json({ message: "Server error while updating collector." });
+    }
+  });
+  
   return router;
 };
