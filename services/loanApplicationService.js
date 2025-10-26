@@ -56,7 +56,6 @@ async function getApplicationById(repo, applicationId) {
 // Create a new loan application with validation and encryption
 async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   const {
-    borrowersId,
     isReloan,
     sourceOfIncome,
     appName, appDob, appContact, appEmail, appMarital, appChildren,
@@ -154,7 +153,6 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
 
   let newApplication = {
     applicationId,
-    borrowersId: borrowersId || null, 
     appName: encrypt(appName),
     appDob,
     appContact: encrypt(appContact),
