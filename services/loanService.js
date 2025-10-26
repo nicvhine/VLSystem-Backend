@@ -8,8 +8,8 @@ const createLoan = async (applicationId, db) => {
   const application = await repo.findApplicationById(applicationId);
   if (!application) throw new Error("Application not found");
 
-  if (application.status !== "Active")
-    throw new Error("Loan can only be generated for applications with status 'Active'");
+  if (application.status !== "Disbursed")
+    throw new Error("Loan can only be generated for applications with status 'Disbursed'");
 
   const existingLoan = await repo.findExistingLoan(applicationId);
   if (existingLoan) throw new Error("Loan already exists for this application");
