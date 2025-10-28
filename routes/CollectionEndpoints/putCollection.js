@@ -57,7 +57,7 @@ module.exports = (db) => {
   
         const { dueDate, periodAmount, loanId, isPaid } = collection;
         if (!dueDate || !periodAmount) {
-          return res.status(400).json({ error: 'Missing dueDate or periodAmount in collection record' });
+          return res.status(400).json({ error: 'Missing dueDate or periodAmount' });
         }
   
         const now = new Date();
@@ -67,7 +67,6 @@ module.exports = (db) => {
         let penalty = 0;
         let creditScoreChange = 0;
   
-        // Determine penalty & credit score adjustment
         if (!isPaid) {
           if (daysLate > 30) {
             penalty = periodAmount * 0.05;
@@ -77,29 +76,15 @@ module.exports = (db) => {
             creditScoreChange = -0.5;
           }
         } else {
-          if (daysLate > 3) {
-            // Paid late
-            penalty = 0;
-            creditScoreChange = -0.5;
-          } else {
-            // Paid on time or early
-            penalty = 0;
-            creditScoreChange = +0.5;
-          }
+          if (daysLate > 3) creditScoreChange = -0.5;
+          else creditScoreChange = +0.5;
         }
   
-        // Update collection (only penalty + timestamp)
         await db.collection('collections').updateOne(
           { referenceNumber },
-          {
-            $set: {
-              penalty,
-              lastPenaltyUpdated: new Date(),
-            },
-          }
+          { $set: { penalty, lastPenaltyUpdated: new Date() } }
         );
   
-        // Adjust loan credit score
         if (loanId && creditScoreChange !== 0) {
           const loan = await db.collection('loans').findOne({ _id: loanId });
           if (loan) {
@@ -115,18 +100,17 @@ module.exports = (db) => {
         }
   
         res.json({
-          message: 'Penalty and loan credit score updated successfully',
+          message: 'Penalty and credit score updated successfully',
           penalty,
           creditScoreChange,
         });
       } catch (err) {
-        console.error('Failed to update penalty and score:', err);
+        console.error('Failed to update penalty:', err);
         res.status(500).json({ error: 'Internal server error' });
       }
     }
   );
 
-  
 
   return router;
 };

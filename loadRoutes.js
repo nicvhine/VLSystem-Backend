@@ -13,8 +13,10 @@ function loadRoutes(app, db) {
     const smsRoutes = require('./Routes/SemaphoreEndpoints');
     const agentRoutes = require('./Routes/AgentEndpoints')(db);
     const statRoutes = require('./Routes/StatsEndpoints')(db);
+    const penaltyRoutes = require('./Routes/PenaltyEndpoints')(db);
 
     require('./Routes/ApplicationEndpoints/cleanup');
+    // require('./Routes/CollectionEndpoints/statusUpdate');
 
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);
@@ -27,6 +29,7 @@ function loadRoutes(app, db) {
     app.use('/uploads', express.static('uploads'));
     app.use('/agents', agentRoutes);
     app.use('/stat', statRoutes);
+    app.use('/penalty', penaltyRoutes);
 
     app.get("/ping", (req, res) => { res.json({ message: "pong from root" }); });
 
