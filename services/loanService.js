@@ -26,7 +26,7 @@ const createLoan = async (applicationId, db) => {
   if (maxLoan.length > 0 && !isNaN(maxLoan[0].loanIdNum)) nextId = maxLoan[0].loanIdNum + 1;
   const loanId = "L" + padId(nextId);
 
-  // Create loan
+  // Create loan with default credit score
   const loan = {
     loanId,
     applicationId,
@@ -36,6 +36,7 @@ const createLoan = async (applicationId, db) => {
     balance: application.appTotalPayable,
     status: "Active",
     dateDisbursed: application.dateDisbursed || new Date(),
+    creditScore: 10, // Default credit score for loan-level display
     createdAt: new Date(),
   };
 
@@ -69,7 +70,9 @@ const createLoan = async (applicationId, db) => {
       status: "Unpaid",
       collector: borrower.assignedCollector || "",
       note: "",
+      creditScore: 10, //  Default score per collection
       createdAt: new Date(),
+      updatedAt: new Date(),
     });
   }
 
