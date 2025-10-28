@@ -12,7 +12,7 @@ module.exports = (db) => {
     authenticateToken,
     async (req, res) => {
       try {
-        const { role, borrowersId, username } = req.user;
+        const { role, borrowersId, name } = req.user;
         const collectorQuery = req.query.collector;
 
         let query = {};
@@ -22,7 +22,7 @@ module.exports = (db) => {
           query = collectorQuery ? { collector: collectorQuery } : {};
         } else if (role === 'collector') {
           // Collector can fetch only their own collections
-          query = { collector: username };
+          query = { collector: name };
         } else if (role === 'borrower') {
           // Borrower can fetch only their own collections
           query = { borrowersId };
@@ -46,12 +46,12 @@ module.exports = (db) => {
     authorizeRole("manager", "head", "borrower", "collector"),
     async (req, res) => {
       try {
-        const { role, borrowersId: jwtBorrowerId, username } = req.user;
+        const { role, borrowersId: jwtBorrowerId, name } = req.user;
         const { borrowersId, loanId } = req.params;
 
         // Role-based access check
         if (
-          role === 'collector' && username !== req.query.collector ||
+          role === 'collector' && name !== req.query.collector ||
           role === 'borrower' && jwtBorrowerId !== borrowersId
         ) {
           return res.status(403).json({ error: 'Unauthorized access' });
