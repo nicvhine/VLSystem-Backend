@@ -36,7 +36,7 @@ const createLoan = async (applicationId, db) => {
     balance: application.appTotalPayable,
     status: "Active",
     dateDisbursed: application.dateDisbursed || new Date(),
-    creditScore: 10, // Default credit score for loan-level display
+    creditScore: 10, 
     createdAt: new Date(),
   };
 
@@ -70,7 +70,6 @@ const createLoan = async (applicationId, db) => {
       status: "Unpaid",
       collector: borrower.assignedCollector || "",
       note: "",
-      creditScore: 10, //  Default score per collection
       createdAt: new Date(),
       updatedAt: new Date(),
     });
