@@ -15,13 +15,16 @@ module.exports = (db) => {
           : { id };
         return loanOfficerNotifications.findOneAndUpdate(
           filter,
-          { $set: { read: true } },
+          { $set: { read: true, viewed: true } },
           { returnDocument: "after" }
         );
       },
   
       markAllLoanOfficerNotificationsRead: () =>
-        loanOfficerNotifications.updateMany({ read: false }, { $set: { read: true } }),
+        loanOfficerNotifications.updateMany(
+          { $or: [ { read: { $ne: true } }, { viewed: { $ne: true } } ] },
+          { $set: { read: true, viewed: true } }
+        ),
   
       // Manager queries
       getManagerNotifications: () =>
@@ -33,13 +36,16 @@ module.exports = (db) => {
           : { id };
         return managerNotifications.findOneAndUpdate(
           filter,
-          { $set: { read: true } },
+          { $set: { read: true, viewed: true } },
           { returnDocument: "after" }
         );
       },
   
       markAllManagerNotificationsRead: () =>
-        managerNotifications.updateMany({ read: false }, { $set: { read: true } }),
+        managerNotifications.updateMany(
+          { $or: [ { read: { $ne: true } }, { viewed: { $ne: true } } ] },
+          { $set: { read: true, viewed: true } }
+        ),
   
       // Borrower queries
       getBorrowerNotifications: (borrowersId) =>
@@ -47,6 +53,23 @@ module.exports = (db) => {
   
       insertBorrowerNotifications: (notifs) =>
         notifs.length > 0 ? borrowerNotifications.insertMany(notifs) : null,
+
+      markBorrowerNotificationRead: (id, borrowersId) => {
+        const filter = require("mongodb").ObjectId.isValid(id)
+          ? { _id: new require("mongodb").ObjectId(id) }
+          : { id };
+        return borrowerNotifications.findOneAndUpdate(
+          { ...filter, borrowersId },
+          { $set: { read: true, viewed: true } },
+          { returnDocument: "after" }
+        );
+      },
+
+      markAllBorrowerNotificationsRead: (borrowersId) =>
+        borrowerNotifications.updateMany(
+          { borrowersId, $or: [ { read: { $ne: true } }, { viewed: { $ne: true } } ] },
+          { $set: { read: true, viewed: true } }
+        ),
   
       findDueCollections: (borrowersId, today, threeDaysLater) =>
         collections

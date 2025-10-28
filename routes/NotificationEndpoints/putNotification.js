@@ -1,7 +1,7 @@
 const express = require("express");
 const authenticateToken = require("../../Middleware/auth");
 const authorizeRole = require("../../Middleware/authorizeRole");
-const service = require("../../Services/notificationService"); 
+const service = require("../../Services/notificationService");
 
 module.exports = (db) => {
   const router = express.Router();
@@ -10,23 +10,26 @@ module.exports = (db) => {
   router.put(
     "/:role/:id/read",
     authenticateToken,
-    authorizeRole("manager", "loan officer", "borrower"), 
+    authorizeRole("manager", "loan officer", "borrower"),
     async (req, res) => {
       try {
         const role = req.params.role.toLowerCase().trim();
         const id = req.params.id;
 
-        // user can only mark their own notifications
-        if (
-          (role === "borrower" && req.user.borrowersId !== id) ||
-          (role === "manager" && req.user.role !== "manager") ||
-          (role === "loan officer" && req.user.role !== "loan officer")
-        ) {
+        // Validate role ownership
+        if (role === "manager" && (req.user.role || "").toLowerCase() !== "manager") {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        if (role === "loan-officer" && (req.user.role || "").toLowerCase() !== "loan officer") {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        if (role === "borrower" && (req.user.role || "").toLowerCase() !== "borrower") {
           return res.status(403).json({ error: "Access denied" });
         }
 
-        const notif = await service.markNotificationRead(role, id);
-        res.json(notif);
+        const borrowersId = role === "borrower" ? req.user.borrowersId : undefined;
+        const result = await service.markNotificationRead(db, role, id, borrowersId);
+        res.json(result);
       } catch (err) {
         console.error(err);
         res.status(404).json({ error: err.message });
@@ -34,7 +37,7 @@ module.exports = (db) => {
     }
   );
 
-  // Mark all notifications for a role as read
+  // Mark all notifications as read for current user's role
   router.put(
     "/:role/read-all",
     authenticateToken,
@@ -43,16 +46,18 @@ module.exports = (db) => {
       try {
         const role = req.params.role.toLowerCase().trim();
 
-        // Only allow user to mark their own role notifications
-        if (
-          (role === "borrower" && req.user.role !== "borrower") ||
-          (role === "manager" && req.user.role !== "manager") ||
-          (role === "loan officer" && req.user.role !== "loan officer")
-        ) {
+        if (role === "manager" && (req.user.role || "").toLowerCase() !== "manager") {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        if (role === "loan-officer" && (req.user.role || "").toLowerCase() !== "loan officer") {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        if (role === "borrower" && (req.user.role || "").toLowerCase() !== "borrower") {
           return res.status(403).json({ error: "Access denied" });
         }
 
-        const result = await service.markAllRoleRead(role);
+        const borrowersId = role === "borrower" ? req.user.borrowersId : undefined;
+        const result = await service.markAllRoleRead(db, role, borrowersId);
         res.json({ matched: result.matchedCount, modified: result.modifiedCount });
       } catch (err) {
         console.error(err);
