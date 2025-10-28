@@ -35,23 +35,26 @@ module.exports = (repo, db) => {
     async approveEndorsement(id, approverId, remarks = null) {
       const endorsement = await repo.getById(id);
       if (!endorsement) throw new Error("Endorsement not found");
-
-      // Use collectionId to find the collection
+    
       const collection = await db.collection("collections").findOne({ collectionId: endorsement.collectionId });
       if (!collection) throw new Error("Collection not found");
-
-      const { periodAmount: baseAmount, status: collectionStatus, loanId, paidAmount } = collection;
-
-      // Compute penalty rate and amounts
+    
+      const { periodAmount: baseAmount, status: oldStatus, loanId, paidAmount } = collection;
+    
       const penaltyRate =
-        collectionStatus === "Past Due" ? 0.02 :
-        collectionStatus === "Overdue" ? 0.05 : 0;
-
+        oldStatus === "Past Due" ? 0.02 :
+        oldStatus === "Overdue" ? 0.05 : 0;
+    
       const penaltyAmount = baseAmount * penaltyRate;
       const newPeriodAmount = baseAmount + penaltyAmount;
       const newPeriodBalance = newPeriodAmount - paidAmount;
-
-      // Update collection
+    
+      let updatedStatus = "Unpaid";
+      if (newPeriodBalance <= 0) updatedStatus = "Paid";
+      else if (oldStatus === "Past Due") updatedStatus = "Past Due";
+      else if (oldStatus === "Overdue") updatedStatus = "Overdue";
+      else updatedStatus = "Unpaid";
+    
       await db.collection("collections").updateOne(
         { collectionId: collection.collectionId },
         {
@@ -60,40 +63,51 @@ module.exports = (repo, db) => {
             penaltyRate,
             periodAmount: newPeriodAmount,
             paidAmount: newPeriodBalance,
+            status: updatedStatus,
             lastPenaltyUpdated: new Date(),
           }
         }
       );
-
-      // Update loan credit score
+    
       if (loanId) {
-        const loan = await db.collection("loans").findOne({ _id: loanId });
+        const loan = await db.collection("loans").findOne({ loanId });
         if (loan) {
           let delta = 0;
-          if (collectionStatus === "On Time") delta = 0.5;
-          if (collectionStatus === "Past Due") delta = -0.5;
-          if (collectionStatus === "Overdue") delta = -1.5;
-
+          switch (updatedStatus) {
+            case "Paid": delta = 0.5; break;
+            case "Past Due": delta = -0.5; break;
+            case "Overdue": delta = -1.5; break;
+            default: delta = 0; break;
+          }
+    
           let newCreditScore = (loan.creditScore || 0) + delta;
           newCreditScore = Math.min(Math.max(newCreditScore, 0), 10);
-
+    
           await db.collection("loans").updateOne(
-            { _id: loanId },
+            { loanId },
             { $set: { creditScore: newCreditScore } }
           );
         }
       }
-
-      // Update endorsement status
+    
       const updateData = {
         status: "Approved",
         approvedBy: approverId,
         dateReviewed: new Date(),
+        remarks,
       };
       await repo.update(id, updateData);
-
-      return { ...updateData, penaltyAmount, penaltyRate, newPeriodAmount };
+    
+      return {
+        ...updateData,
+        penaltyAmount,
+        penaltyRate,
+        newPeriodAmount,
+        newPeriodBalance,
+        updatedStatus,
+      };
     },
+    
 
     async rejectEndorsement(id, approverId, remarks = null) {
       const endorsement = await repo.getById(id);
