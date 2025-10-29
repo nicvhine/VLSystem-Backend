@@ -4,26 +4,27 @@ module.exports = (repo, db) => {
       const penaltyRate =
         collection.status === "Past Due" ? 0.02 :
         collection.status === "Overdue" ? 0.05 : 0;
-
+    
       const penaltyAmount = collection.periodAmount * penaltyRate;
+      const finalAmount = collection.periodAmount + penaltyAmount;
 
       const newEndorsement = {
         referenceNumber: collection.referenceNumber,
         collectionId: collection.collectionId,
         loanId: collection.loanId,
-        borrowerId: collection.borrowerId,
         paidAmount: collection.paidAmount,
         borrowerName: collection.name,
         status: "Pending",
-        endorsedBy: userId,
+        endorsedBy: collection.collector, 
         reason: formData.reason,
         penaltyAmount,
         penaltyRate,
+        finalAmount,
         collectionStatus: collection.status,
         dateEndorsed: new Date(),
         dateReviewed: null,
       };
-
+    
       const insertedId = await repo.create(newEndorsement);
       return { insertedId, penaltyAmount, penaltyRate };
     },

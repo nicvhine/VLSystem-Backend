@@ -16,7 +16,7 @@ function loadRoutes(app, db) {
     const penaltyRoutes = require('./Routes/PenaltyEndpoints')(db);
 
     require('./Routes/ApplicationEndpoints/cleanup');
-    // require('./Routes/CollectionEndpoints/statusUpdate');
+    require('./Routes/CollectionEndpoints/statusUpdate');
 
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);
