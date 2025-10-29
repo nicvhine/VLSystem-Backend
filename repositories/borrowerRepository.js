@@ -9,9 +9,14 @@ module.exports = (db) => {
     findByEmail: (email) => borrowers.findOne({ email }),
     findByUsernameAndEmail: (username, email) =>
       borrowers.findOne({ username, email }),
-    findByBorrowersId: (borrowersId) =>
-      borrowers.findOne({ borrowersId }),
+    findByBorrowersId: (borrowersId) => borrowers.findOne({ borrowersId }),
     insertBorrower: (borrower) => borrowers.insertOne(borrower),
+
+    // Added combined username/email search
+    findByUsernameOrEmail: async (identifier) =>
+      borrowers.findOne({
+        $or: [{ username: identifier }, { email: identifier }],
+      }),
 
     // Application queries
     findApplicationById: (applicationId) =>
@@ -23,8 +28,7 @@ module.exports = (db) => {
       ),
 
     // Loan queries
-    findBorrowerById: (borrowersId) =>
-      borrowers.findOne({ borrowersId }),
+    findBorrowerById: (borrowersId) => borrowers.findOne({ borrowersId }),
     findActiveLoanByBorrowerId: (borrowersId) =>
       loans.findOne({ borrowersId, status: "Active" }),
   };

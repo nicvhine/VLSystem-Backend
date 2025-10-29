@@ -4,11 +4,11 @@ const { decrypt } = require("../Utils/crypt");
 const { generateBorrowerId } = require("../Utils/generator");
 const { generateBorrowerUsername } = require("../Utils/username");
 const otpStore = require("../Utils/otpStore");
-const {BACKEND_URL} = require("../config");
+const { BACKEND_URL } = require("../config");
 const borrowerRepository = require("../Repositories/borrowerRepository");
 const borrowerSchema = require("../schemas/borrowerSchema");
 
-//Create borrower
+// Create borrower
 async function createBorrower(data, db) {
   const repo = borrowerRepository(db);
   const { name, role, applicationId, assignedCollector } = data;
@@ -22,17 +22,9 @@ async function createBorrower(data, db) {
   const application = await repo.findApplicationById(applicationId);
   if (!application) throw new Error("Application not found");
 
-  // Generate unique username
-  const username = await generateBorrowerUsername(
-    name,
-    db.collection("borrowers_account")
-  );
-  if (!username) throw new Error("Invalid full name");
-
-  // Generate borrower ID
-  const borrowersId = await generateBorrowerId(
-    db.collection("borrowers_account")
-  );
+  // Generate unique username and borrower ID
+  const username = await generateBorrowerUsername(name, db.collection("borrowers_account"));
+  const borrowersId = await generateBorrowerId(db.collection("borrowers_account"));
 
   // Default password
   const lastName = name.trim().split(" ").slice(-1)[0].toLowerCase();
@@ -44,12 +36,10 @@ async function createBorrower(data, db) {
   const hashedPassword = await bcrypt.hash(defaultPassword, 10);
 
   const profilePicUrl = application.profilePic
-  ? 
-    application.profilePic.filePath
+    ? application.profilePic.filePath
       ? application.profilePic.filePath.replace(/\\/g, "/")
       : application.profilePic
-  : null;
-
+    : null;
 
   const borrower = borrowerSchema.parse({
     borrowersId,
@@ -60,6 +50,7 @@ async function createBorrower(data, db) {
     isFirstLogin: true,
     assignedCollector,
     email: decrypt(application.appEmail),
+    phoneNumber: decrypt(application.appContact),
     profilePic: profilePicUrl,
   });
 
@@ -69,10 +60,11 @@ async function createBorrower(data, db) {
   return { borrower, tempPassword: defaultPassword };
 }
 
-//Login borrower
+// Login borrower
 async function loginBorrower(username, password, db, jwtSecret) {
   if (!username || !password)
     throw new Error("Username and password are required");
+
   const repo = borrowerRepository(db);
   const borrower = await repo.findByUsername(username);
   if (!borrower) throw new Error("Invalid credentials");
@@ -100,11 +92,11 @@ async function loginBorrower(username, password, db, jwtSecret) {
   };
 }
 
-//forgot password
+// Forgot password
 async function forgotPassword(username, email, db) {
   if (!username || !email) throw new Error("Username and email are required");
-  const repo = borrowerRepository(db);
 
+  const repo = borrowerRepository(db);
   const borrower = await repo.findByUsernameAndEmail(username, email);
   if (!borrower)
     throw new Error("No account found with that username and email");
@@ -117,25 +109,22 @@ async function forgotPassword(username, email, db) {
   };
 }
 
-//Send otp
+// Send OTP
 async function sendOtp(borrowersId, db) {
   if (!borrowersId) throw new Error("borrowersId is required");
 
   const repo = borrowerRepository(db);
-
   const borrower = await repo.findByBorrowersId(borrowersId);
   if (!borrower) throw new Error("Borrower not found");
 
   const otp = Math.floor(100000 + Math.random() * 900000).toString();
-
   otpStore[borrowersId] = { otp, expires: Date.now() + 5 * 60 * 1000 };
 
   console.log(`OTP for ${borrower.email}: ${otp}`);
-
   return { message: "OTP sent to your email address" };
 }
 
-//Verify OTP
+// Verify OTP
 async function verifyOtp(borrowersId, otp) {
   if (!borrowersId || !otp) throw new Error("borrowersId and otp are required");
 
@@ -145,18 +134,16 @@ async function verifyOtp(borrowersId, otp) {
   if (record.otp !== otp) throw new Error("Invalid OTP");
 
   delete otpStore[borrowersId];
-
   return { message: "OTP verified successfully" };
 }
 
-
+// Get borrower by ID
 async function getBorrowerById(borrowersId, db) {
   const repo = borrowerRepository(db);
   const borrower = await repo.findBorrowerById(borrowersId);
   if (!borrower) throw new Error("Borrower not found");
 
   const activeLoan = await repo.findActiveLoanByBorrowerId(borrowersId);
-
   const profilePicUrl = borrower.profilePic?.filePath
     ? `${BACKEND_URL}/${borrower.profilePic.filePath.replace(/\\/g, "/")}`
     : null;
@@ -173,6 +160,27 @@ async function getBorrowerById(borrowersId, db) {
   };
 }
 
+// Find borrower account by username or email
+async function findBorrowerAccount(identifier, db) {
+  if (!identifier) throw new Error("Username or email is required");
+
+  const repo = borrowerRepository(db);
+  const borrower = await repo.findByUsernameOrEmail(identifier);
+
+  if (!borrower) throw new Error("Account not found");
+
+  return {
+    message: "Account found.",
+    borrower: {
+      id: borrower.borrowersId,
+      name: borrower.name,
+      email: borrower.email,
+      username: borrower.username,
+      phoneNumber: borrower.phoneNumber,
+    },
+  };
+}
+
 module.exports = {
   createBorrower,
   loginBorrower,
@@ -180,4 +188,5 @@ module.exports = {
   sendOtp,
   verifyOtp,
   getBorrowerById,
+  findBorrowerAccount,
 };

@@ -7,6 +7,7 @@ const { decryptApplication } = require("../../Services/loanApplicationService");
 const loanRepository = require("../../Repositories/loanRepository");
 
 module.exports = (db) => {
+
   // Get borrower details + latest loan application
   router.get("/:id", authenticateToken, authorizeRole("borrower"), async (req, res) => {
     try {
