@@ -10,7 +10,7 @@ module.exports = (db) => {
   const repo = penaltyEndorsementRepository(db);
   const service = penaltyEndorsementServiceFactory(repo, db);
 
-  router.get("/", authenticateToken, authorizeRole("manager"), async (req, res) => {
+  router.get("/", authenticateToken, authorizeRole("loan officer"), async (req, res) => {
     try {
       const endorsements = await service.getAllEndorsements();
       res.json(endorsements);

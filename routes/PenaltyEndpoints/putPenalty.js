@@ -11,7 +11,7 @@ module.exports = (db) => {
   const service = penaltyEndorsementServiceFactory(repo, db);
 
  // PUT - Approve
-router.put("/:id/approve", authenticateToken, authorizeRole("manager"), async (req, res) => {
+router.put("/:id/approve", authenticateToken, authorizeRole("loan officer"), async (req, res) => {
   try {
     const { id } = req.params;
     const { remarks } = req.body;
@@ -26,7 +26,7 @@ router.put("/:id/approve", authenticateToken, authorizeRole("manager"), async (r
 });
 
 // PUT - Reject
-router.put("/:id/reject", authenticateToken, authorizeRole("manager"), async (req, res) => {
+router.put("/:id/reject", authenticateToken, authorizeRole("loan officer"), async (req, res) => {
   try {
     const { id } = req.params;
     const { remarks } = req.body;
