@@ -6,6 +6,29 @@ const notificationService = require("../../Services/notificationService");
 
 module.exports = (db) => {
 
+  // Borrower notifications
+  router.get("/:borrowersId", async (req, res) => {
+    try {
+      const { borrowersId } = req.params;
+
+      if (!borrowersId) {
+        return res.status(400).json({ error: "borrowersId is required." });
+      }
+
+      const notificationsCollection = db.collection("borrower_notifications");
+
+      const notifications = await notificationsCollection
+        .find({ borrowersId })
+        .sort({ createdAt: -1 })
+        .toArray();
+
+      res.status(200).json({ notifications });
+    } catch (error) {
+      console.error("Error fetching notifications:", error);
+      res.status(500).json({ error: "Failed to fetch notifications." });
+    }
+  });
+
   // Staff notifications by role
   router.get(
     "/:role",
@@ -37,30 +60,7 @@ module.exports = (db) => {
       }
     }
   );
-
-  // Borrower notifications
-  router.get(
-    "/borrower/:borrowersId",
-    authenticateToken,
-    authorizeRole("borrower"), 
-    async (req, res) => {
-      try {
-        const borrowersId = req.params.borrowersId;
-
-        // Borrower can only fetch their own notifications
-        if (req.user.borrowersId !== borrowersId) {
-          return res.status(403).json({ error: "Access denied" });
-        }
-
-        const notifications = await notificationService.getBorrowerNotifications(db, borrowersId);
-        res.json({ notifications });
-
-      } catch (err) {
-        console.error("Error fetching borrower notifications:", err);
-        res.status(500).json({ error: err.message });
-      }
-    }
-  );
-
+  
+  
   return router;
 };

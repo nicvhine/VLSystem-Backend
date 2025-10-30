@@ -164,6 +164,20 @@ async function createReloanApplication(req, loanType, repo, db, uploadedFiles) {
   // --- Insert into repository ---
   await repo.insertLoanApplication(newApplication);
 
+  if (newApplication.borrowersId) {
+    const notification = {
+      borrowersId: newApplication.borrowersId,
+      message: `Your re-loan application (${newApplication.applicationId}) has been submitted successfully.`,
+      read: false,
+      viewed: false,
+      createdAt: new Date(),
+    };
+
+    // Directly insert into MongoDB collection
+    const notificationsCollection = db.collection("borrower_notifications");
+    await notificationsCollection.insertOne(notification);
+  }
+  
   return newApplication;
 }
 

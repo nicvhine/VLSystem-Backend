@@ -16,6 +16,7 @@ function loadRoutes(app, db) {
     const penaltyRoutes = require('./Routes/PenaltyEndpoints')(db);
 
     require('./Routes/ApplicationEndpoints/cleanup');
+    require('./Routes/NotificationEndpoints/triggerNotification');
     // require('./Routes/CollectionEndpoints/statusUpdate');
 
     app.use('/users', userRoutes);
