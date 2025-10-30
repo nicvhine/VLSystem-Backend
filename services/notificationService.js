@@ -1,4 +1,5 @@
 const notificationRepository = require("../Repositories/notificationRepository");
+const { addDays, format } = require("date-fns"); 
 
 async function getLoanOfficerNotifications(db) {
   const repo = notificationRepository(db);
@@ -32,47 +33,10 @@ async function markAllManagerNotificationsRead(db) {
   return await repo.markAllManagerNotificationsRead();
 }
 
-async function getBorrowerNotifications(db, borrowersId) {
+async function getBorrowerNotifications(db) {
   const repo = notificationRepository(db);
-  const now = new Date();
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const threeDaysLater = new Date(today);
-  threeDaysLater.setDate(today.getDate() + 3);
-
-  const dueCollections = await repo.findDueCollections(
-    borrowersId,
-    today,
-    threeDaysLater
-  );
-
-  const existingRefs = await repo.findExistingDueRefs(borrowersId);
-
-  const newDueNotifs = dueCollections
-    .filter((c) => !existingRefs.includes(c.referenceNumber))
-    .map((c) => {
-      const dueDate = new Date(c.dueDate);
-      const diffTime = dueDate.getTime() - today.getTime();
-      const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      return {
-        id: `due-${c.referenceNumber}`,
-        message: `📅 Payment due in ${daysRemaining} day${
-          daysRemaining !== 1 ? "s" : ""
-        } for Collection ${c.collectionNumber}`,
-        referenceNumber: c.referenceNumber,
-        borrowersId: c.borrowersId,
-        date: c.dueDate,
-        read: false,
-        type: "due",
-        createdAt: new Date(),
-      };
-    });
-
-  if (newDueNotifs.length > 0) {
-    await repo.insertBorrowerNotifications(newDueNotifs);
-  }
-
-  return await repo.getBorrowerNotifications(borrowersId);
+  const notifs = await repo.getBorrowerNotifications();
+  return await enrichWithActorProfilePic(db, notifs);
 }
 
 // Enrich notifications with actor profile picture.
@@ -161,6 +125,37 @@ async function markAllRoleRead(db, role, borrowersId) {
   throw new Error("Invalid role");
 }
 
+
+async function scheduleDueNotifications(db, collections) {
+  if (!collections || collections.length === 0) return;
+
+  const notificationsCollection = db.collection("borrower_notifications");
+  const notifications = [];
+
+  collections.forEach((col) => {
+    const daysBefore = [3, 2, 1, 0]; 
+    daysBefore.forEach((days) => {
+      const notifyDate = addDays(col.dueDate, -days);
+      const dayLabel = days === 0 ? "Today" : `${days} day(s) before`;
+
+      notifications.push({
+        borrowersId: col.borrowersId,
+        loanId: col.loanId,
+        collectionRef: col.referenceNumber,
+        message: `Your payment for collection ${col.referenceNumber} is due on ${format(col.dueDate, "yyyy-MM-dd")} (${dayLabel}).`,
+        read: false,
+        viewed: false,
+        createdAt: new Date(),
+        notifyAt: notifyDate,
+      });
+    });
+  });
+
+  if (notifications.length > 0) {
+    await notificationsCollection.insertMany(notifications);
+  }
+}
+
 module.exports = {
   getLoanOfficerNotifications,
   markLoanOfficerNotificationRead,
@@ -171,4 +166,5 @@ module.exports = {
   getBorrowerNotifications,
   markNotificationRead,
   markAllRoleRead,
+  scheduleDueNotifications,
 };
