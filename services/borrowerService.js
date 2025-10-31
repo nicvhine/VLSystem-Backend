@@ -141,7 +141,8 @@ async function verifyOtp(borrowersId, otp) {
 async function getBorrowerById(borrowersId, db) {
   const repo = borrowerRepository(db);
   const borrower = await repo.findBorrowerById(borrowersId);
-  if (!borrower) throw new Error("Borrower not found");
+
+  if (!borrower) return null;
 
   const activeLoan = await repo.findActiveLoanByBorrowerId(borrowersId);
   const profilePicUrl = borrower.profilePic?.filePath
@@ -159,6 +160,7 @@ async function getBorrowerById(borrowersId, db) {
     status: activeLoan ? "Active" : "Inactive",
   };
 }
+
 
 // Find borrower account by username or email
 async function findBorrowerAccount(identifier, db) {
