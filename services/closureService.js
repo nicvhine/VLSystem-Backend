@@ -29,11 +29,10 @@ const ClosureService = (db) => {
 
   const getClosureById = async (endorsementId) => {
     const closure = await repo.getClosureById(endorsementId);
-    if (!closure) throw new Error("Closure not found");
-    return closure;
+    return closure || null;
   };
+  
 
-  // NEW: get closure by loanId
   const getClosureByLoanId = async (loanId) => {
     const closure = await repo.getClosureByLoanId(loanId);
     return closure || null;
