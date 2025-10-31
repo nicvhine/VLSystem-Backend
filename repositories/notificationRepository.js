@@ -1,7 +1,7 @@
 module.exports = (db) => {
     const loanOfficerNotifications = db.collection("loanOfficer_notifications");
     const managerNotifications = db.collection("manager_notifications");
-    const borrowerNotifications = db.collection("notifications");
+  const borrowerNotifications = db.collection("borrower_notifications");
     const collections = db.collection("collections");
   
     return {
