@@ -14,7 +14,7 @@ module.exports = (db) => {
     "/endorse",
     authenticateToken,
     authorizeRole("collector"),
-    express.json(), // parse JSON
+    express.json(), 
     async (req, res) => {
       try {
         const { referenceNumber, reason, penaltyAmount, payableAmount } = req.body;

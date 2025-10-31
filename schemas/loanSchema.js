@@ -7,7 +7,7 @@ const loanSchema = z.object({
     profilePic: z.string().optional(),
     paidAmount: z.number().min(0),
     balance: z.number().min(0),
-    status: z.enum(["Active", "Inactive"]), // expand as needed
+    status: z.enum(["Active", "Inactive"]), 
     dateDisbursed: z.coerce.date(),
     createdAt: z.coerce.date()
 });
