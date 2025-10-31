@@ -8,16 +8,39 @@ const loanRepository = require("../../Repositories/loanRepository");
 
 module.exports = (db) => {
 
-  // Get borrower details + latest loan application
-  router.get("/:id", authenticateToken, authorizeRole("borrower"), async (req, res) => {
-    try {
-      const { id } = req.params;
+    // GET all borrowers
+    router.get("/", authenticateToken, authorizeRole("manager", "loan officer", "head"), async (req, res) => {
+      try {
+        const borrowers = await db
+          .collection("borrowers_account")
+          .find({})
+          .toArray();
+  
+        const sanitizedBorrowers = borrowers.map(b => ({
+          borrowersId: b.borrowersId,
+          name: b.name,
+          email: b.email,
+          phoneNumber: b.phoneNumber,
+          status: b.status
+        }));
+  
+        res.json(sanitizedBorrowers);
+      } catch (error) {
+        console.error("Error fetching borrowers:", error);
+        res.status(500).json({ error: error.message || "Failed to fetch borrowers" });
+      }
+    });
 
-      const borrowerDetails = await getBorrowerById(id, db);
+  // Get borrower details + latest loan application
+  router.get("/:borrowersId", authenticateToken, authorizeRole("borrower", "manager"), async (req, res) => {
+    try {
+      const { borrowersId } = req.params;
+
+      const borrowerDetails = await getBorrowerById(borrowersId, db);
 
       const latestApplicationArr = await db
         .collection("loan_applications")
-        .find({ borrowersId: id })
+        .find({ borrowersId: borrowersId })
         .sort({ createdAt: -1 })
         .limit(1)
         .toArray();
@@ -58,5 +81,43 @@ module.exports = (db) => {
     }
   });
 
+  router.get("/:id/stats", authenticateToken, authorizeRole("borrower", "manager"), async (req, res) => {
+    try {
+      const { id } = req.params;
+  
+      // Fetch total loans
+      const totalLoans = await db.collection("loans").countDocuments({ borrowersId: id });
+  
+      // Fetch total loan applications
+      const totalApplications = await db.collection("loan_applications").countDocuments({ borrowersId: id });
+  
+      // Fetch active loan 
+      const activeLoan = await db.collection("loans").findOne({ borrowersId: id, status: "Active" });
+  
+      // Fetch latest loan
+      const latestLoan = await db
+        .collection("loans")
+        .find({ borrowersId: id })
+        .sort({ createdAt: -1 })
+        .limit(1)
+        .toArray();
+  
+      // Calculate total amount borrowed
+      const allLoans = await db.collection("loans").find({ borrowersId: id }).toArray();
+      const totalBorrowed = allLoans.reduce((sum, l) => sum + (l.amountReleased || 0), 0);
+  
+      res.json({
+        totalLoans,
+        totalApplications,
+        totalBorrowed,
+        hasActiveLoan: !!activeLoan,
+        latestLoan: latestLoan[0] || null,
+      });
+    } catch (error) {
+      console.error("Error fetching borrower stats:", error);
+      res.status(500).json({ error: error.message || "Failed to fetch borrower stats" });
+    }
+  });
+  
   return router;
 };
