@@ -14,7 +14,7 @@ function loadRoutes(app, db) {
     const agentRoutes = require('./Routes/AgentEndpoints')(db);
     const statRoutes = require('./Routes/StatsEndpoints')(db);
     const penaltyRoutes = require('./Routes/PenaltyEndpoints')(db);
-
+    const closureRoutes = require('./Routes/ClosureEndpoints')(db);
     require('./Routes/ApplicationEndpoints/cleanup');
     require('./Routes/NotificationEndpoints/triggerNotification');
     // require('./Routes/CollectionEndpoints/statusUpdate');
@@ -31,6 +31,7 @@ function loadRoutes(app, db) {
     app.use('/agents', agentRoutes);
     app.use('/stat', statRoutes);
     app.use('/penalty', penaltyRoutes);
+    app.use('/closure', closureRoutes);
 
     app.get("/ping", (req, res) => { res.json({ message: "pong from root" }); });
 

@@ -58,4 +58,24 @@ async function generateBorrowerId(borrowersCollection) {
 }
 
 
-module.exports = { padId, generateAgentId, generateApplicationId, generateBorrowerId };
+async function generateClosureEndorsementId(endorsementsCollection) {
+  const lastEndorsement = await endorsementsCollection
+    .find({})
+    .sort({ endorsementId: -1 })
+    .limit(1)
+    .toArray();
+
+  let nextNumber = 1;
+  if (lastEndorsement.length > 0) {
+    const lastId = lastEndorsement[0].endorsementId;
+    if (lastId && typeof lastId === "string") {
+      const numPart = parseInt(lastId.replace("CE", ""), 10);
+      if (!isNaN(numPart)) nextNumber = numPart + 1;
+    }
+  }
+
+  return `CE${padId(nextNumber)}`;
+}
+
+
+module.exports = { padId, generateAgentId, generateApplicationId, generateBorrowerId, generateClosureEndorsementId };
