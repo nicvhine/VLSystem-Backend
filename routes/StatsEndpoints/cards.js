@@ -35,22 +35,35 @@ module.exports = (db) => {
   
   router.get("/loan-type-stats", authenticateToken, authorizeRole("manager", "head"), async (req, res) => {
     try {
-      const collection = db.collection("loans");
+      const loansCollection = db.collection("loans");
   
-      const types = await collection.aggregate([
+      const types = await loansCollection.aggregate([
+        // Join with loan_applications on applicationId
+        {
+          $lookup: {
+            from: "loan_applications",
+            localField: "applicationId",
+            foreignField: "applicationId",
+            as: "application",
+          },
+        },
+        // Flatten the joined array
+        { $unwind: "$application" },
+        // Group by loanType from the joined application
         {
           $group: {
-            _id: "$loanType",
-            count: { $sum: 1 }
-          }
+            _id: "$application.loanType",
+            count: { $sum: 1 },
+          },
         },
+        // Format output
         {
           $project: {
             _id: 0,
             loanType: "$_id",
-            count: 1
-          }
-        }
+            count: 1,
+          },
+        },
       ]).toArray();
   
       res.status(200).json(types);
@@ -58,8 +71,8 @@ module.exports = (db) => {
       console.error("Error fetching loan type stats:", error);
       res.status(500).json({ error: "Failed to fetch loan type statistics" });
     }
-  });  
-
+  });
+  
   router.get("/applicationStatus-stats", authenticateToken, authorizeRole("manager", "head", "loan officer"), async (req, res) => {
     try {
       const collection = db.collection("loan_applications");

@@ -11,7 +11,7 @@ const borrowerSchema = require("../schemas/borrowerSchema");
 // Create borrower
 async function createBorrower(data, db) {
   const repo = borrowerRepository(db);
-  const { name, role, applicationId, assignedCollector } = data;
+  const { name, role, applicationId, assignedCollector, assignedCollectorId } = data;
 
   if (!name || !role || !applicationId)
     throw new Error("Name, role, and applicationId are required");
@@ -49,6 +49,7 @@ async function createBorrower(data, db) {
     password: hashedPassword,
     isFirstLogin: true,
     assignedCollector,
+    assignedCollectorId, 
     email: decrypt(application.appEmail),
     phoneNumber: decrypt(application.appContact),
     profilePic: profilePicUrl,

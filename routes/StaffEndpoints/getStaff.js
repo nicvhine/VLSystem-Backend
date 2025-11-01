@@ -29,15 +29,17 @@ module.exports = (db) => {
 
     // Get collector names
     router.get('/collectors', authenticateToken, async (req, res) => {
-        try {
-          const collectors = await db.collection('users').find({ role: 'collector' }).toArray();
-          const names = collectors.map(c => c.name);
-          res.json(names);
-        } catch (err) {
-          console.error('Failed to fetch collectors:', err);
-          res.status(500).json({ error: 'Failed to load collectors' });
-        }
-      });
-    
+      try {
+        const collectors = await users.find({ role: 'collector' }).toArray();
+        const mappedCollectors = collectors.map(c => ({
+          userId: c.userId || c._id.toString(),
+          name: c.name,
+        }));
+        res.json(mappedCollectors);
+      } catch (err) {
+        console.error('Failed to fetch collectors:', err);
+        res.status(500).json({ error: 'Failed to load collectors' });
+      }
+    });
     return router;
 }
