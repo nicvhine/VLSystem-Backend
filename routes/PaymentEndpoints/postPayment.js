@@ -48,7 +48,7 @@ module.exports = (db) => {
     authorizeRole("borrower"),
     async (req, res) => {
       try {
-        const { borrowersId } = req.user; // logged-in borrower
+        const { borrowersId } = req.user; 
         const result = await paymentService.createPaymongoGcash({ ...req.body, borrowersId }, db);
         res.json(result);
       } catch (err) {
