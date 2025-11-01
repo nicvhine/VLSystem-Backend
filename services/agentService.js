@@ -1,16 +1,15 @@
 const { generateAgentId } = require("../Utils/generator");
 
-// Compute aggregated loan stats for an agent
 const calculateStats = (applications) => {
   const totalLoanAmount = applications.reduce(
-    (sum, app) => sum + (app.appLoanAmount || 0),
+    (sum, app) => sum + Number(app.appLoanAmount || 0), 
     0
   );
 
   return {
     handledLoans: applications.length,
-    totalLoanAmount,
-    totalCommission: totalLoanAmount * 0.05,
+    totalLoanAmount, 
+    totalCommission: totalLoanAmount * 0.05, 
   };
 };
 
@@ -23,22 +22,21 @@ const createAgent = async ({ name, phoneNumber }, agentRepo, db) => {
   if (existing)
     throw new Error("Agent with this name and phone number already exists");
 
-    const agentId = await generateAgentId(db);
+  const agentId = await generateAgentId(db);
 
   const newAgent = {
     agentId,
     name: name.trim(),
     phoneNumber: phoneNumber.trim(),
-    handledLoans: 0,
-    totalLoanAmount: 0,
-    totalCommission: 0,
+    handledLoans: 0,          
+    totalLoanAmount: 0,       
+    totalCommission: 0,      
     createdAt: new Date(),
   };
 
   await agentRepo.insertAgent(newAgent);
   return newAgent;
 };
-
 
 // Get all agents and update their computed stats
 const getAllAgentsWithStats = async (repo) => {
@@ -70,8 +68,15 @@ const getAgentDetails = async (agentId, repo) => {
   return agent;
 };
 
+// Utility for formatting display (UI only)
+const formatCurrencyForDisplay = (amount) => {
+  // Example: shows leading zeros if you want
+  return `₱${Number(amount).toLocaleString("en-PH", { minimumIntegerDigits: 6 })}`;
+};
+
 module.exports = {
   createAgent,
   getAllAgentsWithStats,
   getAgentDetails,
+  formatCurrencyForDisplay,
 };

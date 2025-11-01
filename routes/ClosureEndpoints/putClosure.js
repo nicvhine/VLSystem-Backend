@@ -7,8 +7,6 @@ module.exports = (db) => {
 
   router.put('/:endorsementId', async (req, res) => {
     const { endorsementId } = req.params;
-    console.log("PUT closure called for endorsementId:", endorsementId);
-
     const { status } = req.body;
 
     if (!status || !["Approved", "Rejected"].includes(status)) {
@@ -16,43 +14,56 @@ module.exports = (db) => {
     }
 
     try {
-      // Fetch closure endorsement
       const closure = await service.getClosureById(endorsementId);
       if (!closure) return res.status(404).json({ message: "Closure not found" });
 
-      // Update closure endorsement status
+      // Update closure endorsement
       await db.collection("closure_endorsements").updateOne(
         { endorsementId },
         { $set: { status, updatedAt: new Date() } }
       );
 
       if (status === "Approved") {
-        // Update loan status to "Closed"
-        const loanUpdateResult = await db.collection("loans").findOneAndUpdate(
-          { loanId: closure.loanId },
-          { $set: { status: "Closed", dateClosed: new Date() } },
-          { returnDocument: "after" }
-        );
+        const loanId = closure.loanId?.trim();
+        if (!loanId) {
+          return res.status(400).json({ message: "LoanId not found in closure" });
+        }
 
-        if (!loanUpdateResult.value) {
+        // Fetch the loan
+        const loan = await db.collection("loans").findOne({ loanId });
+        if (!loan) {
           return res.status(404).json({ message: "Loan not found" });
         }
 
-        // Get applicationId from the updated loan
-        const applicationId = loanUpdateResult.value.applicationId;
+        // Update the loan
+        await db.collection("loans").updateOne(
+          { loanId },
+          { $set: { status: "Closed", dateClosed: new Date() } }
+        );
+        console.log("Loan updated:", loanId);
 
-        if (applicationId) {
-          // Update loan_applications status to "Closed"
-          await db.collection("loan_applications").updateOne(
-            { applicationId },
+        // Update loan application(s)
+        if (loan.applicationId) {
+          const loanAppUpdate = await db.collection("loan_applications").updateOne(
+            { applicationId: loan.applicationId },
             { $set: { status: "Closed", dateClosed: new Date() } }
           );
+          console.log(`Loan application updated: ${loanAppUpdate.modifiedCount}`);
+        } else {
+          console.log(`Loan ${loanId} has no applicationId, skipping loan_applications update.`);
         }
+
+        // Update collections
+        const collectionsUpdate = await db.collection("collections").updateMany(
+          { loanId },
+          { $set: { status: "Closed" } }
+        );
+        console.log(`Collections updated: ${collectionsUpdate.modifiedCount}`);
       }
 
       return res.status(200).json({ message: "Status updated successfully" });
     } catch (err) {
-      console.error(err);
+      console.error("Closure update error:", err);
       return res.status(500).json({ message: "Server error" });
     }
   });

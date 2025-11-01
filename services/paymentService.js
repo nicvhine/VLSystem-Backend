@@ -132,7 +132,7 @@ const createPaymongoGcash = async ({ amount, collectionNumber, referenceNumber, 
           currency: "PHP",
           redirect: {
             success: `http://localhost:3000/userPage/borrowerPage/payMongoTools/payment-success/${referenceNumber}`,
-            failed: `http://localhost:3000/borrower/payment-failed/${referenceNumber}`,
+            failed:  `http://localhost:3000/userPage/borrowerPage/payMongoTools/cancel/${referenceNumber}`,
           },
           payment_intent: paymentIntent.id,
           statement_descriptor: `Collection ${collectionNumber}`,

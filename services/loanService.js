@@ -55,7 +55,7 @@ const createLoan = async (applicationId, db) => {
     dueDate.setMonth(dueDate.getMonth() + i + 1);
 
     runningBalance -= monthlyDue;
-    const periodBalance = monthlyDue; // No payment made yet
+    const periodBalance = monthlyDue;
 
     collections.push({
       referenceNumber: `${loanId}-C${i + 1}`,
@@ -70,6 +70,7 @@ const createLoan = async (applicationId, db) => {
       loanBalance: runningBalance > 0 ? runningBalance : 0,
       status: "Unpaid",
       collector: borrower.assignedCollector || "",
+      collectorId: borrower.assignedCollectorId, 
       note: "",
       createdAt: new Date(),
       updatedAt: new Date(),
