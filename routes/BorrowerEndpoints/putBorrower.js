@@ -91,6 +91,37 @@ module.exports = (db) => {
       res.status(500).json({ message: "Server error while updating collector." });
     }
   });
+
+  router.put('/:id', authenticateToken, async (req, res) => {
+    const { id } = req.params;
+    const { name, email, phoneNumber, profilePic } = req.body;
+
+    if (!name && !email && !phoneNumber && !profilePic) {
+      return res.status(400).json({ message: "At least one field must be provided to update." });
+    }
+
+    try {
+      const borrower = await borrowers.findOne({ borrowersId: id });
+      if (!borrower) return res.status(404).json({ message: "Borrower not found." });
+
+      const updateData = {};
+      if (name) updateData.name = name;
+      if (email) updateData.email = email;
+      if (phoneNumber) updateData.phoneNumber = phoneNumber;
+      if (profilePic) updateData.profilePic = profilePic;
+
+      await borrowers.updateOne(
+        { borrowersId: id },
+        { $set: updateData }
+      );
+
+      res.status(200).json({ message: "Borrower details updated successfully.", updatedFields: updateData });
+    } catch (err) {
+      console.error("Error updating borrower details:", err);
+      res.status(500).json({ message: "Server error while updating borrower details." });
+    }
+  });
+
   
   return router;
 };
