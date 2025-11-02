@@ -18,7 +18,7 @@ function loadRoutes(app, db) {
     
     require('./Routes/ApplicationEndpoints/cleanup');
     require('./Routes/NotificationEndpoints/triggerNotification');
-    require('./Routes/CollectionEndpoints/statusUpdate');
+    // require('./Routes/CollectionEndpoints/statusUpdate');
 
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);

@@ -92,7 +92,7 @@ module.exports = (db) => {
   router.get(
     "/:borrowersId",
     authenticateToken,
-    authorizeRole("borrower", "manager"),
+    authorizeRole("borrower", "manager", "head"),
     async (req, res) => {
       try {
         const { borrowersId } = req.params;
@@ -157,7 +157,7 @@ module.exports = (db) => {
   router.get(
     "/:id/stats",
     authenticateToken,
-    authorizeRole("borrower", "manager"),
+    authorizeRole("borrower", "manager", "head"),
     async (req, res) => {
       try {
         const { id } = req.params;
