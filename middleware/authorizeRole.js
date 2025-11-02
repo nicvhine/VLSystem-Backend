@@ -6,7 +6,6 @@ function authorizeRole(...allowedRoles) {
     const normalizedAllowed = allowedRoles.map(r => r.toLowerCase().trim());
 
     if (!userRole || !normalizedAllowed.includes(userRole)) {
-      console.log("DEBUG: Access denied");
       return res.status(403).json({ message: "Access denied: Unauthorized role" });
     }
 
