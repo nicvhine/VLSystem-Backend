@@ -14,25 +14,30 @@ module.exports = (db) => {
   // Create a staff user (head only)
   router.post("/", authenticateToken, authorizeRole("head"), async (req, res) => {
     try {
-      const { user, credentials } = await createUser(req.body, req.user?.username, repo);
+      const { newUser, defaultPassword } = await createUser(req.body, req.user?.username, repo);
+  
       res.status(201).json({
         message: "User created",
         user: {
-          userId: user.userId,
-          name: user.name,
-          email: user.email,
-          phoneNumber: user.phoneNumber,
-          role: user.role,
-          username: user.username,
-          profilePic: user.profilePic || null,
+          userId: newUser.userId,
+          name: newUser.name,
+          email: newUser.email,
+          phoneNumber: newUser.phoneNumber,
+          role: newUser.role,
+          username: newUser.username,
+          profilePic: newUser.profilePic || null,
         },
-        credentials,
+        credentials: {
+          username: newUser.username,
+          tempPassword: defaultPassword,
+        },
       });
     } catch (error) {
       console.error("Error adding user:", error);
       res.status(400).json({ error: error.message });
     }
   });
+  
 
   router.post(
     "/:userId/upload-profile",
