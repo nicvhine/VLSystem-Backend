@@ -49,7 +49,7 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
     // Push payment log with unique payment reference
     paymentLogs.push({
       loanId: col.loanId,
-      referenceNumber: generatePaymentRef(col.referenceNumber), // unique reference
+      referenceNumber: generatePaymentRef(col.referenceNumber), 
       borrowersId: col.borrowersId,
       collector: collectorName || "Cash Collector",
       amount: paymentToApply,
@@ -76,8 +76,17 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
   const loanStatus = determineLoanStatus(updatedLoanCollections);
   await repo.updateLoan(collection.loanId, { status: loanStatus });
 
-  return { message: `${mode} payment applied successfully`, paymentLogs, remainingUnapplied: remainingAmount };
-};
+  const borrowersId = paymentLogs[0]?.borrowersId || collection.borrowersId;
+  const totalPaid = paymentLogs.reduce((sum, log) => sum + (log.amount || 0), 0);
+
+  return { 
+    message: `${mode} payment applied successfully`, 
+    borrowersId,
+    amount: totalPaid,
+    referenceNumber,
+    paymentLogs, 
+    remainingUnapplied: remainingAmount 
+  };};
 
 // Cash payment
 const handleCashPayment = async (payload, db) => applyPayment({ ...payload, mode: "Cash" }, db);

@@ -2,6 +2,7 @@ const express = require("express");
 const paymentService = require("../../Services/paymentService");
 const authenticateToken = require("../../Middleware/auth");
 const authorizeRole = require("../../Middleware/authorizeRole");
+const { addBorrowerPaymentNotification } = require("../../Services/borrowerNotif");
 
 module.exports = (db) => {
   const router = express.Router();
@@ -33,6 +34,17 @@ module.exports = (db) => {
           db
         );
   
+        //  Notify borrower
+        if (result?.borrowersId && result?.amount) {
+          await addBorrowerPaymentNotification(
+            db,
+            result.borrowersId,
+            referenceNumber,
+            result.amount,
+            "Cash"
+          );
+        }
+
         res.json(result);
       } catch (err) {
         console.error("Cash payment error:", err);
@@ -58,7 +70,6 @@ module.exports = (db) => {
     }
   );
 
-  // Handle PayMongo success callback (borrower only)
   router.post(
     "/:referenceNumber/paymongo/success",
     authenticateToken,
