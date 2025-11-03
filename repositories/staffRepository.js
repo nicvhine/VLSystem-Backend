@@ -3,7 +3,10 @@ module.exports = (db) => {
     const logs = db.collection("logs");
   
     return {
-      findByEmail: (email) => users.findOne({ email: email.toLowerCase() }),
+        findByEmail: (email) => users.findOne({ email: email.toLowerCase() }),
+        findByPhoneNumber: (phoneNumber) => users.findOne({ phoneNumber }),
+        // Case-insensitive exact name match
+        findByName: (name) => users.findOne({ name: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }),
       findByUsername: (username) => users.findOne({ username }),
       findMaxUser: () =>
         users

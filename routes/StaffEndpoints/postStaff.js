@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const { upload, processUploadedDocs } = require("../../Utils/uploadConfig");
-const authenticateToken = require("../../Middleware/auth");
-const authorizeRole = require("../../Middleware/authorizeRole");
+const { upload, processUploadedDocs } = require("../../utils/uploadConfig");
+const authenticateToken = require("../../middleware/auth");
+const authorizeRole = require("../../middleware/authorizeRole");
 
-const userRepository = require("../../Repositories/staffRepository");
-const { createUser, loginUser } = require("../../Services/staffService");
+const userRepository = require("../../repositories/staffRepository");
+const { createUser, loginUser } = require("../../services/staffService");
 const sharp = require("sharp");
 
 module.exports = (db) => {
@@ -97,6 +97,34 @@ module.exports = (db) => {
       const existingUser = await repo.findByEmail(email);
       if (existingUser) return res.status(409).json({ error: "Email already in use." });
       res.status(200).json({ message: "Email is available" });
+    } catch (err) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Check if staff phone number is available
+  router.post("/check-phone", async (req, res) => {
+    const { phoneNumber } = req.body;
+    if (!phoneNumber) return res.status(400).json({ error: "Phone number is required" });
+
+    try {
+      const existingUser = await repo.findByPhoneNumber(phoneNumber);
+      if (existingUser) return res.status(409).json({ error: "Phone number already in use." });
+      res.status(200).json({ message: "Phone number is available" });
+    } catch (err) {
+      res.status(500).json({ error: "Server error" });
+    }
+  });
+
+  // Check if staff name is available (case-insensitive exact match)
+  router.post("/check-name", async (req, res) => {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: "Name is required" });
+
+    try {
+      const existingUser = await repo.findByName(name.trim());
+      if (existingUser) return res.status(409).json({ error: "Name already in use." });
+      res.status(200).json({ message: "Name is available" });
     } catch (err) {
       res.status(500).json({ error: "Server error" });
     }

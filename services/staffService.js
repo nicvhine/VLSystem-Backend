@@ -16,8 +16,15 @@ async function createUser({ name, email, phoneNumber, role }, actor, repo) {
   const username = await generateStaffUsername(name, role, repo);
   if (!username) throw new Error("Cannot generate username.");
 
-  const existingUser = await repo.findByEmail(email);
-  if (existingUser) throw new Error("Email already registered.");
+  // Uniqueness checks
+  const emailExists = await repo.findByEmail(email);
+  if (emailExists) throw new Error("Email already registered.");
+
+  const phoneExists = await repo.findByPhoneNumber(phoneNumber);
+  if (phoneExists) throw new Error("Phone number already registered.");
+
+  const nameExists = await repo.findByName(name.trim());
+  if (nameExists) throw new Error("Name already registered.");
 
   const maxUser = await repo.findMaxUser();
   let nextId = 1;
