@@ -3,10 +3,13 @@ module.exports = (db) => {
     const logs = db.collection("logs");
   
     return {
-        findByEmail: (email) => users.findOne({ email: email.toLowerCase() }),
-        findByPhoneNumber: (phoneNumber) => users.findOne({ phoneNumber }),
-        // Case-insensitive exact name match
-        findByName: (name) => users.findOne({ name: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' } }),
+      findById: (userId) => users.findOne({ userId }),
+      findByEmail: (email) => users.findOne({ email: email.toLowerCase() }),
+      findByPhoneNumber: (phoneNumber) => users.findOne({ phoneNumber }),
+      findByName: (name) =>
+        users.findOne({
+          name: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },
+        }),
       findByUsername: (username) => users.findOne({ username }),
       findMaxUser: () =>
         users
@@ -19,7 +22,13 @@ module.exports = (db) => {
       insertUser: (user) => users.insertOne(user),
       updateProfilePic: (userId, profilePic) =>
         users.updateOne({ userId }, { $set: { profilePic } }),
+        updateUserPassword: (userId, hashedPassword, extraFields = {}) =>
+        users.updateOne(
+            { userId },
+            { $set: { password: hashedPassword, ...extraFields } }
+        ),    
       logAction: (log) => logs.insertOne(log),
     };
+    
   };
   

@@ -6,6 +6,7 @@ const authorizeRole = require("../../middleware/authorizeRole");
 const userRepository = require("../../repositories/staffRepository");
 const { createUser, loginUser } = require("../../services/staffService");
 const sharp = require("sharp");
+const bcrypt = require("bcrypt");
 
 module.exports = (db) => {
   const repo = userRepository(db);
@@ -164,6 +165,44 @@ module.exports = (db) => {
       res.status(500).json({ error: "Server error" });
     }
   });
+
+  router.post(
+    "/reset-password/:userId",
+    authenticateToken,
+    authorizeRole("sysad"),
+    async (req, res) => {
+      const { userId } = req.params;
+  
+      try {
+        // Find the user using the repository
+        const user = await repo.findById(userId);
+        if (!user) return res.status(404).json({ message: "User not found" });
+  
+        // Construct default password: lastName + userId
+        const lastName = user.name.trim().split(" ").slice(-1)[0].toLowerCase();
+        const defaultPassword = `${lastName}${userId}`;
+  
+        // Hash the password
+        const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+  
+        // Update user password in the database
+        await repo.updateUserPassword(userId, hashedPassword, { isFirstLogin: true });
+  
+        // Log the action
+        await repo.logAction({
+          timestamp: new Date(),
+          actor: req.user.username,
+          action: "RESET_PASSWORD",
+          details: `Sysad ${req.user.name} reset password for user ${user.username} (${user.userId}).`,
+        });
+  
+        return res.json({ message: "Password reset successfully", defaultPassword });
+      } catch (err) {
+        console.error("Error resetting password:", err);
+        return res.status(500).json({ message: "Internal server error" });
+      }
+    }
+  );
 
   return router;
 };
