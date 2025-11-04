@@ -8,7 +8,7 @@ module.exports = (db) => {
     const users = db.collection('users');
 
     // Get all users (head only)
-    router.get('/', authenticateToken, authorizeRole("head"), async (req, res) => {
+    router.get('/', authenticateToken, authorizeRole("head", "sysad"), async (req, res) => {
         try {
         const allUsers = await users.find().toArray();
         
