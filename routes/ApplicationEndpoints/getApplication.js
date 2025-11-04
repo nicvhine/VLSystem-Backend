@@ -19,6 +19,19 @@ module.exports = (db) => {
     }
   });
 
+  router.get("/active", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
+    try {
+      const allApps = await loanAppService.getAllApplications(repo);
+      const activeApps = allApps.filter((app) => app.status !== "Denied");
+
+      res.status(200).json(activeApps);
+    } catch (error) {
+      console.error("Error in GET /loan-applications/active:", error);
+      res.status(500).json({ error: "Failed to fetch active loan applications." });
+    }
+  });
+
+
   // GET interviews
   router.get("/interviews", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
     try {
@@ -27,6 +40,18 @@ module.exports = (db) => {
     } catch (error) {
       console.error("Error fetching interviews:", error);
       res.status(500).json({ error: "Failed to fetch interviews." });
+    }
+  });
+
+  router.get("/archive", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
+    try {
+      const allApps = await loanAppService.getAllApplications(repo);
+      const deniedApps = allApps.filter((app) => app.status === "Denied");
+
+      res.status(200).json(deniedApps);
+    } catch (error) {
+      console.error("Error in GET /loan-applications/archive:", error);
+      res.status(500).json({ error: "Failed to fetch archived applications." });
     }
   });
 

@@ -19,6 +19,7 @@ module.exports = (db) => {
             phoneNumber: u.phoneNumber,
             role: u.role,
             username: u.username,
+            status: u.status,
         }));
         res.json(mappedUsers);
         } catch (err) {

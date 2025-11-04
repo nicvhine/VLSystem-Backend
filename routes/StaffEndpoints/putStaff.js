@@ -2,11 +2,27 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../../Middleware/auth');
 const bcrypt = require('bcrypt');
+const LogRepository = require('../../repositories/logRepository'); 
 
 module.exports = (db) => {
   const users = db.collection('users');
+  const logRepo = LogRepository(db);
 
-  // Change password
+  async function logAction(user, action, description) {
+    try {
+      await logRepo.insertActivityLog({
+        userId: user.userId,
+        name: user.name,
+        role: user.role,
+        action,
+        description,
+        createdAt: new Date(),
+      });
+    } catch (err) {
+      console.error("Logging failed:", err);
+    }
+  }
+
   router.put('/:id/change-password', authenticateToken, async (req, res) => {
     const { id } = req.params;
     const { newPassword } = req.body;
@@ -31,6 +47,9 @@ module.exports = (db) => {
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       await users.updateOne({ userId: id }, { $set: { password: hashedPassword, isFirstLogin: false } });
 
+      // Log action
+      await logAction(req.user, "Change Password", `${req.user.name} changed password for ${user.name} (${user.userId})`);
+
       res.status(200).json({ message: 'Password updated successfully' });
     } catch (err) {
       console.error('Password update error:', err);
@@ -38,7 +57,6 @@ module.exports = (db) => {
     }
   });
 
-  // Update email
   router.put('/:userId/update-email', authenticateToken, async (req, res) => {
     const { userId } = req.params;
     const { email } = req.body;
@@ -57,6 +75,10 @@ module.exports = (db) => {
       }
 
       await users.updateOne({ userId }, { $set: { email: normalizedEmail } });
+
+      // Log action
+      await logAction(req.user, "Update Email", `${req.user.name} updated email to ${normalizedEmail}`);
+
       res.status(200).json({ message: 'Email updated successfully' });
     } catch (err) {
       console.error('Failed to update email:', err);
@@ -64,7 +86,6 @@ module.exports = (db) => {
     }
   });
 
-  // Update phone number
   router.put('/:userId/update-phoneNumber', authenticateToken, async (req, res) => {
     const { userId } = req.params;
     const { phoneNumber } = req.body;
@@ -81,6 +102,10 @@ module.exports = (db) => {
       }
 
       await users.updateOne({ userId }, { $set: { phoneNumber } });
+
+      // Log action
+      await logAction(req.user, "Update Phone", `${req.user.name} updated phone number to ${phoneNumber}`);
+
       res.status(200).json({ message: 'Phone number updated successfully' });
     } catch (err) {
       console.error('Failed to update phone number:', err);
@@ -88,17 +113,16 @@ module.exports = (db) => {
     }
   });
 
-  // Edit staff details
   router.put('/:userId', authenticateToken, async (req, res) => {
     const { userId } = req.params;
-    const { name, email, phoneNumber, role } = req.body;
+    const { name, email, phoneNumber, role, status} = req.body;
     const { role: jwtRole, userId: jwtUserId } = req.user;
 
     if (userId !== jwtUserId && jwtRole !== 'head') {
       return res.status(403).json({ message: 'Unauthorized: can only edit your own details unless head' });
     }
 
-    if (!name && !email && !phoneNumber && !role) {
+    if (!name && !email && !phoneNumber && !role && !status) {
       return res.status(400).json({ message: 'At least one field must be provided for update.' });
     }
 
@@ -123,11 +147,16 @@ module.exports = (db) => {
       if (email) updateFields.email = email?.trim().toLowerCase();
       if (phoneNumber) updateFields.phoneNumber = phoneNumber;
       if (role && jwtRole === 'head') updateFields.role = role;
+      if (status) updateFields.status = status;
 
       const updateResult = await users.updateOne({ userId }, { $set: updateFields });
       if (updateResult.matchedCount === 0) return res.status(404).json({ message: 'User not found' });
 
       const updatedUser = await users.findOne({ userId });
+
+      // Log action
+      await logAction(req.user, "Edit Staff", `${req.user.name} updated details for ${updatedUser.name} (${updatedUser.userId})`);
+
       res.status(200).json({ message: 'User updated successfully', user: updatedUser });
     } catch (error) {
       console.error('Failed to update user:', error);
