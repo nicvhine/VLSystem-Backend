@@ -125,37 +125,6 @@ async function markAllRoleRead(db, role, borrowersId) {
   throw new Error("Invalid role");
 }
 
-
-async function scheduleDueNotifications(db, collections) {
-  if (!collections || collections.length === 0) return;
-
-  const notificationsCollection = db.collection("borrower_notifications");
-  const notifications = [];
-
-  collections.forEach((col) => {
-    const daysBefore = [3, 2, 1, 0]; 
-    daysBefore.forEach((days) => {
-      const notifyDate = addDays(col.dueDate, -days);
-      const dayLabel = days === 0 ? "Today" : `${days} day(s) before`;
-
-      notifications.push({
-        borrowersId: col.borrowersId,
-        loanId: col.loanId,
-        collectionRef: col.referenceNumber,
-        message: `Your payment for collection ${col.referenceNumber} is due on ${format(col.dueDate, "yyyy-MM-dd")} (${dayLabel}).`,
-        read: false,
-        viewed: false,
-        createdAt: new Date(),
-        notifyAt: notifyDate,
-      });
-    });
-  });
-
-  if (notifications.length > 0) {
-    await notificationsCollection.insertMany(notifications);
-  }
-}
-
 module.exports = {
   getLoanOfficerNotifications,
   markLoanOfficerNotificationRead,
@@ -166,5 +135,4 @@ module.exports = {
   getBorrowerNotifications,
   markNotificationRead,
   markAllRoleRead,
-  scheduleDueNotifications,
 };

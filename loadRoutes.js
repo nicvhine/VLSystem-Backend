@@ -16,6 +16,7 @@ function loadRoutes(app, db) {
     const penaltyRoutes = require('./Routes/PenaltyEndpoints')(db);
     const closureRoutes = require('./Routes/ClosureEndpoints')(db);
     const otpRoutes = require('./Routes/otpEndpoint')(db);
+    const sysadRoutes = require('./Routes/sysadDashboard')(db);
     
     require('./Routes/ApplicationEndpoints/cleanup');
     require('./Routes/NotificationEndpoints/triggerNotification');
@@ -35,6 +36,7 @@ function loadRoutes(app, db) {
     app.use('/penalty', penaltyRoutes);
     app.use('/closure', closureRoutes);
     app.use('/otp', otpRoutes);
+    app.use('/sysad', sysadRoutes);
 
     app.get("/ping", (req, res) => { res.json({ message: "pong from root" }); });
 

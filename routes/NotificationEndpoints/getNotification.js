@@ -54,7 +54,7 @@ module.exports = (db) => {
 
   // Staff notifications by role
   router.get(
-    "/:role",
+    "/staff/:role",
     authenticateToken,
     authorizeRole("manager", "loan officer"), 
     async (req, res) => {

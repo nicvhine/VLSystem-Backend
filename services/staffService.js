@@ -44,6 +44,7 @@ async function createUser({ name, email, phoneNumber, role }, actor, repo) {
     role,
     username,
     password: hashedPassword,
+    status: "Active",
   };
 
   await repo.insertUser(newUser);
