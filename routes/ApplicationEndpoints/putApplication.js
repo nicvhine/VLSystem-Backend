@@ -32,28 +32,10 @@ module.exports = (db) => {
   const loanApplications = db.collection("loan_applications");
   const logRepo = LogRepository(db);
 
-  // Helper: write logs
-  async function logAction(user, action, description) {
-    try {
-      await logRepo.insertActivityLog({
-        userId: user.userId,
-        name: user.name || user.username,
-        role: user.role,
-        action,
-        description,
-        createdAt: new Date(),
-      });
-    } catch (err) {
-      console.error("Logging failed:", err);
-    }
-  }
-
   router.put("/:applicationId", authenticateToken, authorizeRole("manager", "loan officer"), async (req, res) => {
     try {
       const { applicationId } = req.params;
       const updateData = req.body;
-
-      console.log("[PUT] Incoming request for", applicationId, updateData);
 
       // Add disbursed date if status is "Disbursed"
       if (typeof updateData.status === "string" && updateData.status.trim().toLowerCase() === "disbursed") {
@@ -67,16 +49,18 @@ module.exports = (db) => {
       await loanApplications.updateOne({ applicationId }, { $set: updateData });
       const updatedDoc = await loanApplications.findOne({ applicationId });
 
+      await logRepo.insertActivityLog({
+        userId: req.user.userId,
+        name: req.user.name,
+        role: req.user.role,
+        action: "UPDATE_LOAN_APPLICATION",
+        description: `Updated loan application ${applicationId}: ${JSON.stringify(updateData)}`,
+      });
+
       res.status(200).json({
         ...updatedDoc,
         _debug: { statusUpdated: true },
       });
-
-      await logAction(
-        req.user,
-        "Update Loan Application",
-        `${req.user.name} (${req.user.role}) updated loan application ${applicationId} from "${existingApp.status}" to "${updateData.status || existingApp.status}"`
-      );
 
       // Async post-update: update agent stats & notify
       (async () => {
@@ -166,8 +150,14 @@ module.exports = (db) => {
       if (result.matchedCount === 0) {
         return res.status(404).json({ error: "Application not found" });
       }
-
-      await logAction(req.user, "Schedule Interview", `${req.user.name} scheduled interview for ${applicationId} at ${interviewDate} ${interviewTime}`);
+  
+      await logRepo.insertActivityLog({
+        userId: req.user.userId,
+        name: req.user.name,
+        role: req.user.role,
+        action: "SCHEDULE_INTERVIEW",
+        description: `Scheduled interview for loan application ${applicationId} on ${interviewDate} at ${interviewTime}`,
+      });
   
       res.json({ message: "Interview scheduled successfully" });
     } catch (error) {
@@ -206,9 +196,15 @@ module.exports = (db) => {
   
       await loanApplications.updateOne({ applicationId }, { $set: updatedFields });
       const updatedApp = await loanApplications.findOne({ applicationId });
-
-      await logAction(req.user, "Update Principal", `${req.user.name} updated loan ${applicationId} principal to ₱${newPrincipal.toLocaleString()}`);
   
+      await logRepo.insertActivityLog({
+        userId: req.user.userId,
+        name: req.user.name,
+        role: req.user.role,
+        action: "UPDATE_PRINCIPAL",
+        description: `Updated principal for loan application ${applicationId} to ${newPrincipal}`,
+      });
+      
       res.json({ updatedApp });
     } catch (err) {
       console.error(err);

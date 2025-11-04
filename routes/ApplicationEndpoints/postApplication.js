@@ -4,10 +4,12 @@ const { upload, validate2x2, processUploadedDocs } = require("../../Utils/upload
 const { createLoanApplication } = require("../../Services/loanApplicationService");
 const { createReloanApplication } = require("../../Services/reloanApplicationService");
 const loanApplicationRepository = require("../../Repositories/loanApplicationRepository");
+const logRepository = require("../../repositories/logRepository"); 
 
 // Submit a new loan application with file uploads
 module.exports = (db) => {
   const repo = loanApplicationRepository(db);
+  const logRepo = logRepository(db);
 
   router.post(
     "/apply/:loanType",
@@ -23,6 +25,15 @@ module.exports = (db) => {
   
         const application = await createLoanApplication(req, loanType, repo, db, uploadedFiles);
   
+         // Log the action
+        await logRepo.insertActivityLog({
+          userId: req.user.userId,
+          name: req.user.name,
+          role: req.user.role,
+          action: "CREATE_LOAN_APPLICATION",
+          description: `Submitted new ${loanType} loan application for ${application.borrowerName}`,
+        });
+
         res.status(201).json({
           message: "Loan application submitted successfully.",
           application,
@@ -51,6 +62,14 @@ module.exports = (db) => {
         req.body.isReloan = true;
 
         const application = await createReloanApplication(req, loanType, repo, db, uploadedFiles);
+
+        await logRepo.insertActivityLog({
+          userId: req.user.userId,
+          name: req.user.name,
+          role: req.user.role,
+          action: "CREATE_RELOAN_APPLICATION",
+          description: `Submitted re-loan ${loanType} application for ${application.borrowerName}`,
+        });
 
         res.status(201).json({
           message: "Re-loan application submitted successfully.",
