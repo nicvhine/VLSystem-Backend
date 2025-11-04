@@ -27,7 +27,6 @@ module.exports = (db) => {
             { userId },
             { $set: { password: hashedPassword, ...extraFields } }
         ),    
-      logAction: (log) => logs.insertOne(log),
     };
     
   };

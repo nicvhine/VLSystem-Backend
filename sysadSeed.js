@@ -8,28 +8,19 @@ const client = new MongoClient(uri);
 async function seedSysAd() {
   try {
     await client.connect();
-    const db = client.db(process.env.DB_NAME || "VLSystem");
-    const users = db.collection("users");
+    const db = client.db(process.env.DB_NAME || 'VLSystem');
+    const users = db.collection('users');
 
-    // Check if SysAd already exists
-    const existing = await users.findOne({ role: "sysad" });
-    if (existing) {
-      console.log("SysAd account already exists:", existing.username);
-      return;
-    }
+    const hashedPassword = await bcrypt.hash('SysAd@123', 10);
 
-    // Generate password hash
-    const hashedPassword = await bcrypt.hash("SysAd@123", 10);
-
-    // Create SysAd record
     const sysad = {
-      userId: "Sys00001", 
-      name: "System Administrator",
-      username: "sysad",
-      email: "sysad@vlsystem.local",
-      phoneNumber: "0000000000",
+      userId: '00001',
+      name: 'System Administrator',
+      username: 'sysad',
+      email: 'sysad@vlsystem.local',
+      phoneNumber: '0000000000',
       password: hashedPassword,
-      role: "sysad",
+      role: 'sysad',
       isFirstLogin: true,
       active: true,
       createdAt: new Date(),
@@ -38,12 +29,12 @@ async function seedSysAd() {
 
     await users.insertOne(sysad);
 
-    console.log("SysAd account created successfully!");
-    console.log("Username: sysad");
-    console.log("Password: SysAd@123");
-    console.log("User ID: Sys00001");
+    console.log('SysAd account created successfully!');
+    console.log('Username: sysad');
+    console.log('Password: SysAd@123');
+    console.log('User ID: 00001');
   } catch (err) {
-    console.error("Error seeding SysAd:", err);
+    console.error('Error seeding SysAd:', err);
   } finally {
     await client.close();
   }

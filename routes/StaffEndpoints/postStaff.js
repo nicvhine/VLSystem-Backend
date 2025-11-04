@@ -7,26 +7,25 @@ const userRepository = require("../../repositories/staffRepository");
 const { createUser, loginUser } = require("../../services/staffService");
 const sharp = require("sharp");
 const bcrypt = require("bcrypt");
+const logRepository = require("../../repositories/logRepository");
 
 module.exports = (db) => {
   const repo = userRepository(db);
-  const { insertActivityLog } = require("../../repositories/logRepository")(db);
+  const logRepo = logRepository(db);
 
   // Create a staff user (head only)
-  router.post("/", authenticateToken, authorizeRole("head"), async (req, res) => {
+  router.post("/", authenticateToken, authorizeRole("head", "sysad"), async (req, res) => {
     try {
       const { newUser, defaultPassword } = await createUser(req.body, req.user?.username, repo);
   
-      // Insert activity log
-      await insertActivityLog({
-        userId: req.user.userId, 
+      await logRepo.insertActivityLog({
+        userId: req.user.userId,
         name: req.user.name,
         role: req.user.role,
-        action: "Create Staff Account",
-        description: `Head ${req.user.name} created new staff account (${newUser.role}) - ${newUser.userId}`,
-        createdAt: new Date(),
+        action: "CREATE_USER",
+        description: `Created new user: ${newUser.name} (${newUser.role})`,
       });
-  
+
       // Respond with user data including status
       res.status(201).json({
         message: "User created",
@@ -76,6 +75,15 @@ module.exports = (db) => {
         // Save path in DB
         await repo.updateProfilePic(userId, profilePic.filePath);
   
+        // Log the action
+        await logRepo.insertActivityLog({
+          userId: req.user.userId,
+          name: req.user.name,
+          role: req.user.role,
+          action: "UPLOAD_PROFILE_PIC",
+          description: `Uploaded profile picture for userId: ${userId}`,
+        });
+
         res.status(200).json({
           message: "Profile uploaded successfully",
           profilePic,
@@ -96,29 +104,9 @@ module.exports = (db) => {
     try {
       const result = await loginUser(username, password, repo);
   
-      // Log successful login
-      await insertActivityLog({
-        userId: result.user.userId,
-        name: result.user.name,
-        role: result.user.role,
-        action: "Login",
-        description: `${result.user.role} ${result.user.name} logged in.`,
-        createdAt: new Date(),
-      });
-  
       res.json({ message: "Login successful", ...result });
     } catch (err) {
       console.error("Login error:", err.message);
-  
-      // Log failed login attempt
-      await insertActivityLog({
-        userId: "N/A",
-        name: username || "Unknown",
-        role: "N/A",
-        action: "Failed Login Attempt",
-        description: `Failed login attempt for username: ${username}`,
-        createdAt: new Date(),
-      });
   
       res.status(401).json({ error: err.message });
     }
@@ -188,14 +176,14 @@ module.exports = (db) => {
         // Update user password in the database
         await repo.updateUserPassword(userId, hashedPassword, { isFirstLogin: true });
   
-        // Log the action
-        await repo.logAction({
-          timestamp: new Date(),
-          actor: req.user.username,
+        await logRepo.insertActivityLog({
+          userId: req.user.userId,
+          name: req.user.name,
+          role: req.user.role,
           action: "RESET_PASSWORD",
-          details: `Sysad ${req.user.name} reset password for user ${user.username} (${user.userId}).`,
+          description: `Reset password for userId: ${userId} (${user.name})`,
         });
-  
+        
         return res.json({ message: "Password reset successfully", defaultPassword });
       } catch (err) {
         console.error("Error resetting password:", err);

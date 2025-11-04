@@ -9,6 +9,21 @@ module.exports = (db) => {
   const logs = db.collection("activity_logs");
 
   router.get(
+    "/all",
+    authenticateToken,
+    authorizeRole("sysad"),
+    async (req, res) => {
+      try {
+        const allLogs = await logs.find({}).sort({ createdAt: -1 }).toArray();
+        res.json(allLogs);
+      } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: "Failed to fetch logs." });
+      }
+    }
+  );  
+
+  router.get(
     "/overview",
     authenticateToken,
     authorizeRole("sysad"),
