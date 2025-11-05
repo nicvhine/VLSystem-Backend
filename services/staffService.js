@@ -48,12 +48,6 @@ async function createUser({ name, email, phoneNumber, role }, actor, repo) {
   };
 
   await repo.insertUser(newUser);
-  await repo.logAction({
-    timestamp: new Date(),
-    actor,
-    action: "CREATE_USER",
-    details: `Created user ${newUser.username} (${newUser.role}) with ID ${userId}.`,
-  });
 
   return { newUser, defaultPassword };
 }
