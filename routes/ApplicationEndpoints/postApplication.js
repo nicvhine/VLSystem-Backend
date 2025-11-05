@@ -27,11 +27,8 @@ module.exports = (db) => {
   
          // Log the action
         await logRepo.insertActivityLog({
-          userId: req.user.userId,
-          name: req.user.name,
-          role: req.user.role,
           action: "CREATE_LOAN_APPLICATION",
-          description: `Submitted new ${loanType} loan application for ${application.borrowerName}`,
+          description: `New ${loanType} loan application submitted.`,
         });
 
         res.status(201).json({
@@ -62,14 +59,6 @@ module.exports = (db) => {
         req.body.isReloan = true;
 
         const application = await createReloanApplication(req, loanType, repo, db, uploadedFiles);
-
-        await logRepo.insertActivityLog({
-          userId: req.user.userId,
-          name: req.user.name,
-          role: req.user.role,
-          action: "CREATE_RELOAN_APPLICATION",
-          description: `Submitted re-loan ${loanType} application for ${application.borrowerName}`,
-        });
 
         res.status(201).json({
           message: "Re-loan application submitted successfully.",

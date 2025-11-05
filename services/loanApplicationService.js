@@ -2,6 +2,7 @@ const { decrypt } = require("../Utils/crypt");
 const { generateApplicationId } = require("../Utils/generator");
 const { computeApplicationAmounts } = require("../Utils/loanCalculations");
 const { encrypt } = require("../Utils/crypt");
+const { sendSMS } = require("../Services/smsService");
 
 const decryptApplication = (app) => ({
   ...app,
@@ -210,7 +211,18 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   }
 
   await repo.insertLoanApplication(newApplication);
+
+  try {
+    for (const ref of parsedReferences) {
+      const message = `Good day ${ref.name}, ${appName} has listed you as a reference for their loan application at Vistula Lending Corporation. You may be contacted for verification. Thank you!`;
+      await sendSMS(ref.contact, message);
+    }
+  } catch (err) {
+    console.error("Failed to send reference notifications:", err.message);
+  }
+
   return newApplication;
+
 }
 
 

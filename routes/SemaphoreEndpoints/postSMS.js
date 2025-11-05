@@ -1,24 +1,18 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
+const { formatPhoneNumber, sendSMS } = require('../../Services/smsService');
+require('dotenv').config();
 
 const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY;
 
-// Optional: helper to ensure proper formatting
-function formatPhoneNumber(number) {
-  let cleaned = number.toString().replace(/\D/g, '');
-  if (!cleaned.startsWith('63') && cleaned.startsWith('0')) {
-    cleaned = '63' + cleaned.slice(1);
-  }
-  return cleaned;
-}
+module.exports = (db) => {
 
-// POST /api/send-sms
-router.post('/', async (req, res) => {
+  router.post('/login', async (req, res) => {
   const { phoneNumber, code } = req.body;
 
   if (!phoneNumber || !code) {
-    return res.status(400).json({ success: false, error: 'Missing phone number or code' });
+    return res.status(400).json({ success: false, error: 'Missing phone number or code.' });
   }
 
   const to = formatPhoneNumber(phoneNumber);
@@ -32,10 +26,10 @@ router.post('/', async (req, res) => {
       sendername: 'VISTULA'
     });
 
-    console.log(' SMS sent:', response.data);
+    console.log('SMS sent (login):', response.data);
     res.status(200).json({ success: true, data: response.data });
   } catch (error) {
-    console.error('SMS send error:', error.response?.data || error.message);
+    console.error('SMS send error (login):', error.response?.data || error.message);
     res.status(500).json({
       success: false,
       error: error.response?.data || error.message || 'Failed to send SMS'
@@ -43,4 +37,30 @@ router.post('/', async (req, res) => {
   }
 });
 
-module.exports = router;
+router.post("/sendOtp", async (req, res) => {
+  const { phoneNumber, otp } = req.body;
+
+  if (!phoneNumber || !otp) {
+    return res.status(400).json({ error: "Missing phone number or OTP" });
+  }
+
+  try {
+    const response = await axios.post(
+      "https://api.semaphore.co/api/v4/messages",
+      {
+        apikey: process.env.SEMAPHORE_API_KEY,
+        number: phoneNumber,
+        message: `Your OTP is ${otp}. Please verify within 5 minutes.`,
+        sendername: "Gethsemane"
+      }
+    );
+
+    return res.status(200).json({ success: true, data: response.data });
+  } catch (error) {
+    console.error("Semaphore error:", error.response?.data || error.message);
+    return res.status(500).json({ error: "Failed to send SMS" });
+  }
+});
+
+return router;
+}

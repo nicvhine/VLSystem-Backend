@@ -1,9 +1,12 @@
-const express = require('express');
+const express = require("express");
 const router = express.Router();
-const postSMS = require('./postSMS'); 
 
-console.log('SemaphoreEndpoints module loaded');
+const postSms = require("./postSMS");
 
-router.use('/send-sms', postSMS);
+module.exports = (db) => {
+    router.use("/", postSms(db));
+    
+    return router;
+};
 
-module.exports = router;
+
