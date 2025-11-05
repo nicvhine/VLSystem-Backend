@@ -8,7 +8,7 @@ const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY;
 
 module.exports = (db) => {
 
-  router.post('/login', async (req, res) => {
+  router.post('/otpCode', async (req, res) => {
   const { phoneNumber, code } = req.body;
 
   if (!phoneNumber || !code) {
@@ -23,10 +23,10 @@ module.exports = (db) => {
       apikey: SEMAPHORE_API_KEY,
       number: to,
       message,
-      sendername: 'VISTULA'
+      sendername: 'Gethsemane'
     });
 
-    console.log('SMS sent (login):', response.data);
+    console.log('SMS sent:', response.data);
     res.status(200).json({ success: true, data: response.data });
   } catch (error) {
     console.error('SMS send error (login):', error.response?.data || error.message);
