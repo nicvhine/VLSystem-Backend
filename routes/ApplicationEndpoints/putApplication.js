@@ -4,6 +4,8 @@ const authenticateToken = require('../../Middleware/auth');
 const authorizeRole = require('../../Middleware/authorizeRole');
 const { computeLoanFields } = require('../../Services/loanApplicationService');
 const LogRepository = require('../../repositories/logRepository');
+const { sendSMS, formatPhoneNumber } = require('../../Services/smsService');
+const { decrypt } = require("../../Utils/crypt");
 
 const loanOptions = {
   withCollateral: [
@@ -84,7 +86,32 @@ module.exports = (db) => {
             }
           }
 
-          // Notification
+          // If status changed to "Approved", send SMS notification to borrower
+          if (typeof updateData.status === "string" && updateData.status.trim().toLowerCase() === "approved") {
+            try {
+              let phone = existingApp.appContact;
+
+              if (phone && typeof phone === "string") {
+                phone = decrypt(phone);
+              }
+          
+              console.log("[DEBUG] Decrypted borrower phone:", phone);
+
+              if (phone) {
+                const formattedPhone = formatPhoneNumber(phone);
+                const message = `Your loan application ${applicationId} has been approved! Please stay alert for calls or updates regarding the disbursement process.`;
+
+                await sendSMS(formattedPhone, message, "Gethsemane");
+                console.log(`📩 Loan approval SMS sent to ${formattedPhone}`);
+              } else {
+                console.warn(`[SMS SKIPPED] No phone number found for borrower of application ${applicationId}`);
+              }
+            } catch (smsErr) {
+              console.error(`[SMS ERROR] Failed to send approval SMS:`, smsErr.message);
+            }
+          }
+
+          // Notification system between manager and loan officer
           function normalizeRole(role) {
             return String(role || "").trim().toLowerCase().replace(/[_-]+/g, " ");
           }
@@ -126,6 +153,7 @@ module.exports = (db) => {
           console.error("[ASYNC POST-UPDATE ERROR]", asyncErr);
         }
       })();
+
     } catch (error) {
       console.error("Error in PUT /loan-applications/:applicationId:", error);
       res.status(500).json({ error: "Failed to update loan application." });
