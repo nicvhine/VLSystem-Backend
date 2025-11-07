@@ -20,12 +20,12 @@ function computeApplicationAmounts(principal, interestRate, terms, loanType) {
   
     const totalPayable = principal + totalInterestAmount;
   
-    let serviceFee = 0;
-    if (principal >= 10000 && principal <= 20000) {
+  let serviceFee = 0;
+  if (principal >= 6000 && principal <= 20000) {
       serviceFee = principal * 0.05;
-    } else if (principal >= 25000 && principal <= 40000) {
+    } else if (principal >= 25000 && principal <= 45000) {
       serviceFee = 1000;
-    } else if (principal >= 50000 && principal <= 500000) {
+    } else if (principal >= 50000) {
       serviceFee = principal * 0.03;
     }
   

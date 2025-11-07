@@ -17,9 +17,9 @@ function computeApplicationAmounts(principal, interestRate, terms, loanType) {
   const appMonthlyDue = loanType !== "open-term" ? appTotalPayable / (terms || 1) : 0;
 
   let appServiceFee = 0;
-  if (principal >= 10000 && principal <= 20000) appServiceFee = principal * 0.05;
-  else if (principal > 20000 && principal <= 45000) appServiceFee = 1000;
-  else if (principal > 45000) appServiceFee = principal * 0.03;
+  if (principal >= 6000 && principal <= 20000) appServiceFee = principal * 0.05;
+  else if (principal >= 25000 && principal <= 45000) appServiceFee = 1000;
+  else if (principal >= 50000) appServiceFee = principal * 0.03;
 
   const appNetReleased = principal - appServiceFee;
 

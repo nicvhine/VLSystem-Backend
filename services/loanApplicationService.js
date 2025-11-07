@@ -250,10 +250,9 @@ function computeLoanFields(principal, months = 12, interestRate = 0) {
   interestRate = Number(interestRate || 0);
 
   let serviceFee = 0;
-
-  if (principal <= 20000) serviceFee = principal * 0.05;
-  else if (principal <= 45000) serviceFee = 1000;
-  else serviceFee = principal * 0.03;
+  if (principal >= 6000 && principal <= 20000) serviceFee = principal * 0.05;
+  else if (principal >= 25000 && principal <= 45000) serviceFee = 1000;
+  else if (principal >= 50000) serviceFee = principal * 0.03;
 
   const interestAmount = principal * (interestRate / 100);
   const totalInterestAmount = interestAmount * months;
