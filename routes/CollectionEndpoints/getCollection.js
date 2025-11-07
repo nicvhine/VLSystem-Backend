@@ -12,7 +12,7 @@ module.exports = (db) => {
     authenticateToken,
     async (req, res) => {
       try {
-        const { role, borrowersId, name } = req.user;
+        const { role, borrowersId, collectorId, userId} = req.user;
         const collectorQuery = req.query.collector;
 
         let query = {};
@@ -22,7 +22,7 @@ module.exports = (db) => {
           query = collectorQuery ? { collector: collectorQuery } : {};
         } else if (role === 'collector') {
           // Collector can fetch only their own collections
-          query = { collector: name };
+          query = { collectorId: userId  };
         } else if (role === 'borrower') {
           // Borrower can fetch only their own collections
           query = { borrowersId };

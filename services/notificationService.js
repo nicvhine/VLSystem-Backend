@@ -1,5 +1,4 @@
 const notificationRepository = require("../Repositories/notificationRepository");
-const { addDays, format } = require("date-fns"); 
 
 async function getLoanOfficerNotifications(db) {
   const repo = notificationRepository(db);
@@ -33,9 +32,25 @@ async function markAllManagerNotificationsRead(db) {
   return await repo.markAllManagerNotificationsRead();
 }
 
-async function getBorrowerNotifications(db) {
+async function getCollectorNotifications(db) {
   const repo = notificationRepository(db);
-  const notifs = await repo.getBorrowerNotifications();
+  const notifs = await repo.getCollectorNotifications();
+  return await enrichWithActorProfilePic(db, notifs);
+}
+
+async function markCollectorNotificationRead(db, id) {
+  const repo = notificationRepository(db);
+  return await repo.markCollectorNotificationRead(id);
+}
+
+async function markAllCollectorNotificationsRead(db) {
+  const repo = notificationRepository(db);
+  return await repo.markAllCollectorNotificationsRead();
+}
+// NOTE: accept borrowersId here and pass it down
+async function getBorrowerNotifications(db, borrowersId) {
+  const repo = notificationRepository(db);
+  const notifs = await repo.getBorrowerNotifications(borrowersId);
   return await enrichWithActorProfilePic(db, notifs);
 }
 
@@ -105,6 +120,8 @@ async function markNotificationRead(db, role, id, borrowersId) {
     return await repo.markLoanOfficerNotificationRead(id);
   } else if (role === "manager") {
     return await repo.markManagerNotificationRead(id);
+  } else if (role === "collector") {
+    return await repo.markCollectorNotificationRead(id);
   } else if (role === "borrower") {
     if (!borrowersId) throw new Error("Missing borrowersId");
     return await repo.markBorrowerNotificationRead(id, borrowersId);
@@ -118,6 +135,8 @@ async function markAllRoleRead(db, role, borrowersId) {
     return await repo.markAllLoanOfficerNotificationsRead();
   } else if (role === "manager") {
     return await repo.markAllManagerNotificationsRead();
+  } else if (role === "collector") {
+    return await repo.markAllCollectorNotificationsRead();
   } else if (role === "borrower") {
     if (!borrowersId) throw new Error("Missing borrowersId");
     return await repo.markAllBorrowerNotificationsRead(borrowersId);
@@ -127,12 +146,17 @@ async function markAllRoleRead(db, role, borrowersId) {
 
 module.exports = {
   getLoanOfficerNotifications,
-  markLoanOfficerNotificationRead,
-  markAllLoanOfficerNotificationsRead,
   getManagerNotifications,
-  markManagerNotificationRead,
-  markAllManagerNotificationsRead,
+  getCollectorNotifications,
   getBorrowerNotifications,
+
+  markLoanOfficerNotificationRead,
+  markManagerNotificationRead,
+  markCollectorNotificationRead,
+
+  markAllLoanOfficerNotificationsRead,
+  markAllManagerNotificationsRead,
+  markAllCollectorNotificationsRead,
   markNotificationRead,
   markAllRoleRead,
 };

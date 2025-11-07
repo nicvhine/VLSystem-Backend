@@ -3,6 +3,7 @@ const { generateApplicationId } = require("../Utils/generator");
 const { computeApplicationAmounts } = require("../Utils/loanCalculations");
 const { encrypt } = require("../Utils/crypt");
 const { sendSMS } = require("../Services/smsService");
+const notificationRepository = require("../Repositories/notificationRepository"); 
 
 const decryptApplication = (app) => ({
   ...app,
@@ -210,21 +211,38 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     newApplication = { ...newApplication, sourceOfIncome, appOccupation, appEmploymentStatus, appCompanyName };
   }
 
+  // persist application
   await repo.insertLoanApplication(newApplication);
 
+  // create loan officer notification using repository
+  try {
+    const notifRepo = notificationRepository(db);
+    await notifRepo.insertLoanOfficerNotification({
+      type: "new-application",
+      title: "New Loan Application Submitted",
+      message: `${appName} has submitted a new loan application.`,
+      applicationId,
+      actor: "System",
+      read: false,
+      viewed: false,
+      createdAt: new Date(),
+    });
+  } catch (err) {
+    console.error("Failed to create loan officer notification:", err && err.message ? err.message : err);
+  }
+
+  // send SMS to references
   try {
     for (const ref of parsedReferences) {
       const message = `Good day ${ref.name}, ${appName} has listed you as a reference for their loan application at Vistula Lending Corporation. You may be contacted for verification. Thank you!`;
       await sendSMS(ref.contact, message);
     }
   } catch (err) {
-    console.error("Failed to send reference notifications:", err.message);
+    console.error("Failed to send reference notifications:", err && err.message ? err.message : err);
   }
 
   return newApplication;
-
 }
-
 
 function computeLoanFields(principal, months = 12, interestRate = 0) {
   principal = Number(principal || 0);
@@ -262,7 +280,7 @@ module.exports = {
   getStatusStats,
   getLoanTypeStats,
   createLoanApplication,
-  getApplicationById, 
+  getApplicationById,
   decryptApplication,
   computeLoanFields
 };

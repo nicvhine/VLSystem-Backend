@@ -23,10 +23,10 @@ async function sendSMS(to, message, sender = 'Gethsemane') {
       sendername: sender
     });
 
-    console.log(`✅ SMS sent to ${formatted}:`, response.data);
+    console.log(`SMS sent to ${formatted}:`, response.data);
     return response.data;
   } catch (error) {
-    console.error(`❌ Failed to send SMS to ${formatted}:`, error.response?.data || error.message);
+    console.error(`Failed to send SMS to ${formatted}:`, error.response?.data || error.message);
     throw error;
   }
 }

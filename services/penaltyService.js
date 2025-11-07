@@ -1,6 +1,6 @@
 module.exports = (repo, db) => {
   return {
-    async endorsePenalty(collection, formData, userId) {
+    async endorsePenalty(collection, formData, collectorId) {
       const penaltyRate =
         collection.status === "Past Due" ? 0.02 :
         collection.status === "Overdue" ? 0.05 : 0;
@@ -16,6 +16,7 @@ module.exports = (repo, db) => {
         borrowerName: collection.name,
         status: "Pending",
         endorsedBy: collection.collector, 
+        collectorId: collection.collectorId, 
         reason: formData.reason,
         penaltyAmount,
         penaltyRate,
