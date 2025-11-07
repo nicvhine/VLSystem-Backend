@@ -102,7 +102,7 @@ module.exports = (db) => {
                 const message = `Your loan application ${applicationId} has been approved! Please stay alert for calls or updates regarding the disbursement process.`;
 
                 await sendSMS(formattedPhone, message, "Gethsemane");
-                console.log(`📩 Loan approval SMS sent to ${formattedPhone}`);
+                console.log(`Loan approval SMS sent to ${formattedPhone}`);
               } else {
                 console.warn(`[SMS SKIPPED] No phone number found for borrower of application ${applicationId}`);
               }
@@ -110,6 +110,38 @@ module.exports = (db) => {
               console.error(`[SMS ERROR] Failed to send approval SMS:`, smsErr.message);
             }
           }
+
+          // If status changed to "Denied", send SMS notification to borrower
+          if (typeof updateData.status === "string" && updateData.status.trim().toLowerCase() === "denied") {
+            try {
+              let phone = existingApp.appContact;
+              let name = existingApp.appName;
+
+              if (phone && typeof phone === "string") {
+                phone = decrypt(phone);
+              }
+
+              if (name && typeof name === "string") {
+                name = decrypt(name);
+              }
+
+              console.log("[DEBUG] Decrypted borrower phone:", phone);
+              console.log("[DEBUG] Decrypted borrower name:", name);
+
+              if (phone) {
+                const formattedPhone = formatPhoneNumber(phone);
+                const message = `Hello ${name}, your loan application ${applicationId} has been denied. You may reapply online, or contact our office for more details.`;
+
+                await sendSMS(formattedPhone, message, "Gethsemane");
+                console.log(`Loan denial SMS sent to ${formattedPhone}`);
+              } else {
+                console.warn(`[SMS SKIPPED] No phone number found for borrower of application ${applicationId}`);
+              }
+            } catch (smsErr) {
+              console.error(`[SMS ERROR] Failed to send denial SMS:`, smsErr.message);
+            }
+          }
+
 
           // Notification system between manager and loan officer
           function normalizeRole(role) {

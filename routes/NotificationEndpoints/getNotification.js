@@ -56,7 +56,7 @@ module.exports = (db) => {
   router.get(
     "/staff/:role",
     authenticateToken,
-    authorizeRole("manager", "loan officer"), 
+    authorizeRole("manager", "loan officer", "collector"), 
     async (req, res) => {
       try {
         const role = (req.params.role || "").toLowerCase().trim();
@@ -71,6 +71,8 @@ module.exports = (db) => {
           notifications = await notificationService.getLoanOfficerNotifications(db);
         } else if (role === "manager") {
           notifications = await notificationService.getManagerNotifications(db);
+        } else if (role === "collector") {
+          notifications = await notificationService.getCollectorNotifications(db);
         } else {
           return res.status(400).json({ error: "Invalid role" });
         }
