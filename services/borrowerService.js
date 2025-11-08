@@ -1,9 +1,9 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { decrypt } = require("../Utils/crypt");
-const { generateBorrowerId } = require("../Utils/generator");
-const { generateBorrowerUsername } = require("../Utils/username");
-const otpStore = require("../Utils/otpStore");
+const { decrypt } = require("../utils/crypt");
+const { generateBorrowerId } = require("../utils/generator");
+const { generateBorrowerUsername } = require("../utils/username");
+const otpStore = require("../utils/otpStore");
 const { BACKEND_URL } = require("../config");
 const borrowerRepository = require("../Repositories/borrowerRepository");
 const borrowerSchema = require("../schemas/borrowerSchema");

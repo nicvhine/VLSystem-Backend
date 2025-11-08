@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { upload, validate2x2, processUploadedDocs } = require("../../Utils/uploadConfig");
+const { upload, validate2x2, processUploadedDocs } = require("../../utils/uploadConfig");
 const { createLoanApplication } = require("../../Services/loanApplicationService");
 const { createReloanApplication } = require("../../Services/reloanApplicationService");
 const loanApplicationRepository = require("../../Repositories/loanApplicationRepository");

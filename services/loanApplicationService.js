@@ -1,7 +1,7 @@
-const { decrypt } = require("../Utils/crypt");
-const { generateApplicationId } = require("../Utils/generator");
-const { computeApplicationAmounts } = require("../Utils/loanCalculations");
-const { encrypt } = require("../Utils/crypt");
+const { decrypt } = require("../utils/crypt");
+const { generateApplicationId } = require("../utils/generator");
+const { computeApplicationAmounts } = require("../utils/loanCalculations");
+const { encrypt } = require("../utils/crypt");
 const { sendSMS } = require("../Services/smsService");
 const notificationRepository = require("../Repositories/notificationRepository"); 
 

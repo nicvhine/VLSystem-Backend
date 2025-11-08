@@ -1,4 +1,4 @@
-const { padId } = require("../Utils/generator");
+const { padId } = require("../utils/generator");
 const loanRepository = require("../Repositories/loanRepository");
 const { scheduleDueNotifications } = require("../Services/borrowerNotif");
 

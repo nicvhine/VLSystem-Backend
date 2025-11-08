@@ -2,7 +2,7 @@ require('dotenv').config();
 const cron = require('node-cron');
 const { MongoClient } = require('mongodb');
 const { sendSMS, formatPhoneNumber } = require('../../Services/smsService');
-const { decrypt } = require('../../Utils/crypt'); 
+const { decrypt } = require('../../utils/crypt');
 
 const uri = process.env.MONGODB_URI;
 

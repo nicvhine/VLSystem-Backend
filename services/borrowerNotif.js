@@ -2,7 +2,7 @@ require("dotenv").config();
 const { addDays, format } = require("date-fns");
 const notificationRepository = require("../Repositories/notificationRepository");
 const { sendSMS, formatPhoneNumber } = require("../Services/smsService");
-const { decrypt } = require("../Utils/crypt");
+const { decrypt } = require("../utils/crypt");
 
 async function getBorrowerNotifications(db) {
   const repo = notificationRepository(db);

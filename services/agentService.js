@@ -1,4 +1,4 @@
-const { generateAgentId } = require("../Utils/generator");
+const { generateAgentId } = require("../utils/generator");
 
 const calculateStats = (applications) => {
   const totalLoanAmount = applications.reduce(

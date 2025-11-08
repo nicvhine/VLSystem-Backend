@@ -5,7 +5,7 @@ const authorizeRole = require('../../Middleware/authorizeRole');
 const { computeLoanFields } = require('../../Services/loanApplicationService');
 const LogRepository = require('../../repositories/logRepository');
 const { sendSMS, formatPhoneNumber } = require('../../Services/smsService');
-const { decrypt } = require("../../Utils/crypt");
+const { decrypt } = require("../../utils/crypt");
 
 const loanOptions = {
   withCollateral: [
