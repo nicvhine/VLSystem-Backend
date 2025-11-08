@@ -1,4 +1,4 @@
-const {getNextSequence} = require("./Utils/database");
+const {getNextSequence} = require("./utils/database");
 const express = require('express');
 
 // Register API routes and static assets
