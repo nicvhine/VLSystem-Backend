@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
 const { upload, validate2x2, processUploadedDocs } = require("../../utils/uploadConfig");
-const { createLoanApplication } = require("../../Services/loanApplicationService");
-const { createReloanApplication } = require("../../Services/reloanApplicationService");
-const loanApplicationRepository = require("../../Repositories/loanApplicationRepository");
+const { createLoanApplication } = require("../../services/loanApplicationService");
+const { createReloanApplication } = require("../../services/reloanApplicationService");
+const loanApplicationRepository = require("../../repositories/loanApplicationRepository");
 const logRepository = require("../../repositories/logRepository"); 
 
 // Submit a new loan application with file uploads

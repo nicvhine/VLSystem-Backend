@@ -2,8 +2,8 @@ const express = require("express");
 const router = express.Router();
 const authenticateToken = require("../../middleware/auth");
 const authorizeRole = require("../../middleware/authorizeRole");
-const { createAgent } = require("../../Services/agentService");
-const agentRepository = require("../../Repositories/agentRepository");
+const { createAgent } = require("../../services/agentService");
+const agentRepository = require("../../repositories/agentRepository");
 const logRepository = require("../../repositories/logRepository"); 
 
 // Create a new agent (loan officer only)
