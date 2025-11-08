@@ -5,7 +5,7 @@ const { generateBorrowerId } = require("../utils/generator");
 const { generateBorrowerUsername } = require("../utils/username");
 const otpStore = require("../utils/otpStore");
 const { BACKEND_URL } = require("../config");
-const borrowerRepository = require("../Repositories/borrowerRepository");
+const borrowerRepository = require("../repositories/borrowerRepository");
 const borrowerSchema = require("../schemas/borrowerSchema");
 
 // Create borrower

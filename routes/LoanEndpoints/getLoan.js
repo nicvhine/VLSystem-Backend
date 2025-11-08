@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../../Middleware/auth');
-const authorizeRole = require('../../Middleware/authorizeRole');
+const authenticateToken = require('../../middleware/auth');
+const authorizeRole = require('../../middleware/authorizeRole');
 const { decrypt } = require('../../utils/crypt');
 
 module.exports = (db) => {

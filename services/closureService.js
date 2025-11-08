@@ -1,4 +1,4 @@
-const ClosureRepo = require("../Repositories/closureRepository");
+const ClosureRepo = require("../repositories/closureRepository");
 const { generateClosureEndorsementId } = require("../utils/generator");
 
 const ClosureService = (db) => {

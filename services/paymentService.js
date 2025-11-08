@@ -1,4 +1,4 @@
-const paymentRepository = require("../Repositories/paymentRepository");
+const paymentRepository = require("../repositories/paymentRepository");
 const { determineLoanStatus } = require("../utils/collection");
 const axios = require("axios");
 
