@@ -1,6 +1,6 @@
 require("dotenv").config();
 const cron = require("node-cron");
-const { sendSMS, formatPhoneNumber } = require("../../Services/smsService");
+const { sendSMS, formatPhoneNumber } = require("../../services/smsService");
 const { decrypt } = require("../../utils/crypt");
 
 console.log("✅ triggerNotification.js loaded and ready to schedule checks...");

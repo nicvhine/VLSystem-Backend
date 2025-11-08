@@ -1,9 +1,9 @@
 const express = require("express");
-const authenticateToken = require("../../Middleware/auth");
-const authorizeRole = require("../../Middleware/authorizeRole");
-const penaltyEndorsementRepository = require("../../Repositories/penaltyRespository");
-const penaltyEndorsementServiceFactory = require("../../Services/penaltyService");
-const notificationRepository = require("../../Repositories/notificationRepository");
+const authenticateToken = require("../../middleware/auth");
+const authorizeRole = require("../../middleware/authorizeRole");
+const penaltyEndorsementRepository = require("../../repositories/penaltyRespository");
+const penaltyEndorsementServiceFactory = require("../../services/penaltyService");
+const notificationRepository = require("../../repositories/notificationRepository");
 
 const router = express.Router();
 

@@ -1,4 +1,4 @@
-const { createAgent, getAllAgentsWithStats, getAgentDetails } = require('../Services/agentService');
+const { createAgent, getAllAgentsWithStats, getAgentDetails } = require('../services/agentService');
 const { generateAgentId } = require('../utils/generator');
 
 jest.mock('../utils/generator');

@@ -1,10 +1,10 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../../Middleware/auth'); 
-const authorizeRole = require('../../Middleware/authorizeRole');
-const { computeLoanFields } = require('../../Services/loanApplicationService');
+const authenticateToken = require('../../middleware/auth');
+const authorizeRole = require('../../middleware/authorizeRole');
+const { computeLoanFields } = require('../../services/loanApplicationService');
 const LogRepository = require('../../repositories/logRepository');
-const { sendSMS, formatPhoneNumber } = require('../../Services/smsService');
+const { sendSMS, formatPhoneNumber } = require('../../services/smsService');
 const { decrypt } = require("../../utils/crypt");
 
 const loanOptions = {

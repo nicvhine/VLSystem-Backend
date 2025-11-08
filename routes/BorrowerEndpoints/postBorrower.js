@@ -10,9 +10,9 @@ const {
   sendOtp,
   verifyOtp,
   findBorrowerAccount,
-} = require('../../Services/borrowerService');
-const authenticateToken = require('../../Middleware/auth');
-const authorizeRole = require('../../Middleware/authorizeRole');
+} = require('../../services/borrowerService');
+const authenticateToken = require('../../middleware/auth');
+const authorizeRole = require('../../middleware/authorizeRole');
 
 module.exports = (db) => {
   // Create borrower account

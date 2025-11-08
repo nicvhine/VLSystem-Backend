@@ -1,8 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const { createLoan } = require("../../Services/loanService");
-const authenticateToken = require("../../Middleware/auth");
-const authorizeRole = require("../../Middleware/authorizeRole");
+const { createLoan } = require("../../services/loanService");
+const authenticateToken = require("../../middleware/auth");
+const authorizeRole = require("../../middleware/authorizeRole");
 
 module.exports = (db) => {
   router.post("/generate-loan/:applicationId", authenticateToken, authorizeRole("manager"), async (req, res) => {
