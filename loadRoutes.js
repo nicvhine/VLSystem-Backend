@@ -19,7 +19,7 @@ function loadRoutes(app, db) {
     const sysadRoutes = require('./Routes/sysadDashboard')(db);
 
     require('./Routes/ApplicationEndpoints/cleanup');
-    // require('./Routes/CollectionEndpoints/statusUpdate');
+    require('./Routes/CollectionEndpoints/statusUpdate');
     
     const { startNotificationCron } = require("./Routes/NotificationEndpoints/triggerNotification");
     startNotificationCron(db);
