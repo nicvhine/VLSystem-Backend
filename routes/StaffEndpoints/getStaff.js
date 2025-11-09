@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const authenticateToken = require('../../middleware/auth');
 const authorizeRole = require('../../middleware/authorizeRole');
+const { decrypt } = require('../../utils/crypt'); 
 
 // Read staff list and collectors
 module.exports = (db) => {
@@ -15,8 +16,8 @@ module.exports = (db) => {
         const mappedUsers = allUsers.map(u => ({
             userId: u.userId || u._id.toString(),
             name: u.name,
-            email: u.email,
-            phoneNumber: u.phoneNumber,
+            email: decrypt(u.email),
+            phoneNumber: decrypt(u.phoneNumber),
             role: u.role,
             username: u.username,
             status: u.status,
