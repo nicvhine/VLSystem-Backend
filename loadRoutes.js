@@ -1,27 +1,27 @@
-const {getNextSequence} = require("./utils/database");
+const {getNextSequence} = require("./Utils/database");
 const express = require('express');
 
 // Register API routes and static assets
 function loadRoutes(app, db) {
-    const userRoutes = require('./routes/StaffEndpoints')(db);
-    const loanApplicationRoutes = require('./routes/ApplicationEndpoints')(db, getNextSequence);
-    const borrowersRoutes = require('./routes/BorrowerEndpoints')(db);
-    const loanRoutes = require('./routes/LoanEndpoints')(db);
-    const collectionRoutes = require('./routes/CollectionEndpoints')(db);
-    const paymentRoutes = require('./routes/PaymentEndpoints')(db);
-    const notificationRoutes = require('./routes/NotificationEndpoints')(db);
-    const smsRoutes = require('./routes/SemaphoreEndpoints')(db);
-    const agentRoutes = require('./routes/AgentEndpoints')(db);
-    const statRoutes = require('./routes/StatsEndpoints')(db);
-    const penaltyRoutes = require('./routes/PenaltyEndpoints')(db);
-    const closureRoutes = require('./routes/ClosureEndpoints')(db);
-    const otpRoutes = require('./routes/otpEndpoint')(db);
-    const sysadRoutes = require('./routes/sysadDashboard')(db);
+    const userRoutes = require('./Routes/StaffEndpoints')(db);
+    const loanApplicationRoutes = require('./Routes/ApplicationEndpoints')(db, getNextSequence);
+    const borrowersRoutes = require('./Routes/BorrowerEndpoints')(db);
+    const loanRoutes = require('./Routes/LoanEndpoints')(db);
+    const collectionRoutes = require('./Routes/CollectionEndpoints')(db);
+    const paymentRoutes = require('./Routes/PaymentEndpoints')(db);
+    const notificationRoutes = require('./Routes/NotificationEndpoints')(db);
+    const smsRoutes = require('./Routes/SemaphoreEndpoints')(db);
+    const agentRoutes = require('./Routes/AgentEndpoints')(db);
+    const statRoutes = require('./Routes/StatsEndpoints')(db);
+    const penaltyRoutes = require('./Routes/PenaltyEndpoints')(db);
+    const closureRoutes = require('./Routes/ClosureEndpoints')(db);
+    const otpRoutes = require('./Routes/otpEndpoint')(db);
+    const sysadRoutes = require('./Routes/sysadDashboard')(db);
 
-    require('./routes/ApplicationEndpoints/cleanup');
-    // require('./routes/CollectionEndpoints/statusUpdate');
+    require('./Routes/ApplicationEndpoints/cleanup');
+    require('./Routes/CollectionEndpoints/statusUpdate');
     
-    const { startNotificationCron } = require("./routes/NotificationEndpoints/triggerNotification");
+    const { startNotificationCron } = require("./Routes/NotificationEndpoints/triggerNotification");
     startNotificationCron(db);
     
     app.use('/users', userRoutes);
