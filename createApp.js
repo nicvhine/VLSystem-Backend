@@ -3,7 +3,7 @@ const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const { CORS_OPTIONS } = require("./config");
-const {connectToDatabase} = require("./Utils/database");
+const {connectToDatabase} = require("./utils/database");
 const loadCounters = require("./loadCounters");
 const loadRoutes = require("./loadRoutes");
 

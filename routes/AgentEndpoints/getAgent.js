@@ -1,9 +1,9 @@
 const express = require("express");
 const router = express.Router();
-const authenticateToken = require("../../Middleware/auth");
-const authorizeRole = require("../../Middleware/authorizeRole");
-const agentRepository = require("../../Repositories/agentRepository");
-const agentService = require("../../Services/agentService");
+const authenticateToken = require("../../middleware/auth");
+const authorizeRole = require("../../middleware/authorizeRole");
+const agentRepository = require("../../repositories/agentRepository");
+const agentService = require("../../services/agentService");
 
 // Read agent names, list, and details
 module.exports = (db) => {

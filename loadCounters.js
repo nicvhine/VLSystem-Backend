@@ -1,4 +1,4 @@
-const { getMaxNumericId } = require('./Utils/database');
+const { getMaxNumericId } = require('./utils/database');
 
 async function loadCounters(db) {
     const maxUserSeq = await getMaxNumericId(db, 'users', 'userId');

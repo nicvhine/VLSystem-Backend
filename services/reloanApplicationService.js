@@ -1,7 +1,7 @@
 'use strict';
 
-const { decrypt, encrypt } = require("../Utils/crypt");
-const { generateApplicationId } = require("../Utils/generator");
+const { decrypt, encrypt } = require("../utils/crypt");
+const { generateApplicationId } = require("../utils/generator");
 
 /**
  * Computes loan amounts including interest, service fee, monthly dues, and net proceeds.

@@ -1,4 +1,4 @@
-const notificationRepository = require("../Repositories/notificationRepository");
+const notificationRepository = require("../repositories/notificationRepository");
 
 async function getLoanOfficerNotifications(db) {
   const repo = notificationRepository(db);

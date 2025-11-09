@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const bcrypt = require('bcrypt');
 require('dotenv').config();
-const authenticateToken = require('../../Middleware/auth');
+const authenticateToken = require('../../middleware/auth');
 
 module.exports = (db) => {
   const borrowers = db.collection("borrowers_account");

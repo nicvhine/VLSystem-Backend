@@ -1,6 +1,6 @@
-const { padId } = require("../Utils/generator");
-const loanRepository = require("../Repositories/loanRepository");
-const { scheduleDueNotifications } = require("../Services/borrowerNotif");
+const { padId } = require("../utils/generator");
+const loanRepository = require("../repositories/loanRepository");
+const { scheduleDueNotifications } = require("../services/borrowerNotif");
 
 // Create a loan and generate its collection schedule
 const createLoan = async (applicationId, db) => {

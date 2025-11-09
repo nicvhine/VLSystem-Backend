@@ -1,5 +1,5 @@
 const { connect, clear, close, getDb } = require('./testDB');
-const loanService = require('../Services/loanService');
+const loanService = require('../services/loanService');
 const { mockApplication, mockBorrower} = require('./mocks');
 
 let db;

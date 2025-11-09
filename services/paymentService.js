@@ -1,5 +1,5 @@
-const paymentRepository = require("../Repositories/paymentRepository");
-const { determineLoanStatus } = require("../Utils/collection");
+const paymentRepository = require("../repositories/paymentRepository");
+const { determineLoanStatus } = require("../utils/collection");
 const axios = require("axios");
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
