@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
-const authenticateToken = require("../middleware/auth");
-const authorizeRole = require("../middleware/authorizeRole");
+const authenticateToken = require("../Middleware/auth");
+const authorizeRole = require("../Middleware/authorizeRole");
+const { decrypt } = require('../utils/crypt'); 
 
 module.exports = (db) => {
   const users = db.collection("users");
@@ -29,18 +30,22 @@ module.exports = (db) => {
     authorizeRole("sysad"),
     async (req, res) => {
       try {
-        const activeStaff = await users
+        const activeStaffRaw = await users
           .find(
             { status: "Active" },
             { projection: { password: 0 } }
           )
           .toArray();
 
+        // Decrypt email and phoneNumber before returning
+        const activeStaff = activeStaffRaw.map(u => ({
+          ...u,
+          email: u.email ? decrypt(u.email) : null,
+          phoneNumber: u.phoneNumber ? decrypt(u.phoneNumber) : null,
+        }));
+
         const activeBorrowers = await borrowers
-          .find(
-            {}, 
-            { projection: { password: 0 } }
-          )
+          .find({}, { projection: { password: 0 } })
           .toArray();
 
         const recentLogs = await logs
