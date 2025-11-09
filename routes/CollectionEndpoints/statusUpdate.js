@@ -1,7 +1,7 @@
 import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { MongoClient } from 'mongodb';
-import { sendSMS } from '../../Services/smsService.js';
+import { sendSMS } from '../../services/smsService.js';
 
 dotenv.config({ path: '../../.env' });
 
