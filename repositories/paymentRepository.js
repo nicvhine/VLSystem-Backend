@@ -55,6 +55,18 @@ module.exports = (db) => {
 
     async getPaymongoPaymentsByLoan(loanId) {
       return await paymongoPayments.find({ loanId }).sort({ createdAt: -1 }).toArray();
-    }
+    },
+
+    async findLoan(loanId) {
+      return await loans.findOne({ loanId });
+    },
+
+    // Insert new collections (used during recalculation or regeneration)
+    async insertCollections(newCollections) {
+      if (!Array.isArray(newCollections)) {
+        throw new Error("insertCollections expects an array of collection documents");
+      }
+      return await collections.insertMany(newCollections);
+    },
   };
 };
