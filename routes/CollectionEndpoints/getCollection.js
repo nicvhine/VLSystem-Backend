@@ -2,6 +2,7 @@ const express = require('express');
 const authenticateToken = require('../../middleware/auth');
 const authorizeRole = require('../../middleware/authorizeRole');
 const router = express.Router();
+const { decrypt } = require("../../utils/crypt");
 
 module.exports = (db) => {
   const collections = db.collection('collections');
@@ -12,25 +13,28 @@ module.exports = (db) => {
     authenticateToken,
     async (req, res) => {
       try {
-        const { role, borrowersId, collectorId, userId} = req.user;
+        const { role, borrowersId, collectorId, userId } = req.user;
         const collectorQuery = req.query.collector;
 
         let query = {};
 
         if (role === 'head' || role === 'manager') {
-          // Head/Manager can fetch all or filtered by collector
           query = collectorQuery ? { collector: collectorQuery } : {};
         } else if (role === 'collector') {
-          // Collector can fetch only their own collections
-          query = { collectorId: userId  };
+          query = { collectorId: userId };
         } else if (role === 'borrower') {
-          // Borrower can fetch only their own collections
           query = { borrowersId };
         } else {
           return res.status(403).json({ error: 'Unauthorized role' });
         }
 
-        const result = await collections.find(query).sort({ collectionNumber: 1 }).toArray();
+        let result = await collections.find(query).sort({ collectionNumber: 1 }).toArray();
+
+        result = result.map(item => ({
+          ...item,
+          name: item.name ? decrypt(item.name) : item.name,
+        }));
+
         res.json(result);
       } catch (err) {
         console.error("Error loading collections:", err);

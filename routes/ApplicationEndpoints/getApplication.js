@@ -22,8 +22,10 @@ module.exports = (db) => {
   router.get("/active", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
     try {
       const allApps = await loanAppService.getAllApplications(repo);
-      const activeApps = allApps.filter((app) => app.status !== "Denied");
-
+      const activeApps = allApps.filter(
+        app => app.status !== "Denied" && app.status !== "Denied by LO"
+      );
+      
       res.status(200).json(activeApps);
     } catch (error) {
       console.error("Error in GET /loan-applications/active:", error);
@@ -46,7 +48,7 @@ module.exports = (db) => {
   router.get("/archive", authenticateToken, authorizeRole("loan officer", "head", "manager"), async (req, res) => {
     try {
       const allApps = await loanAppService.getAllApplications(repo);
-      const deniedApps = allApps.filter((app) => app.status === "Denied");
+      const deniedApps = allApps.filter((app) => app.status === "Denied" || app.status === "Denied by LO");
 
       res.status(200).json(deniedApps);
     } catch (error) {

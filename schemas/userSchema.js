@@ -5,7 +5,7 @@ const userSchema = z.object({
     name: z.string(),
     email: z.string().email(),
     phoneNumber: z.string(),
-    role: z.string(), // consider z.enum([...]) if roles are fixed
+    role: z.string(),
     username: z.string(),
     password: z.string() // already hashed
 });

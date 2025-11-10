@@ -142,14 +142,12 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
 
   const principal = Number(appLoanAmount);
   const interestRate = Number(appInterest);
-  const terms = Number(appLoanTerms) || 1;
+  const terms = Number(appLoanTerms) || null;
 
   const {
     interestAmount,
     totalInterestAmount,
     totalPayable,
-    appServiceFee,
-    appNetReleased,
     appMonthlyDue,
   } = computeApplicationAmounts(principal, interestRate, terms, loanType);
 
@@ -173,8 +171,6 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     appTotalInterestAmount: totalInterestAmount,
     appTotalPayable: totalPayable,
     appMonthlyDue,
-    appServiceFee,
-    appNetReleased,
     appReferences: parsedReferences.map((r) => ({
       name: encrypt(r.name),
       contact: encrypt(r.contact),
@@ -249,28 +245,19 @@ function computeLoanFields(principal, months = 12, interestRate = 0) {
   months = Number(months || 12);
   interestRate = Number(interestRate || 0);
 
-  let serviceFee = 0;
-
-  if (principal <= 20000) serviceFee = principal * 0.05;
-  else if (principal <= 45000) serviceFee = 1000;
-  else serviceFee = principal * 0.03;
-
   const interestAmount = principal * (interestRate / 100);
   const totalInterestAmount = interestAmount * months;
   const totalPayable = principal + totalInterestAmount;
   const monthlyDue = totalPayable / months;
-  const netReleased = principal - serviceFee;
 
   return {
     appLoanAmount: principal,
     appLoanTerms: months,
     appInterestRate: interestRate,
-    appServiceFee: serviceFee,
     appInterestAmount: interestAmount,
     appTotalInterestAmount: totalInterestAmount,
     appTotalPayable: totalPayable,
     appMonthlyDue: monthlyDue,
-    appNetReleased: netReleased,
   };
 }
 
