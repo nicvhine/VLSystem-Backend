@@ -40,7 +40,7 @@ const createLoan = async (applicationId, db) => {
     loanType: application.loanType,
     dateDisbursed: application.dateDisbursed || new Date(),
     creditScore: 10,
-    appInterestRate: Number(application.appInterestRate) || 0, // store for Open-Term calculations
+    appInterestRate: Number(application.appInterestRate) || 0, 
     createdAt: new Date(),
   };
 
@@ -53,7 +53,7 @@ const createLoan = async (applicationId, db) => {
   if (application.loanType === "Open-Term Loan") {
     // Open-Term: one initial collection
     const interestRate = Number(application.appInterestRate) / 100;
-    const monthlyDue = loan.balance * interestRate;
+    const monthlyDue = loan.balance + loan.balance * interestRate;
 
     const dueDate = new Date(disbursedDate);
     dueDate.setMonth(dueDate.getMonth() + 1);
@@ -72,7 +72,7 @@ const createLoan = async (applicationId, db) => {
       status: "Unpaid",
       collector: borrower.assignedCollector || "",
       collectorId: borrower.assignedCollectorId,
-      note: "Open-term initial collection",
+      collectionNote: "Open-term initial collection",
       createdAt: new Date(),
       updatedAt: new Date(),
     };

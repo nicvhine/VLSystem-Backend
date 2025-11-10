@@ -132,7 +132,7 @@ const handleOpenTermRecalculation = async (db, loan, lastCollection, totalPaid) 
     const nextDueDate = new Date(lastCollection.dueDate);
     nextDueDate.setMonth(nextDueDate.getMonth() + 1);
 
-    const nextMonthlyDue = loan.balance * interestRate;
+    const nextMonthlyDue = loan.balance + loan.balance * interestRate;
 
     const nextCollection = {
       referenceNumber: `${loan.loanId}-C${lastCollection.collectionNumber + 1}`,

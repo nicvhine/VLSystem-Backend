@@ -1,12 +1,17 @@
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
-const { decrypt } = require("../utils/crypt");
+const crypto = require("crypto");
+const { decrypt, encrypt } = require("../utils/crypt");
 const { generateBorrowerId } = require("../utils/generator");
-const { generateBorrowerUsername } = require("../Utils/username");
+const { generateBorrowerUsername } = require("../utils/username");
 const otpStore = require("../Utils/otpStore");
 const { BACKEND_URL } = require("../config");
 const borrowerRepository = require("../Repositories/borrowerRepository");
 const borrowerSchema = require("../schemas/borrowerSchema");
+
+function generateTempPassword(length = 12) {
+  return crypto.randomBytes(length).toString("base64").slice(0, length);
+}
 
 // Create borrower
 async function createBorrower(data, db) {
@@ -22,43 +27,67 @@ async function createBorrower(data, db) {
   const application = await repo.findApplicationById(applicationId);
   if (!application) throw new Error("Application not found");
 
+  // Decrypt and normalize email & phone
+  let decryptedEmail = decrypt(application.appEmail);
+  let decryptedPhone = decrypt(application.appContact);
+  let decryptName = decrypt(name);
+
+  if (!decryptedEmail || !decryptedPhone)
+    throw new Error("Application email or phone is missing");
+
   // Generate unique username and borrower ID
   const username = await generateBorrowerUsername(name, db.collection("borrowers_account"));
   const borrowersId = await generateBorrowerId(db.collection("borrowers_account"));
-
-  // Default password
-  const lastName = name.trim().split(" ").slice(-1)[0].toLowerCase();
-  const birthDate = new Date(application.appDob);
-  const formattedDate = `${birthDate.getFullYear()}${(birthDate.getMonth() + 1)
-    .toString()
-    .padStart(2, "0")}${birthDate.getDate().toString().padStart(2, "0")}`;
-  const defaultPassword = `${lastName}${formattedDate}`;
-  const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+  const tempPassword = generateTempPassword();
+  const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
   const profilePicUrl = application.profilePic
     ? application.profilePic.filePath
       ? application.profilePic.filePath.replace(/\\/g, "/")
       : application.profilePic
     : null;
+  
+  // Remove whitespace, normalize
+  const normalizedEmail = decryptedEmail.trim().toLowerCase();
+  const normalizedPhone = decryptedPhone.trim();
+  const normalizedName = decryptName.trim();
 
-  const borrower = borrowerSchema.parse({
+  borrowerSchema.parse({
     borrowersId,
-    name,
+    name: normalizedName,
     role,
     username,
     password: hashedPassword,
     isFirstLogin: true,
     assignedCollector,
-    assignedCollectorId, 
-    email: decrypt(application.appEmail),
-    phoneNumber: decrypt(application.appContact),
+    assignedCollectorId,
+    email: normalizedEmail, 
+    phoneNumber: normalizedPhone,
     profilePic: profilePicUrl,
   });
 
+  // Build borrower object with encrypted fields
+  const borrower = {
+    borrowersId,
+    name: encrypt(name),
+    role,
+    username,
+    password: hashedPassword,
+    isFirstLogin: true,
+    assignedCollector,
+    assignedCollectorId,
+    email: encrypt(normalizedEmail),
+    phoneNumber: encrypt(normalizedPhone),
+    profilePic: profilePicUrl,
+  };
+
+  // Save borrower to DB
   await repo.insertBorrower(borrower);
+
+  // Update application with borrower info
   await repo.updateApplicationWithBorrower(applicationId, borrowersId, username);
 
-  return { borrower, tempPassword: defaultPassword };
+  return { borrower, tempPassword, email: normalizedEmail };
 }
 
 // Login borrower
@@ -81,7 +110,7 @@ async function loginBorrower(username, password, db, jwtSecret) {
 
   return {
     message: "Login successful",
-    name: borrower.name,
+    name: decrypt(borrower.name),
     username: decrypt(borrower.username),
     email: decrypt(borrower.email),
     role: "borrower",
