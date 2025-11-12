@@ -206,9 +206,9 @@ async function findBorrowerAccount(identifier, db) {
     borrower: {
       id: borrower.borrowersId,
       name: borrower.name,
-      email: borrower.email,
+      email: decrypt(borrower.email),
       username: borrower.username,
-      phoneNumber: borrower.phoneNumber,
+      phoneNumber: decrypt(borrower.phoneNumber),
     },
   };
 }
