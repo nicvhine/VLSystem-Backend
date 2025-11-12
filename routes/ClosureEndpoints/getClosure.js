@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const ClosureService = require("../../Services/closureService");
+const ClosureService = require("../../services/closureService");
 
 module.exports = (db) => {
   const service = ClosureService(db);

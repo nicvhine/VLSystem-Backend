@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const ClosureService = require("../../Services/closureService");
-const NotificationRepository = require("../../Repositories/notificationRepository");
-const { sendSMS } = require("../../Services/smsService");
+const ClosureService = require("../../services/closureService");
+const NotificationRepository = require("../../repositories/notificationRepository");
+const { sendSMS } = require("../../services/smsService");
 
 module.exports = (db) => {
   const service = ClosureService(db);

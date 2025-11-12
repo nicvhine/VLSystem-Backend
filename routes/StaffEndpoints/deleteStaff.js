@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../../Middleware/auth');
-const authorizeRole = require('../../Middleware/authorizeRole');
+const authenticateToken = require('../../middleware/auth');
+const authorizeRole = require('../../middleware/authorizeRole');
 const fs = require('fs');
 const path = require('path');
 
@@ -9,7 +9,7 @@ module.exports = (db) => {
     const users = db.collection('users');
 
     // DELETE USER BY ID
-    router.delete('/:id', authenticateToken, authorizeRole("head"), async (req, res) => {
+    router.delete('/:id', authenticateToken, authorizeRole("head", "sysad"), async (req, res) => {
         try {
             const id = req.params.id;
             const actor = req.user?.username || 'Unknown';

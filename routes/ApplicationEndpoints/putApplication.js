@@ -1,11 +1,11 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../../Middleware/auth'); 
-const authorizeRole = require('../../Middleware/authorizeRole');
-const { computeLoanFields } = require('../../Services/loanApplicationService');
+const authenticateToken = require('../../middleware/auth');
+const authorizeRole = require('../../middleware/authorizeRole');
+const { computeLoanFields } = require('../../services/loanApplicationService');
 const LogRepository = require('../../repositories/logRepository');
-const { sendSMS, formatPhoneNumber } = require('../../Services/smsService');
-const { decrypt } = require("../../Utils/crypt");
+const { sendSMS, formatPhoneNumber } = require('../../services/smsService');
+const { decrypt } = require("../../utils/crypt");
 
 const loanOptions = {
   withCollateral: [
@@ -99,7 +99,7 @@ module.exports = (db) => {
 
               if (phone) {
                 const formattedPhone = formatPhoneNumber(phone);
-                const message = `Your loan application ${applicationId} has been approved! Please stay alert for calls or updates regarding the disbursement process.`;
+                const message = `Your loan application ${applicationId} has been approved! Please stay alert for calls or updates regarding the disbursement process. You can expect disbursement within 3 business days.`;
 
                 await sendSMS(formattedPhone, message, "Gethsemane");
                 console.log(`Loan approval SMS sent to ${formattedPhone}`);
@@ -112,10 +112,11 @@ module.exports = (db) => {
           }
 
           // If status changed to "Denied", send SMS notification to borrower
-          if (typeof updateData.status === "string" && updateData.status.trim().toLowerCase() === "denied") {
+          if (typeof updateData.status === "string" && updateData.status.trim().toLowerCase() === "denied" || updateData.status.trim().toLowerCase() === "denied by lo") {
             try {
               let phone = existingApp.appContact;
               let name = existingApp.appName;
+              const denialReason = updateData.denialReason || updatedDoc.denialReason || "Not specified";
 
               if (phone && typeof phone === "string") {
                 phone = decrypt(phone);
@@ -130,7 +131,7 @@ module.exports = (db) => {
 
               if (phone) {
                 const formattedPhone = formatPhoneNumber(phone);
-                const message = `Hello ${name}, your loan application ${applicationId} has been denied. You may reapply online, or contact our office for more details.`;
+                const message = `Hello ${name}, your loan application ${applicationId} has been denied due to: ${denialReason}. You may reapply online, or contact our office for more details.`;
 
                 await sendSMS(formattedPhone, message, "Gethsemane");
                 console.log(`Loan denial SMS sent to ${formattedPhone}`);
@@ -271,6 +272,42 @@ module.exports = (db) => {
       res.status(500).json({ error: "Failed to update principal" });
     }
   });
+
+// Save Service Fee & Net Released before printing
+router.put("/:applicationId/release", authenticateToken, authorizeRole("manager", "loan officer"), async (req, res) => {
+  try {
+    const { applicationId } = req.params;
+    const { serviceFee, netReleased } = req.body;
+
+    if (serviceFee == null || netReleased == null) {
+      return res.status(400).json({ error: "serviceFee and netReleased are required" });
+    }
+
+    const existingApp = await loanApplications.findOne({ applicationId });
+    if (!existingApp) return res.status(404).json({ error: "Loan application not found." });
+
+    await loanApplications.updateOne(
+      { applicationId },
+      { $set: { appServiceFee: Number(serviceFee), appNetReleased: Number(netReleased) } }
+    );
+
+    const updatedApp = await loanApplications.findOne({ applicationId });
+
+    // Log activity
+    await logRepo.insertActivityLog({
+      userId: req.user.userId,
+      name: req.user.name,
+      role: req.user.role,
+      action: "UPDATE_RELEASE",
+      description: `Updated service fee (${serviceFee}) and net released (${netReleased}) for loan application ${applicationId}`,
+    });
+
+    res.status(200).json({ message: "Release data saved successfully", updatedApp });
+  } catch (err) {
+    console.error("Error in PUT /loan-applications/:applicationId/release:", err);
+    res.status(500).json({ error: "Failed to save release data" });
+  }
+});
 
   return router;
 };

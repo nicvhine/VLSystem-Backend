@@ -1,9 +1,9 @@
-const { decrypt } = require("../Utils/crypt");
-const { generateApplicationId } = require("../Utils/generator");
-const { computeApplicationAmounts } = require("../Utils/loanCalculations");
-const { encrypt } = require("../Utils/crypt");
-const { sendSMS } = require("../Services/smsService");
-const notificationRepository = require("../Repositories/notificationRepository"); 
+const { decrypt } = require("../utils/crypt");
+const { generateApplicationId } = require("../utils/generator");
+const { computeApplicationAmounts } = require("../utils/loanCalculations");
+const { encrypt } = require("../utils/crypt");
+const { sendSMS } = require("../services/smsService");
+const notificationRepository = require("../repositories/notificationRepository");
 
 const decryptApplication = (app) => ({
   ...app,
@@ -142,14 +142,12 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
 
   const principal = Number(appLoanAmount);
   const interestRate = Number(appInterest);
-  const terms = Number(appLoanTerms) || 1;
+  const terms = Number(appLoanTerms) || null;
 
   const {
     interestAmount,
     totalInterestAmount,
     totalPayable,
-    appServiceFee,
-    appNetReleased,
     appMonthlyDue,
   } = computeApplicationAmounts(principal, interestRate, terms, loanType);
 
@@ -173,8 +171,6 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     appTotalInterestAmount: totalInterestAmount,
     appTotalPayable: totalPayable,
     appMonthlyDue,
-    appServiceFee,
-    appNetReleased,
     appReferences: parsedReferences.map((r) => ({
       name: encrypt(r.name),
       contact: encrypt(r.contact),
@@ -249,27 +245,19 @@ function computeLoanFields(principal, months = 12, interestRate = 0) {
   months = Number(months || 12);
   interestRate = Number(interestRate || 0);
 
-  let serviceFee = 0;
-  if (principal >= 6000 && principal <= 20000) serviceFee = principal * 0.05;
-  else if (principal >= 25000 && principal <= 45000) serviceFee = 1000;
-  else if (principal >= 50000) serviceFee = principal * 0.03;
-
   const interestAmount = principal * (interestRate / 100);
   const totalInterestAmount = interestAmount * months;
   const totalPayable = principal + totalInterestAmount;
   const monthlyDue = totalPayable / months;
-  const netReleased = principal - serviceFee;
 
   return {
     appLoanAmount: principal,
     appLoanTerms: months,
     appInterestRate: interestRate,
-    appServiceFee: serviceFee,
     appInterestAmount: interestAmount,
     appTotalInterestAmount: totalInterestAmount,
     appTotalPayable: totalPayable,
     appMonthlyDue: monthlyDue,
-    appNetReleased: netReleased,
   };
 }
 

@@ -1,5 +1,5 @@
 const { connect, clear, close, getDb } = require('./testDB');
-const borrowerService = require('../Services/borrowerService');
+const borrowerService = require('../services/borrowerService');
 const bcrypt = require('bcrypt');
 const borrowerSchema = require("../schemas/borrowerSchema");
 const {mockApplication} = require("./mocks");

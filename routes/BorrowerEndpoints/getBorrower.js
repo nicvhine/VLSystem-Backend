@@ -1,10 +1,11 @@
 const express = require("express");
 const router = express.Router();
-const authenticateToken = require("../../Middleware/auth");
-const authorizeRole = require("../../Middleware/authorizeRole");
-const { getBorrowerById } = require("../../Services/borrowerService");
-const { decryptApplication } = require("../../Services/loanApplicationService");
-const loanRepository = require("../../Repositories/loanRepository");
+const authenticateToken = require("../../middleware/auth");
+const authorizeRole = require("../../middleware/authorizeRole");
+const { getBorrowerById } = require("../../services/borrowerService");
+const { decryptApplication } = require("../../services/loanApplicationService");
+const loanRepository = require("../../repositories/loanRepository");
+const { decrypt } = require("../../utils/crypt");
 
 module.exports = (db) => {
   // GET all borrowers
@@ -18,11 +19,11 @@ module.exports = (db) => {
 
         const sanitizedBorrowers = borrowers.map((b) => ({
           borrowersId: b.borrowersId,
-          name: b.name,
-          email: b.email,
-          phoneNumber: b.phoneNumber,
+          name: decrypt(b.name),
+          email: decrypt(b.email),
+          phoneNumber: decrypt(b.phoneNumber),
           status: b.status,
-        }));
+        }));        
 
         res.json(sanitizedBorrowers);
       } catch (error) {

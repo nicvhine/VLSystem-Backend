@@ -4,9 +4,10 @@ const { upload, processUploadedDocs } = require("../../utils/uploadConfig");
 const authenticateToken = require("../../middleware/auth");
 const authorizeRole = require("../../middleware/authorizeRole");
 const userRepository = require("../../repositories/staffRepository");
-const { createUser, loginUser } = require("../../Services/staffService");
+const { createUser, loginUser } = require("../../services/staffService");
 const sharp = require("sharp");
 const bcrypt = require("bcrypt");
+const { decrypt } = require('../../utils/crypt'); 
 const logRepository = require("../../repositories/logRepository");
 
 module.exports = (db) => {
@@ -16,7 +17,7 @@ module.exports = (db) => {
   // Create a staff user (head only)
   router.post("/", authenticateToken, authorizeRole("head", "sysad"), async (req, res) => {
     try {
-      const { newUser, defaultPassword } = await createUser(req.body, req.user?.username, repo);
+      const { newUser, tempPassword } = await createUser(req.body, req.user?.username, repo);
   
       await logRepo.insertActivityLog({
         userId: req.user.userId,
@@ -26,14 +27,17 @@ module.exports = (db) => {
         description: `Created new user: ${newUser.name} (${newUser.role})`,
       });
 
+      const decryptedEmail = decrypt(newUser.email);
+      const decryptedPhone = decrypt(newUser.phoneNumber);
+
       // Respond with user data including status
       res.status(201).json({
         message: "User created",
         user: {
           userId: newUser.userId,
           name: newUser.name,
-          email: newUser.email,
-          phoneNumber: newUser.phoneNumber,
+          email: decryptedEmail,         
+          phoneNumber: decryptedPhone,  
           role: newUser.role,
           username: newUser.username,
           profilePic: newUser.profilePic || null,
@@ -41,7 +45,7 @@ module.exports = (db) => {
         },
         credentials: {
           username: newUser.username,
-          tempPassword: defaultPassword,
+          tempPassword: tempPassword,
         },
       });
     } catch (error) {

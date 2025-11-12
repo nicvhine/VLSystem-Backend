@@ -17,6 +17,11 @@ function computeApplicationAmounts(principal, interestRate, terms, loanType) {
       totalInterestAmount = interestAmount * terms;
       appMonthlyDue = (principal + totalInterestAmount) / terms;
     }
+
+    if (loanType === "open-term") {
+      interestAmount = principal * (interestRate / 100);
+      appMonthlyDue = (principal + totalInterestAmount) / terms;
+    }
   
     const totalPayable = principal + totalInterestAmount;
   
