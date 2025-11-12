@@ -60,6 +60,11 @@ module.exports = (db) => {
 
         const application = await createReloanApplication(req, loanType, repo, db, uploadedFiles);
 
+        await logRepo.insertActivityLog({
+          action: "CREATE_LOAN_APPLICATION",
+          description: `New ${loanType} loan application submitted.`,
+        });
+
         res.status(201).json({
           message: "Re-loan application submitted successfully.",
           application,

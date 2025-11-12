@@ -15,12 +15,14 @@ module.exports = (db) => {
     try {
       const newAgent = await createAgent(req.body, repo, db);
 
+      const creatorName = req.user?.name || "Unknown";
+
       await logRepo.insertActivityLog({
         userId: req.user.userId,
         name: req.user.name,
         role: req.user.role,
         action: "CREATE_AGENT",
-        description: `Created new agent: ${newAgent.name} (${newAgent.role})`,
+        description: `${creatorName} added a new agent: ${newAgent.name}`,
       });
       
       res.status(201).json({ message: "Agent added successfully", agent: newAgent });
