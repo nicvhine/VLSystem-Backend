@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authenticateToken = require('../../middleware/auth');
-
+const { decrypt } = require("../../utils/crypt");
 module.exports = (db) => {
   const loans = db.collection('loans');
 
@@ -22,7 +21,7 @@ module.exports = (db) => {
         const loanData = releasedLoans.find((r) => r._id === b.borrowersId);
         return {
           borrowersId: b.borrowersId,
-          name: b.name,
+          name: decrypt(b.name),
           email: b.email,
           phoneNumber: b.phoneNumber,
           totalBorrowedAmount: loanData ? loanData.totalLoanAmount : 0,

@@ -2,6 +2,7 @@ const paymentRepository = require("../repositories/paymentRepository");
 const { determineLoanStatus } = require("../utils/collection");
 const { scheduleDueNotifications } = require("./borrowerNotif");
 const axios = require("axios");
+const { decrypt } = require("../utils/crypt"); 
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
 
@@ -12,7 +13,6 @@ const generatePaymentRef = (collectionRef) => {
   return `${collectionRef}-P-${timestamp}-${random}`;
 };
 
-// 🔹 Unified payment handler (Cash / GCash)
 const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db) => {
   if (!amount || isNaN(amount) || amount <= 0) throw new Error("Invalid payment amount");
 
@@ -72,26 +72,20 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
 
   const totalApplied = amount - remainingAmount;
 
-  // 🔹 Update loan balance
   await repo.incrementLoan(collection.loanId, { paidAmount: totalApplied, balance: -totalApplied });
 
-  // 🔹 Insert payment logs
   if (paymentLogs.length > 0) await repo.insertPayments(paymentLogs);
 
-  // Fetch updated loan
   const updatedLoan = await repo.findLoan(collection.loanId);
 
-  // 🔹 Handle Open-Term logic
   if (updatedLoan.loanType === "Open-Term Loan") {
     await handleOpenTermRecalculation(db, updatedLoan, collection, totalApplied);
   }
 
-  // 🔹 Update loan status
   const updatedLoanCollections = await repo.findLoanCollections(collection.loanId);
   const loanStatus = determineLoanStatus(updatedLoanCollections);
   await repo.updateLoan(collection.loanId, { status: loanStatus });
 
-  // 🔹 If balance is fully paid
   if (updatedLoan.balance <= 0) {
     await repo.updateLoan(updatedLoan.loanId, { status: "Completed" });
   }
@@ -109,21 +103,17 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
   };
 };
 
-// 🔁 Recalculate & generate next collection for Open-Term Loan
 const handleOpenTermRecalculation = async (db, loan, lastCollection, totalPaid) => {
   const repo = require("../repositories/paymentRepository")(db);
 
-  // 1️⃣ Fetch the loan application
   const loanApp = await db.collection("loan_applications").findOne({ applicationId: loan.applicationId });
   if (!loanApp) throw new Error("Loan application not found");
 
   const interestRate = Number(loanApp.appInterestRate || 0) / 100;
 
-  // 2️⃣ Compute interest & principal
   const interestDue = loan.balance * interestRate;
   const principalPayment = totalPaid > interestDue ? totalPaid - interestDue : 0;
 
-  // 3️⃣ Update remaining balance
   loan.balance = Math.max(loan.balance - principalPayment, 0);
   await repo.updateLoan(loan.loanId, { balance: loan.balance });
 
@@ -163,10 +153,10 @@ const handleOpenTermRecalculation = async (db, loan, lastCollection, totalPaid) 
 
 
 
-// 🔹 Cash payment
+// Cash payment
 const handleCashPayment = async (payload, db) => applyPayment({ ...payload, mode: "Cash" }, db);
 
-// 🔹 Handle PayMongo GCash success callback
+// Handle PayMongo  success callback
 const handlePaymongoSuccess = async (referenceNumber, db) => {
   const repo = paymentRepository(db);
   const paymongoPayment = await repo.findPaymongoPayment(referenceNumber);
@@ -175,14 +165,42 @@ const handlePaymongoSuccess = async (referenceNumber, db) => {
   const now = new Date();
   await repo.updatePaymongoPayment(referenceNumber, { status: "success", paidAt: now });
 
-  return applyPayment({
+  // Apply the payment to collections/loan
+  const result = await applyPayment({
     referenceNumber,
     amount: paymongoPayment.amount,
-    mode: "GCash",
+    mode: "Paymongo",
   }, db);
+
+  // Fetch the borrower's assigned collector and name
+  const borrower = await db.collection("borrowers_account").findOne(
+    { borrowersId: paymongoPayment.borrowersId },
+    { projection: { assignedCollectorId: 1, name: 1 } }
+  );
+
+  if (borrower?.assignedCollectorId) {
+    const decryptedName = borrower.name ? decrypt(borrower.name) : "Unknown";
+    const notifRepo = require("../repositories/notificationRepository")(db);
+
+    await notifRepo.insertCollectorNotification({
+      type: "paymongo-payment-received",
+      title: "PayMongo Payment Received",
+      message: `Payment of ${paymongoPayment.amount} via PayMongo for collection ${referenceNumber} has been received from ${decryptedName}.`,
+      referenceNumber,
+      actor: decryptedName,
+      collectorId: borrower.assignedCollectorId,
+      read: false,
+      viewed: false,
+      createdAt: now,
+    });
+  }
+
+  return result;
 };
 
-// 🔹 Create PayMongo GCash intent
+
+
+// Create PayMongo GCash intent
 const createPaymongoGcash = async ({ amount, collectionNumber, referenceNumber, borrowersId }, db) => {
   if (!referenceNumber || !borrowersId || !amount || amount <= 0)
     throw new Error("Invalid request payload");
@@ -272,10 +290,62 @@ const getBorrowerPayments = async (borrowersId, db) => {
   }));
 };
 
+const getPaymentsByBorrowers = async (borrowerIds, db) => {
+  if (!Array.isArray(borrowerIds) || borrowerIds.length === 0) return [];
+
+  const repo = paymentRepository(db);
+  const payments = await repo.getPaymongoPaymentsByBorrowers(borrowerIds); 
+
+  return payments.map((p) => ({
+    referenceNumber: p.referenceNumber,
+    amount: p.amount || 0,
+    datePaid: p.datePaid || null,
+    mode: p.mode,
+    loanId: p.loanId,
+    borrowersId: p.borrowersId,
+    paidToCollection: p.paidToCollection,
+  }));
+};
+
+const getPaymongoPaymentsWithNames = async (borrowerIds, db) => {
+  if (!Array.isArray(borrowerIds) || borrowerIds.length === 0) return [];
+
+  // Fetch only Paymongo payments for the borrowers
+  const payments = await db
+    .collection("payments")
+    .find({ borrowersId: { $in: borrowerIds }, mode: "Paymongo" })
+    .sort({ createdAt: -1 })
+    .toArray();
+
+  // Fetch borrower names
+  const borrowers = await db
+    .collection("borrowers_account")
+    .find({ borrowersId: { $in: borrowerIds } })
+    .project({ borrowersId: 1, name: 1 })
+    .toArray();
+
+  // Map borrowersId -> name
+  const borrowerMap = borrowers.reduce((acc, b) => {
+    acc[b.borrowersId] = b.name;
+    return acc;
+  }, {});
+
+  // Attach decrypted name to payments
+  return payments.map(p => ({
+    ...p,
+    name: borrowerMap[p.borrowersId] ? decrypt(borrowerMap[p.borrowersId]) : "Unknown",
+  }));
+};
+
+
+
+
 module.exports = {
   handleCashPayment,
   createPaymongoGcash,
   handlePaymongoSuccess,
   getBorrowerPayments,
   getLoanLedger,
+  getPaymentsByBorrowers,
+  getPaymongoPaymentsWithNames
 };

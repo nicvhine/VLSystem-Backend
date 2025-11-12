@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 require('dotenv').config();
+const logRepository = require("../../repositories/logRepository"); 
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const {
@@ -15,10 +16,23 @@ const authenticateToken = require('../../middleware/auth');
 const authorizeRole = require('../../middleware/authorizeRole');
 
 module.exports = (db) => {
+  const logRepo = logRepository(db); 
+  
   // Create borrower account
   router.post("/", authenticateToken, authorizeRole("manager"), async (req, res) => {
     try {
       const newBorrower = await createBorrower(req.body, db);
+
+      const creatorName = req.user.name;
+
+      await logRepo.insertActivityLog({
+        userId: req.user.userId,
+        name: req.user.name,
+        role: req.user.role,
+        action: "CREATE_BORROWER",
+        description: `${creatorName} added a new borrower account: ${newBorrower.name}`,
+      });
+
       res.status(201).json(newBorrower);
     } catch (err) {
       console.error("Error adding borrower:", err);

@@ -12,31 +12,44 @@ module.exports = (db) => {
     authorizeRole("manager", "loan officer", "borrower", "head", "collector"),
     async (req, res) => {
       try {
-        const { role, borrowersId: jwtBorrowersId, username } = req.user;
+        const { role, borrowersId: jwtBorrowersId, userId, username } = req.user;
         const loanId = req.params.loanId;
-  
+
+        // Fetch full ledger
         const ledger = await paymentService.getLoanLedger(loanId, db);
-  
-        // Restrict access for borrower or collector
+
+        if (!ledger || ledger.length === 0) {
+          return res.status(404).json({ success: false, message: "No payments found" });
+        }
+
+        // Restrict access
         if (role === "borrower") {
-          // Only allow borrower if the ledger belongs to them
+          // Borrower can only see their own ledger
           if (!ledger.every(p => p.borrowersId === jwtBorrowersId)) {
             return res.status(403).json({ success: false, message: "Access denied" });
           }
         } else if (role === "collector") {
-          // Only allow collector if they are the assigned collector
-          if (!ledger.every(p => p.collector === username)) {
+          // Collector can only see payments for assigned borrowers
+          const assignedBorrowers = await db
+            .collection("borrowers_account")
+            .find({ assignedCollectorId: userId })
+            .project({ borrowersId: 1 })
+            .toArray();
+          const borrowerIds = assignedBorrowers.map(b => b.borrowersId);
+
+          if (!ledger.every(p => borrowerIds.includes(p.borrowersId))) {
             return res.status(403).json({ success: false, message: "Access denied" });
           }
         }
-  
+
         res.json({ success: true, payments: ledger });
       } catch (err) {
         console.error("Ledger error:", err);
         res.status(500).json({ success: false, message: err.message });
       }
     }
-  );  
+  );
+
 
   router.get(
     "/borrower/:borrowersId",
@@ -60,7 +73,43 @@ module.exports = (db) => {
       }
     }
   );
-  
 
+  router.get(
+    "/paymongo",
+    authenticateToken,
+    authorizeRole("collector"),
+    async (req, res) => {
+      try {
+        const { userId } = req.user;
+
+        // Get borrowers assigned to this collector
+        const assignedBorrowers = await db
+          .collection("borrowers_account")
+          .find({ assignedCollectorId: userId })
+          .project({ borrowersId: 1 })
+          .toArray();
+
+        const borrowerIds = assignedBorrowers.map(b => b.borrowersId);
+
+        if (borrowerIds.length === 0) {
+          return res.status(404).json({ success: false, message: "No borrowers assigned to you" });
+        }
+
+        // Get Paymongo payments with borrower names
+        const payments = await paymentService.getPaymongoPaymentsWithNames(borrowerIds, db);
+
+        if (!payments.length) {
+          return res.status(404).json({ success: false, message: "No Paymongo payments found" });
+        }
+
+        res.json({ success: true, payments });
+      } catch (err) {
+        console.error("Paymongo payments error:", err);
+        res.status(500).json({ success: false, message: err.message });
+      }
+    }
+  );
+
+  
   return router;
 };
