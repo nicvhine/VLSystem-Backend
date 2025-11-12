@@ -10,16 +10,33 @@ module.exports = (db) => {
   router.get(
     "/",
     authenticateToken,
-    authorizeRole("manager", "head", "loan officer"),
+    authorizeRole("manager", "head", "loan officer", "collector"),
     async (req, res) => {
       try {
-        const loans = await db.collection("loans").find().toArray();
-
+        let query = {};
+  
+        // If collector, only fetch loans for borrowers assigned to them
+        if (req.user.role === "collector") {
+          // First, get borrowers assigned to this collector
+          const assignedBorrowers = await db
+            .collection("borrowers_account")
+            .find({ assignedCollectorId: req.user.userId }) 
+            .project({ borrowersId: 1 })
+            .toArray();
+  
+          const borrowerIds = assignedBorrowers.map((b) => b.borrowersId);
+  
+          // Only fetch loans of those borrowers
+          query = { borrowersId: { $in: borrowerIds } };
+        }
+  
+        const loans = await db.collection("loans").find(query).toArray();
+  
         const loansWithDetails = await Promise.all(
           loans.map(async (loan) => {
             const borrower = await db.collection("borrowers_account").findOne({ borrowersId: loan.borrowersId });
             const application = await db.collection("loan_applications").findOne({ applicationId: loan.applicationId });
-
+  
             return {
               ...loan,
               ...application,
@@ -27,7 +44,7 @@ module.exports = (db) => {
             };
           })
         );
-
+  
         res.status(200).json(loansWithDetails);
       } catch (error) {
         console.error("Error in GET /loans:", error);
@@ -35,6 +52,7 @@ module.exports = (db) => {
       }
     }
   );
+  
 
   // Get single loan by loanId
   router.get(
