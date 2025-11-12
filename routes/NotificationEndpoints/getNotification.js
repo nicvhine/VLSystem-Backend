@@ -56,17 +56,32 @@ module.exports = (db) => {
   router.get(
     "/staff/:role",
     authenticateToken,
-    authorizeRole("manager", "loan officer", "collector"), 
+    authorizeRole("manager", "loan officer", "collector", "head"), 
     async (req, res) => {
       try {
         const role = (req.params.role || "").toLowerCase().trim();
-
-        // user can only fetch their own role notifications
-        if ((req.user?.role || "").toLowerCase().trim() !== role.replace("-", " ")) {
+        const userRole = (req.user?.role || "").toLowerCase().trim();
+  
+        let notifications;
+  
+        if (userRole === "head") {
+          const loanOfficerNotifs = await notificationService.getLoanOfficerNotifications(db);
+          const managerNotifs = await notificationService.getManagerNotifications(db);
+          const collectorNotifs = await notificationService.getCollectorNotifications(db);
+  
+          notifications = [
+            ...loanOfficerNotifs.map(n => ({ ...n, sourceRole: "loan officer" })),
+            ...managerNotifs.map(n => ({ ...n, sourceRole: "manager" })),
+            ...collectorNotifs.map(n => ({ ...n, sourceRole: "collector" })),
+          ];
+  
+          return res.json({ notifications });
+        }
+  
+        if (userRole !== role.replace("-", " ")) {
           return res.status(403).json({ error: "Access denied" });
         }
-
-        let notifications;
+  
         if (role === "loan-officer") {
           notifications = await notificationService.getLoanOfficerNotifications(db);
         } else if (role === "manager") {
@@ -76,15 +91,16 @@ module.exports = (db) => {
         } else {
           return res.status(400).json({ error: "Invalid role" });
         }
-
+  
         res.json({ notifications });
-
+  
       } catch (err) {
         console.error("Error fetching notifications:", err);
         res.status(500).json({ error: err.message });
       }
     }
   );
+  
   
   
   return router;

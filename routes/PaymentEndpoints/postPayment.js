@@ -64,7 +64,7 @@ module.exports = (db) => {
         const result = await paymentService.createPaymongoGcash({ ...req.body, borrowersId }, db);
         res.json(result);
       } catch (err) {
-        console.error("PayMongo GCash error:", err.response?.data || err.message);
+        console.error("PayMongo error:", err.response?.data || err.message);
         res.status(500).json({ error: "PayMongo payment failed" });
       }
     }

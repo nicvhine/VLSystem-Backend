@@ -51,12 +51,14 @@ module.exports = (db) => {
       await loanApplications.updateOne({ applicationId }, { $set: updateData });
       const updatedDoc = await loanApplications.findOne({ applicationId });
 
+      const creatorName = req.user.name;
+
       await logRepo.insertActivityLog({
         userId: req.user.userId,
-        name: req.user.name,
+        name: creatorName,
         role: req.user.role,
         action: "UPDATE_LOAN_APPLICATION",
-        description: `Updated loan application ${applicationId}: ${JSON.stringify(updateData)}`,
+        description: `${creatorName} updated loan application ${applicationId}: ${JSON.stringify(updateData)}`,
       });
 
       res.status(200).json({
@@ -211,13 +213,15 @@ module.exports = (db) => {
       if (result.matchedCount === 0) {
         return res.status(404).json({ error: "Application not found" });
       }
+
+      const creatorName = req.user.name;
   
       await logRepo.insertActivityLog({
         userId: req.user.userId,
-        name: req.user.name,
+        name: creatorName,
         role: req.user.role,
         action: "SCHEDULE_INTERVIEW",
-        description: `Scheduled interview for loan application ${applicationId} on ${interviewDate} at ${interviewTime}`,
+        description: `${creatorName} scheduled an interview for loan application ${applicationId} on ${interviewDate} at ${interviewTime}`,
       });
   
       res.json({ message: "Interview scheduled successfully" });
@@ -257,13 +261,15 @@ module.exports = (db) => {
   
       await loanApplications.updateOne({ applicationId }, { $set: updatedFields });
       const updatedApp = await loanApplications.findOne({ applicationId });
-  
+
+      const creatorName = req.user.name;
+
       await logRepo.insertActivityLog({
         userId: req.user.userId,
-        name: req.user.name,
+        name: creatorName,
         role: req.user.role,
         action: "UPDATE_PRINCIPAL",
-        description: `Updated principal for loan application ${applicationId} to ${newPrincipal}`,
+        description: `${creatorName} updated the principal for loan application ${applicationId} to ${newPrincipal}`,
       });
       
       res.json({ updatedApp });
@@ -293,13 +299,15 @@ router.put("/:applicationId/release", authenticateToken, authorizeRole("manager"
 
     const updatedApp = await loanApplications.findOne({ applicationId });
 
+    const creatorName = req.user.name;
+
     // Log activity
     await logRepo.insertActivityLog({
       userId: req.user.userId,
-      name: req.user.name,
+      name: creatorName,
       role: req.user.role,
       action: "UPDATE_RELEASE",
-      description: `Updated service fee (${serviceFee}) and net released (${netReleased}) for loan application ${applicationId}`,
+      description: `${creatorName} updated service fee (${serviceFee}) and net released (${netReleased}) for loan application ${applicationId}`,
     });
 
     res.status(200).json({ message: "Release data saved successfully", updatedApp });

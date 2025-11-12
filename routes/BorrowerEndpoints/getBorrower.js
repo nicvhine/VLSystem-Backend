@@ -12,19 +12,26 @@ module.exports = (db) => {
   router.get(
     "/",
     authenticateToken,
-    authorizeRole("manager", "loan officer", "head"),
+    authorizeRole("manager", "loan officer", "head", "collector"),
     async (req, res) => {
       try {
-        const borrowers = await db.collection("borrowers_account").find({}).toArray();
-
+        let query = {};
+  
+        // If the user is a collector, only get borrowers assigned to them
+        if (req.user.role === "collector") {
+          query = { assignedCollectorId: req.user.userId }; 
+        }
+  
+        const borrowers = await db.collection("borrowers_account").find(query).toArray();
+  
         const sanitizedBorrowers = borrowers.map((b) => ({
           borrowersId: b.borrowersId,
           name: decrypt(b.name),
           email: decrypt(b.email),
           phoneNumber: decrypt(b.phoneNumber),
           status: b.status,
-        }));        
-
+        }));
+  
         res.json(sanitizedBorrowers);
       } catch (error) {
         console.error("Error fetching borrowers:", error);
@@ -32,7 +39,7 @@ module.exports = (db) => {
       }
     }
   );
-
+  
     // Overview: total borrowers + top borrowers by total loan amount
     router.get(
       "/overview",

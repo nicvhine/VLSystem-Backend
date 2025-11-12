@@ -68,5 +68,17 @@ module.exports = (db) => {
       }
       return await collections.insertMany(newCollections);
     },
+    
+    async getPaymongoPaymentsByBorrowers(borrowerIds) {
+      return await payments
+        .find({
+          borrowersId: { $in: borrowerIds },
+          mode: { $in: ["Paymongo"] } 
+        })
+        .sort({ createdAt: -1 })
+        .toArray();
+    }
+    
+
   };
 };
