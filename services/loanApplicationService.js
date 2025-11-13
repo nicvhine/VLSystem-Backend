@@ -165,7 +165,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     appMonthlyIncome: appMonthlyIncome?.toString(),
     appLoanPurpose,
     appLoanAmount: principal.toString(),
-    appLoanTerms: terms.toString(),
+    appLoanTerms: String(terms ?? ""),
     appInterestRate: interestRate.toString(),
     appInterestAmount: interestAmount,
     appTotalInterestAmount: totalInterestAmount,
