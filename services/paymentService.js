@@ -48,7 +48,6 @@ const generateNextOpenTermCollection = async (db, loan, lastCollection) => {
     status: "Unpaid",
     collector: lastCollection.collector,
     collectorId: lastCollection.collectorId,
-    note: "Auto-generated for Open-Term Loan",
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -122,7 +121,7 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
       loanId: loan.loanId,
       referenceNumber: generatePaymentRef(collection.referenceNumber),
       borrowersId: collection.borrowersId,
-      collector: collectorName || "Cash Collector",
+      collector: collection.collector|| "Cash Collector",
       amount,
       // store split so UI can display exact breakdown
       meta: {
@@ -180,7 +179,7 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
         loanId: col.loanId,
         referenceNumber: generatePaymentRef(col.referenceNumber),
         borrowersId: col.borrowersId,
-        collector: collectorName || "Cash Collector",
+        collector: col.collector,
         amount: paymentToApply,
         balance: Math.max(due - newPaidAmount, 0),
         paidToCollection: col.collectionNumber,

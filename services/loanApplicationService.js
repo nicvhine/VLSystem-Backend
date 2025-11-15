@@ -197,6 +197,13 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     documents,
   };
 
+  if (sourceOfIncome === "business") {
+    newApplication = { ...newApplication, sourceOfIncome, appTypeBusiness, appBusinessName, appDateStarted, appBusinessLoc };
+  } else {
+    newApplication = { ...newApplication, sourceOfIncome, appOccupation, appEmploymentStatus, appCompanyName };
+  }
+
+
   // --- Conditionally add fields based on loan type ---
   if (loanType !== "open-term") {
     newApplication.appLoanTerms = terms;
