@@ -75,6 +75,56 @@ module.exports = (db) => {
   );
 
   router.get(
+    "/collection-balance/:referenceNumber",
+    authenticateToken,
+    authorizeRole("manager", "loan officer", "borrower", "head", "collector"),
+    async (req, res) => {
+      try {
+        const { role, borrowersId: jwtBorrowersId, userId } = req.user;
+        let { referenceNumber } = req.params;
+  
+        // Strip -P- suffix if present
+        if (referenceNumber.includes("-P-")) {
+          referenceNumber = referenceNumber.split("-P-")[0];
+        }
+  
+        // Fetch the collection
+        const collection = await db.collection("collections").findOne({ referenceNumber });
+        if (!collection) {
+          return res.status(404).json({ success: false, message: "Collection not found" });
+        }
+  
+        // Role-based access check
+        if (role === "borrower" && collection.borrowersId !== jwtBorrowersId) {
+          return res.status(403).json({ success: false, message: "Access denied" });
+        } else if (role === "collector") {
+          const assignedBorrowers = await db
+            .collection("borrowers_account")
+            .find({ assignedCollectorId: userId })
+            .project({ borrowersId: 1 })
+            .toArray();
+          const borrowerIds = assignedBorrowers.map(b => b.borrowersId);
+  
+          if (!borrowerIds.includes(collection.borrowersId)) {
+            return res.status(403).json({ success: false, message: "Access denied" });
+          }
+        }
+  
+        // runningBalance is already stored in the collection
+        const runningBalance = collection.runningBalance ?? 0;
+        const periodInterestAmount = collection.periodInterestAmount ?? 0;
+  
+        res.json({ success: true, referenceNumber, runningBalance, periodInterestAmount });
+      } catch (err) {
+        console.error("Collection balance error:", err);
+        res.status(500).json({ success: false, message: err.message });
+      }
+    }
+  );
+  
+  
+
+  router.get(
     "/paymongo",
     authenticateToken,
     authorizeRole("collector"),

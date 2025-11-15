@@ -17,34 +17,21 @@ module.exports = (db) => {
         const { name } = req.user; 
         const { referenceNumber } = req.params;
   
-        // Fetch the collection to verify assignment
+        // Fetch the collection
         const collection = await db.collection("collections").findOne({ referenceNumber });
-  
-        if (!collection) {
-          return res.status(404).json({ error: "Collection not found" });
-        }
-  
+        if (!collection) return res.status(404).json({ error: "Collection not found" });
         if (collection.collector !== name) {
           return res.status(403).json({ error: "You can only process payments for your assigned collections." });
         }
   
-        // Process the cash payment
-        const result = await paymentService.handleCashPayment(
-          { referenceNumber, ...req.body },
-          db
-        );
+        // The service will detect loan type internally
+        const result = await paymentService.handleCashPayment({ referenceNumber, ...req.body }, db);
   
-        //  Notify borrower
+        // Notify borrower
         if (result?.borrowersId && result?.amount) {
-          await addBorrowerPaymentNotification(
-            db,
-            result.borrowersId,
-            referenceNumber,
-            result.amount,
-            "Cash"
-          );
+          await addBorrowerPaymentNotification(db, result.borrowersId, referenceNumber, result.amount, "Cash");
         }
-
+  
         res.json(result);
       } catch (err) {
         console.error("Cash payment error:", err);
@@ -52,6 +39,7 @@ module.exports = (db) => {
       }
     }
   );
+  
   
  // PayMongo GCash: create intent (borrower only)
   router.post(
