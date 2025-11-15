@@ -1,8 +1,10 @@
+// services/paymentService.js
 const paymentRepository = require("../repositories/paymentRepository");
+const loanRepository = require("../repositories/loanRepository");
 const { determineLoanStatus } = require("../utils/collection");
 const { scheduleDueNotifications } = require("./borrowerNotif");
 const axios = require("axios");
-const { decrypt } = require("../utils/crypt"); 
+const { decrypt } = require("../utils/crypt");
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
 
@@ -13,75 +15,189 @@ const generatePaymentRef = (collectionRef) => {
   return `${collectionRef}-P-${timestamp}-${random}`;
 };
 
+/**
+ * Generate next Open-Term interest-only collection.
+ * Uses loan.balance (principal outstanding) to compute next interest.
+ */
+const generateNextOpenTermCollection = async (db, loan, lastCollection) => {
+  const repo = loanRepository(db);
+  const balance = Number(loan.balance);
+  if (!balance || balance <= 0) return null;
+
+  const interestRate = Number(loan.appInterestRate) || 0;
+  const interestAmount = balance * (interestRate / 100);
+
+  // Monthly due date: one month after last collection
+  const dueDate = new Date(lastCollection.dueDate);
+  dueDate.setMonth(dueDate.getMonth() + 1);
+
+  const nextCollection = {
+    referenceNumber: `${loan.loanId}-C${lastCollection.collectionNumber + 1}`,
+    loanId: loan.loanId,
+    borrowersId: loan.borrowersId,
+    name: lastCollection.name,
+    collectionNumber: lastCollection.collectionNumber + 1,
+    dueDate,
+    periodAmount: interestAmount,
+    periodInterestRate: interestRate,
+    periodInterestAmount: interestAmount,
+    runningBalance: balance,
+    paidAmount: 0,
+    periodBalance: interestAmount,
+    loanBalance: balance,
+    status: "Unpaid",
+    collector: lastCollection.collector,
+    collectorId: lastCollection.collectorId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  };
+
+  await repo.insertCollections([nextCollection]);
+  await scheduleDueNotifications(db, [nextCollection]);
+  return nextCollection;
+};
+
+
+/**
+ * applyPayment:
+ * - For fixed-term: existing behavior (applies across collections in order).
+ * - For open-term: interest-first, principal-only on excess, update loan.balance by principalPaid,
+ *   generate next collection only when interest for current collection is fully paid.
+ */
 const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db) => {
   if (!amount || isNaN(amount) || amount <= 0) throw new Error("Invalid payment amount");
 
   const repo = paymentRepository(db);
   const now = new Date();
 
-  // Get current collection
+  // Fetch collection
   const collection = await repo.findCollection(referenceNumber);
   if (!collection) throw new Error("Collection not found");
 
-  // Get loan info
+  // Fetch loan
   const loan = await repo.findLoan(collection.loanId);
   if (!loan) throw new Error("Loan not found");
 
-  // Get all collections for this loan
-  const loanCollections = await repo.findLoanCollections(collection.loanId);
-  let remainingAmount = amount;
   const paymentLogs = [];
+  let remainingAmount = amount;
 
-  for (let col of loanCollections) {
-    if (remainingAmount <= 0) break;
+  // If open-term -> handle interest-first + principal-excess
+  if (loan.loanType === "Open-Term Loan") {
+    // Recompute interest due from collection record (safer) or compute from loan.balance
+    const interestDue = Number(collection.periodInterestAmount || collection.periodBalance || 0);
+    const principalOutstanding = Number(loan.balance || collection.loanBalance || collection.runningBalance || 0);
 
-    const due = col.periodAmount || 0;
-    const alreadyPaid = col.paidAmount || 0;
-    const periodRemaining = Math.max(due - alreadyPaid, 0);
-    if (periodRemaining <= 0) continue;
+    // Pay interest first
+    const interestPaid = Math.min(remainingAmount, interestDue);
+    remainingAmount -= interestPaid;
 
-    const paymentToApply = Math.min(remainingAmount, periodRemaining);
-    const newPaidAmount = alreadyPaid + paymentToApply;
+    // Any leftover applies to principal
+    const principalPaid = Math.min(remainingAmount, principalOutstanding);
+    remainingAmount -= principalPaid;
 
-    // Update collection
-    await repo.updateCollection(col.referenceNumber, {
-      paidAmount: newPaidAmount,
-      periodBalance: Math.max(due - newPaidAmount, 0),
-      status: newPaidAmount >= due ? "Paid" : "Partial",
-      loanBalance: Math.max((col.loanBalance || col.periodAmount) - paymentToApply, 0),
-      mode,
-      paidAt: now,
+    // Update collection: interest portion recorded via periodBalance; we keep loanBalance in collection as snapshot
+    const newPeriodBalance = Math.max(interestDue - interestPaid, 0);
+    const newLoanBalanceSnapshot = Math.max(principalOutstanding - principalPaid, 0);
+
+    collection.paidAmount = (collection.paidAmount || 0) + interestPaid + principalPaid;
+    collection.periodBalance = newPeriodBalance;
+    // keep loanBalance in collection as snapshot of principal outstanding after this payment
+    collection.loanBalance = newLoanBalanceSnapshot;
+    collection.mode = mode;
+    collection.paidAt = now;
+    collection.status = newPeriodBalance <= 0 ? "Paid" : "Partial";
+
+    await repo.updateCollection(collection.referenceNumber, {
+      paidAmount: collection.paidAmount,
+      periodBalance: collection.periodBalance,
+      loanBalance: collection.loanBalance,
+      status: collection.status,
+      mode: collection.mode,
+      paidAt: collection.paidAt,
     });
 
-    // Save payment log
-    paymentLogs.push({
-      loanId: col.loanId,
-      referenceNumber: generatePaymentRef(col.referenceNumber),
-      borrowersId: col.borrowersId,
-      collector: collectorName || "Cash Collector",
-      amount: paymentToApply,
-      balance: Math.max(due - newPaidAmount, 0),
-      paidToCollection: col.collectionNumber,
+    // Log payment — record interest and principal parts in metadata
+    const log = {
+      loanId: loan.loanId,
+      referenceNumber: generatePaymentRef(collection.referenceNumber),
+      borrowersId: collection.borrowersId,
+      collector: collection.collector|| "Cash Collector",
+      amount,
+      // store split so UI can display exact breakdown
+      meta: {
+        interestPaid,
+        principalPaid
+      },
+      interestPaid,
+      principalPaid,
+      balance: newPeriodBalance + newLoanBalanceSnapshot,
+      paidToCollection: collection.collectionNumber,
       mode,
       datePaid: now,
       createdAt: now,
-    });
+    };
 
-    remainingAmount -= paymentToApply;
+    paymentLogs.push(log);
+    await repo.insertPayments([log]);
+
+    // Update loan: only deduct principalPaid from loan.balance; record total paidAmount for bookkeeping
+    // We still increment loan.paidAmount by full amount for totals, but only decrease balance by principalPaid
+    await repo.incrementLoan(loan.loanId, { paidAmount: amount, balance: -principalPaid });
+
+    // Generate next collection if interest for this collection is fully paid (periodBalance === 0)
+    if (collection.periodBalance <= 0 && newLoanBalanceSnapshot > 0) {
+      // fetch latest loan after increment
+      const updatedLoan = await repo.findLoan(loan.loanId);
+      // pass updatedLoan so next interest uses updated balance
+      await generateNextOpenTermCollection(db, updatedLoan, collection);
+    }
+
+  } else {
+    // Regular (fixed-term) behavior: distribute across collections in order
+    const loanCollections = await repo.findLoanCollections(collection.loanId);
+    for (let col of loanCollections) {
+      if (remainingAmount <= 0) break;
+
+      const due = col.periodAmount || 0;
+      const alreadyPaid = col.paidAmount || 0;
+      const periodRemaining = Math.max(due - alreadyPaid, 0);
+      if (periodRemaining <= 0) continue;
+
+      const paymentToApply = Math.min(remainingAmount, periodRemaining);
+      const newPaidAmount = alreadyPaid + paymentToApply;
+
+      await repo.updateCollection(col.referenceNumber, {
+        paidAmount: newPaidAmount,
+        periodBalance: Math.max(due - newPaidAmount, 0),
+        status: newPaidAmount >= due ? "Paid" : "Partial",
+        loanBalance: Math.max((col.loanBalance || col.periodAmount) - paymentToApply, 0),
+        mode,
+        paidAt: now,
+      });
+
+      paymentLogs.push({
+        loanId: col.loanId,
+        referenceNumber: generatePaymentRef(col.referenceNumber),
+        borrowersId: col.borrowersId,
+        collector: col.collector,
+        amount: paymentToApply,
+        balance: Math.max(due - newPaidAmount, 0),
+        paidToCollection: col.collectionNumber,
+        mode,
+        datePaid: now,
+        createdAt: now,
+      });
+
+      remainingAmount -= paymentToApply;
+    }
+
+    const totalApplied = amount - remainingAmount;
+    await repo.incrementLoan(collection.loanId, { paidAmount: totalApplied, balance: -totalApplied });
+    if (paymentLogs.length > 0) await repo.insertPayments(paymentLogs);
   }
 
-  const totalApplied = amount - remainingAmount;
-
-  await repo.incrementLoan(collection.loanId, { paidAmount: totalApplied, balance: -totalApplied });
-
-  if (paymentLogs.length > 0) await repo.insertPayments(paymentLogs);
-
+  // Update loan status and collections status
   const updatedLoan = await repo.findLoan(collection.loanId);
-
-  if (updatedLoan.loanType === "Open-Term Loan") {
-    await handleOpenTermRecalculation(db, updatedLoan, collection, totalApplied);
-  }
-
   const updatedLoanCollections = await repo.findLoanCollections(collection.loanId);
   const loanStatus = determineLoanStatus(updatedLoanCollections);
   await repo.updateLoan(collection.loanId, { status: loanStatus });
@@ -90,73 +206,20 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
     await repo.updateLoan(updatedLoan.loanId, { status: "Completed" });
   }
 
-  const borrowersId = paymentLogs[0]?.borrowersId || collection.borrowersId;
-  const totalPaid = paymentLogs.reduce((sum, log) => sum + (log.amount || 0), 0);
-
   return {
     message: `${mode} payment applied successfully`,
-    borrowersId,
-    amount: totalPaid,
+    borrowersId: collection.borrowersId,
+    amount,
     referenceNumber,
     paymentLogs,
     remainingUnapplied: remainingAmount,
   };
 };
 
-const handleOpenTermRecalculation = async (db, loan, lastCollection, totalPaid) => {
-  const repo = require("../repositories/paymentRepository")(db);
-
-  const loanApp = await db.collection("loan_applications").findOne({ applicationId: loan.applicationId });
-  if (!loanApp) throw new Error("Loan application not found");
-
-  const interestRate = Number(loanApp.appInterestRate || 0) / 100;
-
-  const interestDue = loan.balance * interestRate;
-  const principalPayment = totalPaid > interestDue ? totalPaid - interestDue : 0;
-
-  loan.balance = Math.max(loan.balance - principalPayment, 0);
-  await repo.updateLoan(loan.loanId, { balance: loan.balance });
-
-  // 4️⃣ Generate next collection if balance remains
-  if (loan.balance > 0) {
-    const nextDueDate = new Date(lastCollection.dueDate);
-    nextDueDate.setMonth(nextDueDate.getMonth() + 1);
-
-    const nextMonthlyDue = loan.balance + loan.balance * interestRate;
-
-    const nextCollection = {
-      referenceNumber: `${loan.loanId}-C${lastCollection.collectionNumber + 1}`,
-      loanId: loan.loanId,
-      borrowersId: loan.borrowersId,
-      name: lastCollection.name,
-      collectionNumber: lastCollection.collectionNumber + 1,
-      dueDate: nextDueDate,
-      periodAmount: nextMonthlyDue,
-      paidAmount: 0,
-      periodBalance: nextMonthlyDue,
-      loanBalance: loan.balance,
-      status: "Unpaid",
-      collector: lastCollection.collector,
-      collectorId: lastCollection.collectorId,
-      note: "Auto-generated for Open-Term Loan",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    await repo.insertCollections([nextCollection]);
-    await scheduleDueNotifications(db, [nextCollection]);
-  } else {
-    await repo.updateLoan(loan.loanId, { status: "Completed" });
-  }
-};
-
-
-
-
 // Cash payment
 const handleCashPayment = async (payload, db) => applyPayment({ ...payload, mode: "Cash" }, db);
 
-// Handle PayMongo  success callback
+// Handle PayMongo success callback
 const handlePaymongoSuccess = async (referenceNumber, db) => {
   const repo = paymentRepository(db);
   const paymongoPayment = await repo.findPaymongoPayment(referenceNumber);
@@ -165,14 +228,14 @@ const handlePaymongoSuccess = async (referenceNumber, db) => {
   const now = new Date();
   await repo.updatePaymongoPayment(referenceNumber, { status: "success", paidAt: now });
 
-  // Apply the payment to collections/loan
+  // Apply payment to collections/loan
   const result = await applyPayment({
     referenceNumber,
     amount: paymongoPayment.amount,
     mode: "Paymongo",
   }, db);
 
-  // Fetch the borrower's assigned collector and name
+  // Notify assigned collector if present
   const borrower = await db.collection("borrowers_account").findOne(
     { borrowersId: paymongoPayment.borrowersId },
     { projection: { assignedCollectorId: 1, name: 1 } }
@@ -197,8 +260,6 @@ const handlePaymongoSuccess = async (referenceNumber, db) => {
 
   return result;
 };
-
-
 
 // Create PayMongo GCash intent
 const createPaymongoGcash = async ({ amount, collectionNumber, referenceNumber, borrowersId }, db) => {
@@ -260,7 +321,7 @@ const createPaymongoGcash = async ({ amount, collectionNumber, referenceNumber, 
   return { checkout_url: checkoutUrl };
 };
 
-// 🔹 Get loan ledger/payments
+// Other helpers (getLoanLedger, getBorrowerPayments, etc.) remain unchanged
 const getLoanLedger = async (loanId, db) => {
   const repo = paymentRepository(db);
   const payments = await repo.getPaymentsByLoan(loanId);
@@ -275,7 +336,6 @@ const getLoanLedger = async (loanId, db) => {
   }));
 };
 
-// 🔹 Get borrower payment history
 const getBorrowerPayments = async (borrowersId, db) => {
   const repo = paymentRepository(db);
   const payments = await repo.getPaymentsByBorrower(borrowersId);
@@ -294,7 +354,7 @@ const getPaymentsByBorrowers = async (borrowerIds, db) => {
   if (!Array.isArray(borrowerIds) || borrowerIds.length === 0) return [];
 
   const repo = paymentRepository(db);
-  const payments = await repo.getPaymongoPaymentsByBorrowers(borrowerIds); 
+  const payments = await repo.getPaymongoPaymentsByBorrowers(borrowerIds);
 
   return payments.map((p) => ({
     referenceNumber: p.referenceNumber,
@@ -310,35 +370,28 @@ const getPaymentsByBorrowers = async (borrowerIds, db) => {
 const getPaymongoPaymentsWithNames = async (borrowerIds, db) => {
   if (!Array.isArray(borrowerIds) || borrowerIds.length === 0) return [];
 
-  // Fetch only Paymongo payments for the borrowers
   const payments = await db
     .collection("payments")
     .find({ borrowersId: { $in: borrowerIds }, mode: "Paymongo" })
     .sort({ createdAt: -1 })
     .toArray();
 
-  // Fetch borrower names
   const borrowers = await db
     .collection("borrowers_account")
     .find({ borrowersId: { $in: borrowerIds } })
     .project({ borrowersId: 1, name: 1 })
     .toArray();
 
-  // Map borrowersId -> name
   const borrowerMap = borrowers.reduce((acc, b) => {
     acc[b.borrowersId] = b.name;
     return acc;
   }, {});
 
-  // Attach decrypted name to payments
-  return payments.map(p => ({
+  return payments.map((p) => ({
     ...p,
     name: borrowerMap[p.borrowersId] ? decrypt(borrowerMap[p.borrowersId]) : "Unknown",
   }));
 };
-
-
-
 
 module.exports = {
   handleCashPayment,
@@ -347,5 +400,6 @@ module.exports = {
   getBorrowerPayments,
   getLoanLedger,
   getPaymentsByBorrowers,
-  getPaymongoPaymentsWithNames
+  getPaymongoPaymentsWithNames,
+  generateNextOpenTermCollection,
 };
