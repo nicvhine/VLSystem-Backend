@@ -26,8 +26,11 @@ module.exports = (db) => {
   
           const borrowerIds = assignedBorrowers.map((b) => b.borrowersId);
   
-          // Only fetch loans of those borrowers
-          query = { borrowersId: { $in: borrowerIds } };
+          // Only fetch loans of those borrowers (exclude Closed loans)
+          query = { borrowersId: { $in: borrowerIds }, status: { $ne: "Closed" } };
+        } else {
+          // For other roles, exclude Closed loans by default
+          query = { status: { $ne: "Closed" } };
         }
   
         const loans = await db.collection("loans").find(query).toArray();
