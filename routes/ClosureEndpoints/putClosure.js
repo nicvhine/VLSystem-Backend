@@ -23,7 +23,7 @@ module.exports = (db) => {
       const loanId = closure.loanId?.trim();
       if (!loanId) return res.status(400).json({ message: "LoanId not found in closure" });
 
-      console.log("🔹 Updating closure:", endorsementId, "→", status);
+      console.log("Updating closure:", endorsementId, "→", status);
 
       // Update closure
       await db.collection("closure_endorsements").updateOne(
@@ -36,7 +36,7 @@ module.exports = (db) => {
       if (!loan) return res.status(404).json({ message: "Loan not found" });
 
       const borrower = await db.collection("borrowers_account").findOne({ borrowersId: loan.borrowersId });
-      console.log("🔹 Borrower found:", borrower?.name, borrower?.phoneNumber);
+      console.log("Borrower found:", borrower?.name, borrower?.phoneNumber);
 
       // Notify loan officer
       const loanOfficer = await db.collection("users").findOne({ role: "loan officer" });
@@ -84,6 +84,15 @@ module.exports = (db) => {
           { loanId },
           { $set: { status: "Closed" } }
         );
+
+        if (loan.applicationId) {
+          await db.collection("loan_applications").updateMany(
+            { applicationId: loan.applicationId },
+            { $set: { status: "Closed" } }
+          );
+        } else {
+          console.warn(`⚠️ Loan ${loanId} has no applicationId, skipping loan_applications update.`);
+        }
       }
 
       return res.status(200).json({ message: `Closure ${status.toLowerCase()} successfully` });
