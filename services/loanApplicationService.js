@@ -5,6 +5,7 @@ const { encrypt } = require("../utils/crypt");
 const { sendSMS } = require("../services/smsService");
 const notificationRepository = require("../repositories/notificationRepository");
 
+// --- Decrypt functions ---
 const decryptApplication = (app) => ({
   ...app,
   appName: decrypt(app.appName),
@@ -25,19 +26,17 @@ const decryptInterview = (interview) => ({
   appAddress: interview.appAddress ? decrypt(interview.appAddress) : "",
 });
 
-// Fetch all applications with decrypted fields
+// --- Fetch / Stats functions ---
 async function getAllApplications(repo) {
   const applications = await repo.getAllApplications();
   return applications.map(decryptApplication);
 }
 
-// Fetch interviews with partially decrypted fields
 async function getInterviewList(repo) {
   const interviews = await repo.getInterviewList();
   return interviews.map(decryptInterview);
 }
 
-// Count applications by status
 async function getStatusStats(repo) {
   const applied = await repo.countByStatus(/^applied$/i);
   const approved = await repo.countByStatus(/^approved$/i);
@@ -45,17 +44,15 @@ async function getStatusStats(repo) {
   return { applied, approved, denied };
 }
 
-// Aggregate loan type statistics
 async function getLoanTypeStats(repo) {
   return await repo.getLoanTypeStats();
 }
 
-// Retrieve a single application by id
 async function getApplicationById(repo, applicationId) {
   return await repo.getApplicationById(applicationId);
 }
 
-// Create a new loan application with validation and encryption
+// --- Main loan creation function ---
 async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   const {
     isReloan,
@@ -71,12 +68,12 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
 
   const isReloanBool = isReloan === "true" || isReloan === true;
 
-  // Validate agent
+  // --- Validate agent ---
   if (!appAgent) throw new Error("Agent must be selected for this application.");
   const assignedAgent = await repo.findAgentById(appAgent);
   if (!assignedAgent) throw new Error("Selected agent does not exist.");
 
-  // Validate references
+  // --- Validate references ---
   let parsedReferences = [];
   try {
     parsedReferences = typeof appReferences === "string" ? JSON.parse(appReferences) : appReferences;
@@ -98,6 +95,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   if ([...names.values(), ...numbers.values()].some(arr => arr.length > 1))
     throw new Error("Reference names and contact numbers must be unique.");
 
+  // --- Validate documents ---
   const profilePic = uploadedFiles.find(f => f.folder.includes("userProfilePictures"));
   const documents = uploadedFiles.filter(f => f.folder.includes("documents"));
 
@@ -113,6 +111,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     );
   }
 
+  // --- Validate required fields ---
   if (!appName || !appDob || !appContact || !appEmail || !appAddress || !appLoanPurpose || !appLoanAmount)
     throw new Error("All required fields must be provided.");
 
@@ -138,8 +137,8 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     if (existing) throw new Error("You already have a pending application with these details.");
   }
 
+  // --- Generate Application ID ---
   const applicationId = await generateApplicationId(repo.loanApplications);
-
   const principal = Number(appLoanAmount);
   const interestRate = Number(appInterest);
   const terms = Number(appLoanTerms) || null;
@@ -151,6 +150,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     appMonthlyDue,
   } = computeApplicationAmounts(principal, interestRate, terms, loanType);
 
+  // --- Build new application object ---
   let newApplication = {
     applicationId,
     appName: encrypt(appName),
@@ -165,12 +165,8 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     appMonthlyIncome: appMonthlyIncome?.toString(),
     appLoanPurpose,
     appLoanAmount: principal.toString(),
-    appLoanTerms: terms,
     appInterestRate: interestRate.toString(),
     appInterestAmount: interestAmount,
-    appTotalInterestAmount: totalInterestAmount,
-    appTotalPayable: totalPayable,
-    appMonthlyDue,
     appReferences: parsedReferences.map((r) => ({
       name: encrypt(r.name),
       contact: encrypt(r.contact),
@@ -207,10 +203,19 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     newApplication = { ...newApplication, sourceOfIncome, appOccupation, appEmploymentStatus, appCompanyName };
   }
 
-  // persist application
+
+  // --- Conditionally add fields based on loan type ---
+  if (loanType !== "open-term") {
+    newApplication.appLoanTerms = terms;
+    newApplication.appTotalInterestAmount = totalInterestAmount;
+    newApplication.appTotalPayable = totalPayable;
+    newApplication.appMonthlyDue = appMonthlyDue;
+  }
+
+  // --- Persist application ---
   await repo.insertLoanApplication(newApplication);
 
-  // create loan officer notification using repository
+  // --- Notifications ---
   try {
     const notifRepo = notificationRepository(db);
     await notifRepo.insertLoanOfficerNotification({
@@ -224,23 +229,24 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
       createdAt: new Date(),
     });
   } catch (err) {
-    console.error("Failed to create loan officer notification:", err && err.message ? err.message : err);
+    console.error("Failed to create loan officer notification:", err?.message || err);
   }
 
-  // send SMS to references
+  // --- SMS to references ---
   try {
     for (const ref of parsedReferences) {
       const message = `Good day ${ref.name}, ${appName} has listed you as a reference for their loan application at Vistula Lending Corporation. You may be contacted for verification. Thank you!`;
       await sendSMS(ref.contact, message);
     }
   } catch (err) {
-    console.error("Failed to send reference notifications:", err && err.message ? err.message : err);
+    console.error("Failed to send reference notifications:", err?.message || err);
   }
 
   return newApplication;
 }
 
-function computeLoanFields(principal, months = 12, interestRate = 0) {
+// --- Compute loan fields helper ---
+function computeLoanFields(principal, months = 12, interestRate = 0, loanType = "regular") {
   principal = Number(principal || 0);
   months = Number(months || 12);
   interestRate = Number(interestRate || 0);
@@ -249,6 +255,15 @@ function computeLoanFields(principal, months = 12, interestRate = 0) {
   const totalInterestAmount = interestAmount * months;
   const totalPayable = principal + totalInterestAmount;
   const monthlyDue = totalPayable / months;
+
+  // For open-term, return only minimal fields
+  if (loanType === "open-term") {
+    return {
+      appLoanAmount: principal,
+      appInterestRate: interestRate,
+      appInterestAmount: interestAmount,
+    };
+  }
 
   return {
     appLoanAmount: principal,

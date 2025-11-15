@@ -184,6 +184,7 @@ async function getBorrowerById(borrowersId, db) {
     username: decrypt(borrower.username),
     email: decrypt(borrower.email),
     role: "borrower",
+    assignedCollector: borrower.assignedCollector,
     isFirstLogin: borrower.isFirstLogin !== false,
     borrowersId: borrower.borrowersId,
     profilePic: profilePicUrl,
