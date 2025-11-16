@@ -4,6 +4,7 @@ const authenticateToken = require("../../middleware/auth");
 const authorizeRole = require("../../middleware/authorizeRole");
 const agentRepository = require("../../repositories/agentRepository");
 const agentService = require("../../services/agentService");
+const { decrypt } = require("../../utils/crypt");
 
 // Read agent names, list, and details
 module.exports = (db) => {
@@ -32,13 +33,22 @@ module.exports = (db) => {
   });
 
   // Get one agent by ID
-  router.get("/:agentId", authenticateToken, authorizeRole("head", "manager", "loan officer"), async (req, res) => {
+  router.get("/:agentId/loans", authenticateToken, authorizeRole("head", "manager", "loan officer"), async (req, res) => {
+    const { agentId } = req.params;
     try {
-      const agent = await agentService.getAgentDetails(req.params.agentId, repo);
-      res.status(200).json({ agent });
-    } catch (error) {
-      console.error("Error fetching agent:", error);
-      res.status(404).json({ message: error.message });
+      const repo = agentRepository(db);
+      const loans = await repo.getAssignedApplications(agentId);
+
+      // Decrypt each loan's appName
+      const decryptedLoans = loans.map(loan => ({
+        ...loan,
+        appName: decrypt(loan.appName)
+      }));
+
+      res.json({ loans: decryptedLoans }); 
+    } catch (err) {
+      console.error("Failed to fetch agent loans", err);
+      res.status(500).json({ loans: [] });
     }
   });
 

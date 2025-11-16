@@ -19,11 +19,17 @@ module.exports = (db) => {
     },
 
     async getAssignedApplications(agentId) {
-      return await applications
-        .find({ "appAgent.id": agentId, status: "Disbursed" })
+      const result = await applications
+        .find({
+          "appAgent.id": agentId,
+          status: { $in: ["Disbursed", "Active", "Closed"] }, 
+        })
         .toArray();
+    
+      console.log("DEBUG: Loans fetched for", agentId, result);
+      return result;
     },
-
+    
     async updateAgentStats(agentId, stats) {
       await agents.updateOne({ agentId }, { $set: stats });
     },

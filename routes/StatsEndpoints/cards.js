@@ -11,7 +11,7 @@ module.exports = (db) => {
       const result = await db.collection("loan_applications").aggregate([
         {
           $match: {
-            status: { $in: ["Active", "Closed"] }
+            status: { $in: ["Active", "Closed", "Disbursed"] }
           }
         },
         {
@@ -72,29 +72,6 @@ module.exports = (db) => {
       res.status(500).json({ error: "Failed to fetch loan type statistics" });
     }
   });
-  
-  router.get("/applicationStatus-stats", authenticateToken, authorizeRole("manager", "head", "loan officer"), async (req, res) => {
-    try {
-      const collection = db.collection("loan_applications");
-  
-      const applied = await collection.countDocuments({ status: { $regex: /^applied$/i } });
-  
-      // Consider Disbursed, Active, Closed as Approved
-      const approved = await collection.countDocuments({ status: { $in: ["Disbursed", "Active", "Closed", "Approved"] } });
-  
-      const denied = await collection.countDocuments({ status: { $regex: /^denied$/i } });
-  
-      res.json({
-        approved,
-        denied,
-        applied
-      });
-    } catch (error) {
-      console.error("Error fetching loan stats:", error);
-      res.status(500).json({ error: "Failed to fetch statistics" });
-    }
-  });
-  
 
    // GET collection stats
    router.get(
@@ -161,6 +138,41 @@ module.exports = (db) => {
       res.status(500).json({ error: "Failed to fetch loan type statistics" });
     }
   });  
+
+  router.get("/application-statuses",
+  authenticateToken,
+  authorizeRole("manager", "head", "loan officer"),
+  async (req, res) => {
+    try {
+      const statuses = await db.collection("loan_applications").aggregate([
+        {
+          $group: {
+            _id: "$status",
+            count: { $sum: 1 }
+          }
+        }
+      ]).toArray();
+
+      const statusMap = {
+        applied: ["Applied", "Cleared", "Pending"],
+        approved: ["Approved", "Disbursed", "Active"],
+        denied: ["Denied by LO", "Denied"],
+      };
+
+      const sum = (list) => statuses
+        .filter(s => list.includes(s._id))
+        .reduce((a, b) => a + b.count, 0);
+
+      res.json({
+        applied: sum(statusMap.applied),
+        approved: sum(statusMap.approved),
+        denied: sum(statusMap.denied),
+      });
+    } catch (err) {
+      res.status(500).json({ error: "Failed to fetch application status stats" });
+    }
+  }
+);
 
 
   return router;

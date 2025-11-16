@@ -5,6 +5,7 @@ const { createLoanApplication } = require("../../services/loanApplicationService
 const { createReloanApplication } = require("../../services/reloanApplicationService");
 const loanApplicationRepository = require("../../repositories/loanApplicationRepository");
 const logRepository = require("../../repositories/logRepository"); 
+const { encrypt, decrypt } = require("../../utils/crypt");
 
 // Submit a new loan application with file uploads
 module.exports = (db) => {
@@ -75,6 +76,47 @@ module.exports = (db) => {
       }
     }
   );
+
+// Check for duplicate loan applications
+// Check for duplicate loan applications
+router.post("/check-duplicate", async (req, res) => {
+  try {
+    const { appName, appDob, appEmail } = req.body;
+
+    // Fetch all applications
+    const applications = await db.collection("loan_applications").find({}).toArray();
+
+    // Find a match by decrypting stored data
+    const match = applications.find(app => {
+      try {
+        const decryptedName = decrypt(app.appName);
+        const decryptedEmail = decrypt(app.appEmail);
+
+        return (
+          decryptedName.toLowerCase().trim() === appName.toLowerCase().trim() &&
+          decryptedEmail.toLowerCase().trim() === appEmail.toLowerCase().trim() &&
+          app.appDob === appDob
+        );
+      } catch (err) {
+        console.error("Decryption error:", err);
+        return false;
+      }
+    });
+
+    if (match) {
+      return res.json({
+        isDuplicate: true,
+        status: match.status,
+      });
+    }
+
+    res.json({ isDuplicate: false });
+  } catch (error) {
+    console.error("Check duplicate error:", error);
+    res.status(500).json({ error: "Server error." });
+  }
+});
+
 
   return router;
 };

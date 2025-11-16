@@ -6,7 +6,7 @@ const { decrypt } = require('../../utils/crypt');
 
 module.exports = (db) => {
 
-  // Get all loans (staff only)
+// Get all loans (staff only)
   router.get(
     "/",
     authenticateToken,
@@ -14,29 +14,36 @@ module.exports = (db) => {
     async (req, res) => {
       try {
         let query = {};
-  
+
         // If collector, only fetch loans for borrowers assigned to them
         if (req.user.role === "collector") {
-          // First, get borrowers assigned to this collector
+          // Get borrowers assigned to this collector
           const assignedBorrowers = await db
             .collection("borrowers_account")
-            .find({ assignedCollectorId: req.user.userId }) 
+            .find({ assignedCollectorId: req.user.userId })
             .project({ borrowersId: 1 })
             .toArray();
-  
+
           const borrowerIds = assignedBorrowers.map((b) => b.borrowersId);
-  
-          // Only fetch loans of those borrowers
+
+          // Fetch loans for those borrowers (include all statuses)
           query = { borrowersId: { $in: borrowerIds } };
+        } else {
+          // For other roles, fetch all loans (include all statuses)
+          query = {};
         }
-  
+
         const loans = await db.collection("loans").find(query).toArray();
-  
+
         const loansWithDetails = await Promise.all(
           loans.map(async (loan) => {
-            const borrower = await db.collection("borrowers_account").findOne({ borrowersId: loan.borrowersId });
-            const application = await db.collection("loan_applications").findOne({ applicationId: loan.applicationId });
-  
+            const borrower = await db
+              .collection("borrowers_account")
+              .findOne({ borrowersId: loan.borrowersId });
+            const application = await db
+              .collection("loan_applications")
+              .findOne({ applicationId: loan.applicationId });
+
             return {
               ...loan,
               ...application,
@@ -44,7 +51,7 @@ module.exports = (db) => {
             };
           })
         );
-  
+
         res.status(200).json(loansWithDetails);
       } catch (error) {
         console.error("Error in GET /loans:", error);
@@ -52,7 +59,6 @@ module.exports = (db) => {
       }
     }
   );
-  
 
   // Get single loan by loanId
   router.get(
