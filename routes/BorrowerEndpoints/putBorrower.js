@@ -70,27 +70,49 @@ module.exports = (db) => {
 
   router.put('/:id/assign-collector', async (req, res) => {
     const { id } = req.params;
-    const { assignedCollector } = req.body;
-
+    const { assignedCollector, assignedCollectorName } = req.body;
+  
     if (!assignedCollector) {
       return res.status(400).json({ message: "assignedCollector is required." });
     }
-
+  
     try {
       const borrower = await borrowers.findOne({ borrowersId: id });
-      if (!borrower) return res.status(404).json({ message: "Borrower not found." });
-
+      if (!borrower) {
+        return res.status(404).json({ message: "Borrower not found." });
+      }
+  
       await borrowers.updateOne(
         { borrowersId: id },
-        { $set: { assignedCollector } }
+        {
+          $set: {
+            assignedCollector: assignedCollectorName,
+            assignedCollectorId: assignedCollector,
+          },
+        }
       );
-
-      res.status(200).json({ message: `Collector updated successfully to ${assignedCollector}` });
+  
+      const collections = db.collection("collections");
+      await collections.updateMany(
+        { borrowersId: id },
+        {
+          $set: {
+            collector: assignedCollectorName,
+            collectorId: assignedCollector,
+          },
+        }
+      );
+  
+      res.status(200).json({
+        message: "Collector updated successfully",
+        assignedCollector: assignedCollectorName,
+        assignedCollectorId: assignedCollector,
+      });
     } catch (err) {
       console.error("Error updating assigned collector:", err);
       res.status(500).json({ message: "Server error while updating collector." });
     }
-  });
+  });  
 
   router.put('/:id', authenticateToken, async (req, res) => {
     const { id } = req.params;
