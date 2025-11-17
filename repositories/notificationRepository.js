@@ -10,15 +10,19 @@ module.exports = (db) => {
     getLoanOfficerNotifications: () =>
       loanOfficerNotifications.find({}).sort({ createdAt: -1 }).limit(50).toArray(),
 
-    markLoanOfficerNotificationRead: (id) => {
-      const filter = require("mongodb").ObjectId.isValid(id)
-        ? { _id: new require("mongodb").ObjectId(id) }
+    markLoanOfficerNotificationRead: async (id) => {
+      const { ObjectId } = require("mongodb");
+      const filter = ObjectId.isValid(id)
+        ? { _id: new ObjectId(id) }
         : { id };
-      return loanOfficerNotifications.findOneAndUpdate(
+      console.log(`🔧 LoanOfficer - Marking notification with filter:`, filter);
+      const result = await loanOfficerNotifications.findOneAndUpdate(
         filter,
         { $set: { read: true, viewed: true } },
         { returnDocument: "after" }
       );
+      console.log(`🔧 LoanOfficer - Update result:`, result);
+      return result;
     },
 
     markAllLoanOfficerNotificationsRead: () =>
@@ -32,8 +36,9 @@ module.exports = (db) => {
       managerNotifications.find({}).sort({ createdAt: -1 }).limit(50).toArray(),
 
     markManagerNotificationRead: (id) => {
-      const filter = require("mongodb").ObjectId.isValid(id)
-        ? { _id: new require("mongodb").ObjectId(id) }
+      const { ObjectId } = require("mongodb");
+      const filter = ObjectId.isValid(id)
+        ? { _id: new ObjectId(id) }
         : { id };
       return managerNotifications.findOneAndUpdate(
         filter,
@@ -52,9 +57,10 @@ module.exports = (db) => {
     getCollectorNotifications: () =>
     collectorNotifications.find({}).sort({ createdAt: -1 }).limit(50).toArray(),
 
-    markCollectorrNotificationRead: (id) => {
-      const filter = require("mongodb").ObjectId.isValid(id)
-        ? { _id: new require("mongodb").ObjectId(id) }
+    markCollectorNotificationRead: (id) => {
+      const { ObjectId } = require("mongodb");
+      const filter = ObjectId.isValid(id)
+        ? { _id: new ObjectId(id) }
         : { id };
       return collectorNotifications.findOneAndUpdate(
         filter,
@@ -76,8 +82,9 @@ module.exports = (db) => {
       notifs && notifs.length > 0 ? borrowerNotifications.insertMany(notifs) : null,
 
     markBorrowerNotificationRead: (id, borrowersId) => {
-      const filter = require("mongodb").ObjectId.isValid(id)
-        ? { _id: new require("mongodb").ObjectId(id) }
+      const { ObjectId } = require("mongodb");
+      const filter = ObjectId.isValid(id)
+        ? { _id: new ObjectId(id) }
         : { id };
       return borrowerNotifications.findOneAndUpdate(
         { ...filter, borrowersId },

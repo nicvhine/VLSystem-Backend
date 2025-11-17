@@ -98,6 +98,27 @@ module.exports = (db) => {
             );
           }
         }
+
+        // Notify borrower if penalty was applied
+        if (penalty > 0 && collection.borrowersId) {
+          try {
+            const notificationRepository = require("../../repositories/notificationRepository");
+            const notifRepo = notificationRepository(db);
+            await notifRepo.insertBorrowerNotifications([{
+              borrowersId: collection.borrowersId,
+              type: "late-payment-penalty",
+              title: "Late Payment Penalty Notice",
+              message: `A late payment penalty of ₱${penalty.toLocaleString()} has been assessed on your account for collection reference ${referenceNumber}, which is ${daysLate} day(s) overdue. Please settle your account to avoid additional charges.`,
+              referenceNumber,
+              amount: penalty,
+              read: false,
+              viewed: false,
+              createdAt: new Date(),
+            }]);
+          } catch (notifErr) {
+            console.error("Failed to notify borrower about penalty:", notifErr);
+          }
+        }
   
         res.json({
           message: 'Penalty and credit score updated successfully',

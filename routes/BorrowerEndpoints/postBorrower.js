@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 require('dotenv').config();
 const logRepository = require("../../repositories/logRepository"); 
+const notificationRepository = require("../../repositories/notificationRepository");
 
 const JWT_SECRET = process.env.JWT_SECRET;
 const {
@@ -17,6 +18,7 @@ const authorizeRole = require('../../middleware/authorizeRole');
 
 module.exports = (db) => {
   const logRepo = logRepository(db); 
+  const notifRepo = notificationRepository(db);
   
   // Create borrower account
   router.post("/", authenticateToken, authorizeRole("manager"), async (req, res) => {
@@ -32,6 +34,27 @@ module.exports = (db) => {
         action: "CREATE_BORROWER",
         description: `${creatorName} added a new borrower account: ${newBorrower.name}`,
       });
+
+      // Notify loan officer about the new borrower account
+      try {
+        await notifRepo.insertLoanOfficerNotification({
+          type: "borrower-account-created",
+          title: "New Borrower Account Created",
+          message: `${creatorName} has created a borrower account for ${newBorrower.borrower.name}. Application ID: ${req.body.applicationId}`,
+          applicationId: req.body.applicationId,
+          borrowersId: newBorrower.borrower.borrowersId,
+          actor: {
+            name: creatorName,
+            role: "Manager",
+          },
+          read: false,
+          viewed: false,
+          createdAt: new Date(),
+        });
+        console.log("Loan officer notified of new borrower account.");
+      } catch (notifyErr) {
+        console.error("Failed to notify loan officer:", notifyErr.message);
+      }
 
       res.status(201).json(newBorrower);
     } catch (err) {

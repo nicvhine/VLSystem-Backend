@@ -218,10 +218,22 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
   // --- Notifications ---
   try {
     const notifRepo = notificationRepository(db);
+    // Notify Loan Officer
     await notifRepo.insertLoanOfficerNotification({
       type: "new-application",
-      title: "New Loan Application Submitted",
-      message: `${appName} has submitted a new loan application.`,
+      title: "New Loan Application Received",
+      message: `A new loan application has been submitted by ${appName}. Please review and process at your earliest convenience.`,
+      applicationId,
+      actor: "System",
+      read: false,
+      viewed: false,
+      createdAt: new Date(),
+    });
+    // Notify Manager
+    await notifRepo.insertManagerNotification({
+      type: "new-application",
+      title: "New Loan Application for Review",
+      message: `A new loan application (${applicationId}) from ${appName} has been submitted and requires managerial review.`,
       applicationId,
       actor: "System",
       read: false,
@@ -229,7 +241,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
       createdAt: new Date(),
     });
   } catch (err) {
-    console.error("Failed to create loan officer notification:", err?.message || err);
+    console.error("Failed to create application notifications:", err?.message || err);
   }
 
   // --- SMS to references ---
