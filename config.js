@@ -25,7 +25,7 @@ module.exports = {
     PORT: process.env.PORT || 3001,
     MONGODB_URI: process.env.MONGODB_URI,
     CORS_OPTIONS: {
-        origin: 'http://localhost:3000',
+        origin: ['http://localhost:3000', 'http://localhost:3002'],
         methods: ['GET', 'POST', 'PUT', 'DELETE'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true,

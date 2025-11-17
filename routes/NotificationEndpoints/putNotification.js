@@ -10,11 +10,13 @@ module.exports = (db) => {
   router.put(
     "/:role/:id/read",
     authenticateToken,
-    authorizeRole("manager", "loan officer", "borrower"),
+    authorizeRole("manager", "loan officer", "borrower", "collector"),
     async (req, res) => {
       try {
         const role = req.params.role.toLowerCase().trim();
         const id = req.params.id;
+
+        console.log(`📝 Marking notification as read: role=${role}, id=${id}, user=${req.user.name}`);
 
         // Validate role ownership
         if (role === "manager" && (req.user.role || "").toLowerCase() !== "manager") {
@@ -26,12 +28,16 @@ module.exports = (db) => {
         if (role === "borrower" && (req.user.role || "").toLowerCase() !== "borrower") {
           return res.status(403).json({ error: "Access denied" });
         }
+        if (role === "collector" && (req.user.role || "").toLowerCase() !== "collector") {
+          return res.status(403).json({ error: "Access denied" });
+        }
 
         const borrowersId = role === "borrower" ? req.user.borrowersId : undefined;
         const result = await service.markNotificationRead(db, role, id, borrowersId);
+        console.log(`✅ Notification marked as read: id=${id}, result=`, result);
         res.json(result);
       } catch (err) {
-        console.error(err);
+        console.error("❌ Error marking notification as read:", err);
         res.status(404).json({ error: err.message });
       }
     }
@@ -41,7 +47,7 @@ module.exports = (db) => {
   router.put(
     "/:role/read-all",
     authenticateToken,
-    authorizeRole("manager", "loan officer", "borrower"),
+    authorizeRole("manager", "loan officer", "borrower", "collector"),
     async (req, res) => {
       try {
         const role = req.params.role.toLowerCase().trim();
@@ -53,6 +59,9 @@ module.exports = (db) => {
           return res.status(403).json({ error: "Access denied" });
         }
         if (role === "borrower" && (req.user.role || "").toLowerCase() !== "borrower") {
+          return res.status(403).json({ error: "Access denied" });
+        }
+        if (role === "collector" && (req.user.role || "").toLowerCase() !== "collector") {
           return res.status(403).json({ error: "Access denied" });
         }
 

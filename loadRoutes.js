@@ -24,6 +24,12 @@ function loadRoutes(app, db) {
     const { startNotificationCron } = require("./routes/NotificationEndpoints/triggerNotification");
     startNotificationCron(db);
     
+    const { startPendingApplicationChecker } = require("./routes/ApplicationEndpoints/pendingApplicationChecker");
+    startPendingApplicationChecker(db);
+    
+    const { startCollectorNotificationCron } = require("./routes/CollectionEndpoints/collectorNotificationCron");
+    startCollectorNotificationCron(db);
+    
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);
     app.use('/borrowers', borrowersRoutes);
@@ -41,6 +47,12 @@ function loadRoutes(app, db) {
     app.use('/sysad', sysadRoutes);
 
     app.get("/ping", (req, res) => { res.json({ message: "pong from root" }); });
+
+    // 404 handler for debugging
+    app.use((req, res, next) => {
+        console.log(`❌ 404 - Route not found: ${req.method} ${req.url}`);
+        res.status(404).json({ error: 'Route not found', url: req.url, method: req.method });
+    });
 
     console.log('Routes loaded');
 

@@ -50,13 +50,26 @@ module.exports = (db) => {
             createdAt: new Date(),
           });
 
-          console.log("Loan officer notified of penalty endorsement.");
+          // Notify borrower about penalty endorsement
+          await notifRepo.insertBorrowerNotifications([{
+            borrowersId: collection.borrowersId,
+            type: "penalty-endorsed",
+            title: "Penalty Review Notification",
+            message: `Your account for collection reference ${referenceNumber} has been forwarded for penalty assessment review. Proposed penalty amount: ₱${penaltyAmount.toLocaleString()}. Please contact our office for more information.`,
+            referenceNumber,
+            amount: penaltyAmount,
+            read: false,
+            viewed: false,
+            createdAt: new Date(),
+          }]);
+
+          console.log("Loan officer and borrower notified of penalty endorsement.");
         } catch (notifyErr) {
-          console.error("Failed to notify loan officer:", notifyErr.message);
+          console.error("Failed to notify about penalty endorsement:", notifyErr.message);
         }
 
         res.status(201).json({
-          message: "Penalty endorsement created and loan officer notified",
+          message: "Penalty endorsement created and notifications sent",
           ...result,
         });
       } catch (error) {

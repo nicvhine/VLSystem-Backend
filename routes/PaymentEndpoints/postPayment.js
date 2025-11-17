@@ -27,9 +27,49 @@ module.exports = (db) => {
         // The service will detect loan type internally
         const result = await paymentService.handleCashPayment({ referenceNumber, ...req.body }, db);
   
-        // Notify borrower
+        // Notify borrower and collector
         if (result?.borrowersId && result?.amount) {
           await addBorrowerPaymentNotification(db, result.borrowersId, referenceNumber, result.amount, "Cash");
+          
+          const notificationRepository = require("../../repositories/notificationRepository");
+          const notifRepo = notificationRepository(db);
+          
+          // Notify borrower about payment success
+          await notifRepo.insertBorrowerNotifications([{
+            borrowersId: result.borrowersId,
+            type: "payment-received",
+            title: "Payment Successfully Processed",
+            message: `Your cash payment of ₱${result.amount.toLocaleString()} for collection reference ${referenceNumber} has been successfully received and processed. Thank you for your payment.`,
+            referenceNumber,
+            amount: result.amount,
+            read: false,
+            viewed: false,
+            createdAt: new Date(),
+          }]);
+
+          // Notify collector about payment received
+          const borrower = await db.collection("borrowers_account").findOne(
+            { borrowersId: result.borrowersId },
+            { projection: { assignedCollectorId: 1, name: 1 } }
+          );
+          
+          if (borrower?.assignedCollectorId) {
+            const { decrypt } = require("../../utils/crypt");
+            const borrowerName = borrower.name ? decrypt(borrower.name) : "Unknown";
+            
+            await notifRepo.insertCollectorNotification({
+              type: "cash-payment-received",
+              title: "Payment Collected",
+              message: `Cash payment of ₱${result.amount.toLocaleString()} has been received from ${borrowerName} for collection reference ${referenceNumber}. Payment successfully posted to account.`,
+              referenceNumber,
+              borrowersId: result.borrowersId,
+              amount: result.amount,
+              actor: borrowerName,
+              read: false,
+              viewed: false,
+              createdAt: new Date(),
+            });
+          }
         }
   
         res.json(result);

@@ -204,6 +204,24 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
 
   if (updatedLoan.balance <= 0) {
     await repo.updateLoan(updatedLoan.loanId, { status: "Completed" });
+    
+    // Notify loan officer that loan is fully repaid
+    try {
+      const notifRepo = require("../repositories/notificationRepository")(db);
+      await notifRepo.insertLoanOfficerNotification({
+        type: "loan-fully-repaid",
+        title: "Loan Account Fully Repaid",
+        message: `Loan account ${updatedLoan.loanId} has been successfully paid in full. You may now proceed with account closure procedures.`,
+        loanId: updatedLoan.loanId,
+        borrowersId: collection.borrowersId,
+        actor: "System",
+        read: false,
+        viewed: false,
+        createdAt: new Date(),
+      });
+    } catch (notifErr) {
+      console.error("Failed to notify loan officer of full repayment:", notifErr);
+    }
   }
 
   return {
