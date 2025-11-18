@@ -14,11 +14,11 @@ async function createApp() {
     app.use("/uploads", express.static(path.join(__dirname, "uploads")));
     app.use(cors(CORS_OPTIONS));
 
-    // Log all incoming requests for debugging
-    app.use((req, res, next) => {
-        console.log(`🌐 ${req.method} ${req.url} from ${req.headers.origin || 'no-origin'}`);
-        next();
-    });
+    // // Log all incoming requests for debugging
+    // app.use((req, res, next) => {
+    //     console.log(`🌐 ${req.method} ${req.url} from ${req.headers.origin || 'no-origin'}`);
+    //     next();
+    // });
 
     // Initialize database and load routes
     const db = await connectToDatabase();

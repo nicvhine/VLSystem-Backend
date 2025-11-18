@@ -60,7 +60,7 @@ module.exports = (db) => {
         console.error("Failed to create notifications:", notifyErr.message);
       }
     } catch (err) {
-      console.error("❌ Error creating endorsement:", err.message);
+      console.error("Error creating endorsement:", err.message);
       res.status(500).json({ message: err.message });
     }
   });
