@@ -15,19 +15,24 @@ module.exports = (db) => {
       const filter = ObjectId.isValid(id)
         ? { _id: new ObjectId(id) }
         : { id };
-      console.log(`🔧 LoanOfficer - Marking notification with filter:`, filter);
+
       const result = await loanOfficerNotifications.findOneAndUpdate(
         filter,
         { $set: { read: true, viewed: true } },
         { returnDocument: "after" }
       );
-      console.log(`🔧 LoanOfficer - Update result:`, result);
+
       return result;
     },
 
     markAllLoanOfficerNotificationsRead: () =>
       loanOfficerNotifications.updateMany(
-        { $or: [ { read: { $ne: true } }, { viewed: { $ne: true } } ] },
+        {
+          $or: [
+            { read: { $ne: true } },
+            { viewed: { $ne: true } }
+          ]
+        },
         { $set: { read: true, viewed: true } }
       ),
 
@@ -40,6 +45,7 @@ module.exports = (db) => {
       const filter = ObjectId.isValid(id)
         ? { _id: new ObjectId(id) }
         : { id };
+
       return managerNotifications.findOneAndUpdate(
         filter,
         { $set: { read: true, viewed: true } },
@@ -49,19 +55,25 @@ module.exports = (db) => {
 
     markAllManagerNotificationsRead: () =>
       managerNotifications.updateMany(
-        { $or: [ { read: { $ne: true } }, { viewed: { $ne: true } } ] },
+        {
+          $or: [
+            { read: { $ne: true } },
+            { viewed: { $ne: true } }
+          ]
+        },
         { $set: { read: true, viewed: true } }
       ),
 
-    //Collector Queries
+    // Collector queries
     getCollectorNotifications: () =>
-    collectorNotifications.find({}).sort({ createdAt: -1 }).limit(50).toArray(),
+      collectorNotifications.find({}).sort({ createdAt: -1 }).limit(50).toArray(),
 
     markCollectorNotificationRead: (id) => {
       const { ObjectId } = require("mongodb");
       const filter = ObjectId.isValid(id)
         ? { _id: new ObjectId(id) }
         : { id };
+
       return collectorNotifications.findOneAndUpdate(
         filter,
         { $set: { read: true, viewed: true } },
@@ -71,21 +83,25 @@ module.exports = (db) => {
 
     markAllCollectorNotificationsRead: () =>
       collectorNotifications.updateMany(
-        { $or: [ { read: { $ne: true } }, { viewed: { $ne: true } } ] },
+        { 
+          $or: [
+            { read: { $ne: true } },
+            { viewed: { $ne: true } }
+          ]
+        },
         { $set: { read: true, viewed: true } }
       ),
+
     // Borrower queries
     getBorrowerNotifications: (borrowersId) =>
-      borrowerNotifications.find({ borrowersId }).sort({ date: -1 }).toArray(),
-
-    insertBorrowerNotifications: (notifs) =>
-      notifs && notifs.length > 0 ? borrowerNotifications.insertMany(notifs) : null,
+      borrowerNotifications.find({ borrowersId }).sort({ createdAt: -1 }).toArray(),
 
     markBorrowerNotificationRead: (id, borrowersId) => {
       const { ObjectId } = require("mongodb");
       const filter = ObjectId.isValid(id)
         ? { _id: new ObjectId(id) }
         : { id };
+
       return borrowerNotifications.findOneAndUpdate(
         { ...filter, borrowersId },
         { $set: { read: true, viewed: true } },
@@ -95,10 +111,17 @@ module.exports = (db) => {
 
     markAllBorrowerNotificationsRead: (borrowersId) =>
       borrowerNotifications.updateMany(
-        { borrowersId, $or: [ { read: { $ne: true } }, { viewed: { $ne: true } } ] },
+        {
+          borrowersId,
+          $or: [
+            { read: { $ne: true } },
+            { viewed: { $ne: true } }
+          ]
+        },
         { $set: { read: true, viewed: true } }
       ),
 
+    // Collections for auto-notifications
     findDueCollections: (borrowersId, today, threeDaysLater) =>
       collections
         .find({
@@ -115,13 +138,19 @@ module.exports = (db) => {
         .toArray()
         .then((docs) => docs.map((n) => n.referenceNumber)),
 
+    // Insert functions
     insertLoanOfficerNotification: (notif) =>
-      notif ? loanOfficerNotifications.insertOne(notif) : null, 
+      notif ? loanOfficerNotifications.insertOne(notif) : null,
 
     insertManagerNotification: (notif) =>
       notif ? managerNotifications.insertOne(notif) : null,
 
     insertCollectorNotification: (notif) =>
       notif ? collectorNotifications.insertOne(notif) : null,
+
+    insertBorrowerNotifications: (notifs) =>
+      Array.isArray(notifs)
+        ? borrowerNotifications.insertMany(notifs)
+        : borrowerNotifications.insertOne(notifs),
   };
 };
