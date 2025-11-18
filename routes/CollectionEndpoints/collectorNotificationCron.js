@@ -1,12 +1,7 @@
 const cron = require("node-cron");
 const notificationRepository = require("../../repositories/notificationRepository");
 
-/**
- * Collector notification system
- * - Payment reminders 3 days before due date
- * - Overdue payment notifications
- * Runs daily at 9:00 AM
- */
+
 function startCollectorNotificationCron(db) {
   // Run daily at 9:00 AM
   cron.schedule("0 9 * * *", async () => {
