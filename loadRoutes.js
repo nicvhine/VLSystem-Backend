@@ -18,14 +18,24 @@ function loadRoutes(app, db) {
     const otpRoutes = require('./routes/otpEndpoint')(db);
     const sysadRoutes = require('./routes/sysadDashboard')(db);
 
-    require('./routes/ApplicationEndpoints/cleanup');
-    require('./routes/CollectionEndpoints/statusUpdate');
-    
-    const { startNotificationCron } = require("./routes/NotificationEndpoints/triggerNotification");
-    startNotificationCron(db);
-    
-    const { startPendingApplicationChecker } = require("./routes/ApplicationEndpoints/pendingApplicationChecker");
-    startPendingApplicationChecker(db);
+    // TESTING CRONS
+
+    // const { startPendingApplicationCheckerTest } = require("./Crons/TestingCrons/pendingApplicationChecker");
+    // startPendingApplicationCheckerTest(db);
+    // require('./Crons/TestingCrons/unscheduleCleanup');
+    // require('./Crons/TestingCrons/collectionsDue');
+    // const { startBorrowerDueTest } = require("./Crons/TestingCrons/borrowerDueNotif");
+    // startBorrowerDueTest(db);
+
+
+    // PRODUCTION CRON
+
+    const { startPendingApplicationCheckerProd } = require("./Crons/ProductionCrons/pendingApplicationChecker");
+    startPendingApplicationCheckerProd(db);
+    require('./Crons/ProductionCrons/unscheduledCleanup');
+    require('./Crons/ProductionCrons/collectionsDue');
+    const { startBorrowerDueProd } = require("./Crons/ProductionCrons/borrowerDueNotif");
+    startBorrowerDueProd(db);
     
     const { startCollectorNotificationCron } = require("./routes/CollectionEndpoints/collectorNotificationCron");
     startCollectorNotificationCron(db);

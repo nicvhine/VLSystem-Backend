@@ -1,67 +1,90 @@
 const cron = require("node-cron");
 const notificationRepository = require("../../repositories/notificationRepository");
+const { decrypt } = require("../../utils/crypt");
 
-/**
- * Check for applications pending for 3 days without action
- * Runs daily at midnight
- */
 function startPendingApplicationChecker(db) {
-  // Run daily at 00:00
-  cron.schedule("0 0 * * *", async () => {
-    console.log("⏰ Checking for pending applications (3 days)...");
-    
+  cron.schedule("*/30 * * * * *", async () => {
+    console.log("⏰ Checking for pending applications (TEST every 30 seconds)...");
+
     try {
       const applications = db.collection("loan_applications");
       const notifRepo = notificationRepository(db);
+
       const threeDaysAgo = new Date();
       threeDaysAgo.setDate(threeDaysAgo.getDate() - 3);
 
-      // Find applications pending for 3+ days without approval/denial
+      const startOfToday = new Date();
+      startOfToday.setHours(0, 0, 0, 0);
+
       const pendingApps = await applications
         .find({
-          status: { $in: ["Pending", "For Scheduling", "Scheduled"] },
-          submittedDate: { $lte: threeDaysAgo },
+          status: { $in: ["Applied", "Pending", "Cleared"] },
         })
         .toArray();
 
-      console.log(`📋 Found ${pendingApps.length} applications pending for 3+ days`);
+      console.log(`📋 Found ${pendingApps.length} applications to check`);
 
       for (const app of pendingApps) {
         const applicationId = app.applicationId;
-        const appName = app.appName || "Unknown";
-        const status = app.status || "Pending";
+        let appName;
+        try {
+          appName = decrypt(app.appName) || app.appName || "Unknown";
+        } catch {
+          appName = app.appName || "Unknown";
+        }
 
-        // Create status-specific message
+        const status = app.status?.toLowerCase() || "unknown";
+
+        // Determine the relevant date field
+        let relevantDate;
+        switch (status) {
+          case "applied":
+            relevantDate = app.dateApplied;
+            break;
+          case "pending":
+            relevantDate = app.dateScheduled;
+            break;
+          case "cleared":
+            relevantDate = app.dateCleared;
+            break;
+          default:
+            relevantDate = app.dateApplied;
+        }
+
+        if (!relevantDate) continue;
+
+        const dateCheck = new Date(relevantDate);
+        if (dateCheck > threeDaysAgo) continue; // not yet 3 days
+
+        // Messages
         let managerMessage = "";
         let loanOfficerMessage = "";
 
-        switch (status.toLowerCase()) {
+        switch (status) {
+          case "cleared":
+            managerMessage = `Application ${applicationId} from ${appName} has been in "Cleared" status for 3+ days without review.`;
+            loanOfficerMessage = `Application ${applicationId} from ${appName} has been in "Cleared" status for 3+ days.`;
+            break;
+          case "applied":
+            managerMessage = `Application ${applicationId} from ${appName} has been "Applied" for 3+ days without scheduling.`;
+            loanOfficerMessage = `Application ${applicationId} from ${appName} waiting for interview scheduling for 3+ days.`;
+            break;
           case "pending":
-            managerMessage = `Application ${applicationId} from ${appName} has been in "Pending" status for 3 days without review. Please evaluate and take appropriate action.`;
-            loanOfficerMessage = `Application ${applicationId} from ${appName} has remained in "Pending" status for 3 days. Please review and schedule an interview or proceed with evaluation.`;
+            managerMessage = `Application ${applicationId} from ${appName} has been "Pending" for 3+ days with no follow-up.`;
+            loanOfficerMessage = `Application ${applicationId} from ${appName} pending for 3+ days. Please confirm interview completion.`;
             break;
-          case "for scheduling":
-            managerMessage = `Application ${applicationId} from ${appName} has been marked "For Scheduling" for 3 days without an interview date being set.`;
-            loanOfficerMessage = `Application ${applicationId} from ${appName} has been awaiting interview scheduling for 3 days. Please schedule an interview appointment at your earliest convenience.`;
-            break;
-          case "scheduled":
-            managerMessage = `Application ${applicationId} from ${appName} has had an interview scheduled for 3 days without follow-up action. Please verify completion status.`;
-            loanOfficerMessage = `Application ${applicationId} from ${appName} has been in "Scheduled" status for 3 days. Please confirm if the interview was completed and proceed with approval or dismissal.`;
-            break;
-          default:
-            managerMessage = `Application ${applicationId} from ${appName} has been in "${status}" status for 3 days without resolution. Please review and take necessary action.`;
-            loanOfficerMessage = `Application ${applicationId} from ${appName} requires your attention - it has been in "${status}" status for 3 days. Please complete the required processing.`;
         }
 
-        // Check if notification already sent
-        const existingNotif = await db.collection("manager_notifications").findOne({
-          type: "application-pending-3days",
-          applicationId,
-          createdAt: { $gte: threeDaysAgo },
-        });
+        if (!managerMessage || !loanOfficerMessage) continue;
+
+        // // Prevent duplicates per day
+        // const existingNotif = await db.collection("manager_notifications").findOne({
+        //   type: "application-pending-3days",
+        //   applicationId,
+        //   createdAt: { $gte: startOfToday },
+        // });
 
         if (!existingNotif) {
-          // Notify Manager
           await notifRepo.insertManagerNotification({
             type: "application-pending-3days",
             title: "Application Requires Attention",
@@ -73,19 +96,16 @@ function startPendingApplicationChecker(db) {
             viewed: false,
             createdAt: new Date(),
           });
-
-          console.log(`✅ Manager notified about pending application: ${applicationId} (${status})`);
+          console.log(`✅ Manager notified: ${applicationId} (${status})`);
         }
 
-        // Check if loan officer notification already sent
         const existingLONotif = await db.collection("loanOfficer_notifications").findOne({
           type: "application-pending-3days",
           applicationId,
-          createdAt: { $gte: threeDaysAgo },
+          createdAt: { $gte: startOfToday },
         });
 
         if (!existingLONotif) {
-          // Notify Loan Officer
           await notifRepo.insertLoanOfficerNotification({
             type: "application-pending-3days",
             title: "Action Required: Pending Application",
@@ -97,8 +117,7 @@ function startPendingApplicationChecker(db) {
             viewed: false,
             createdAt: new Date(),
           });
-
-          console.log(`✅ Loan Officer notified about pending application: ${applicationId} (${status})`);
+          console.log(`✅ Loan Officer notified: ${applicationId} (${status})`);
         }
       }
 
@@ -108,7 +127,7 @@ function startPendingApplicationChecker(db) {
     }
   });
 
-  console.log("🟢 Pending application checker scheduled (daily at midnight)");
+  console.log("🟢 Pending application checker scheduled (TEST mode)");
 }
 
 module.exports = { startPendingApplicationChecker };
