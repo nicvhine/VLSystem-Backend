@@ -72,20 +72,27 @@ async function sendDailySMSReminders() {
       if (sentToday) continue;
 
       const borrower = await borrowersCol.findOne({ borrowersId });
-      if (borrower && borrower.phoneNumber) {
-        const { phoneNumber, name } = borrower;
+      if (borrower) {
+
+        let decryptedPhone = borrower.phoneNumber ? decrypt(borrower.phoneNumber) : null;
+        let decryptedName = borrower.name ? decrypt(borrower.name) : null;
+
+        // Fallback if decryption fails
+        decryptedPhone = decryptedPhone || borrower.phoneNumber;
+        decryptedName = decryptedName || borrower.name;
+
         const message =
           status === 'Past Due'
-            ? `Hello${name ? ' ' + name : ''}, your payment is PAST DUE. Please settle today.`
-            : `Hello${name ? ' ' + name : ''}, your account is OVERDUE. Please contact us immediately.`;
+            ? `Hello${decryptedName ? ' ' + decryptedName : ''}, your payment is PAST DUE. Please settle today.`
+            : `Hello${decryptedName ? ' ' + decryptedName : ''}, your account is OVERDUE. Please contact us immediately.`;
 
         try {
-          await sendSMS(phoneNumber, message);
+          await sendSMS(decryptedPhone, message);
           smsCount++;
           await collectionsCol.updateOne({ referenceNumber }, { $set: { lastSMSSent: now } });
           console.log(`Sent ${status} SMS to ${name || 'Unknown'} (${phoneNumber})`);
         } catch (smsErr) {
-          console.error(`Failed to send SMS to ${phoneNumber}:`, smsErr.message);
+          console.error(`Failed to send SMS to ${decryptedPhone}:`, smsErr.message);
         }
       }
     }

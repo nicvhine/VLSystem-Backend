@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { MongoClient } from 'mongodb';
 import { sendSMS } from '../../services/smsService.js';
+import { decrypt } from '../../utils/crypt.js'
 
 dotenv.config({ path: '../../.env' });
 
@@ -61,26 +62,36 @@ async function sendDailySMSRemindersTest() {
       const { status, borrowersId, referenceNumber, lastSMSSent } = col;
 
       const lastSent = lastSMSSent ? new Date(lastSMSSent) : null;
-      const sentToday =
-        lastSent &&
-        now.getTime() - lastSent.getTime() < 30 * 1000; // 30 sec window for testing
+      const sentToday = lastSent && now.getTime() - lastSent.getTime() < 30 * 1000; // 30 sec window for testing
       if (sentToday) continue;
 
       const borrower = await borrowersCol.findOne({ borrowersId });
-      if (borrower && borrower.phoneNumber) {
-        const { phoneNumber, name } = borrower;
+      if (borrower) {
+        // Decrypt phone number and name
+        let decryptedPhone = borrower.phoneNumber ? decrypt(borrower.phoneNumber) : null;
+        let decryptedName = borrower.name ? decrypt(borrower.name) : null;
+
+        // Fallback if decryption fails
+        decryptedPhone = decryptedPhone || borrower.phoneNumber;
+        decryptedName = decryptedName || borrower.name;
+
+        if (!decryptedPhone) {
+          console.warn(`[TEST] ⚠️ Missing phone number for borrowersId: ${borrowersId}`);
+          continue;
+        }
+
         const message =
           status === 'Past Due'
-            ? `[TEST] Hello${name ? ' ' + name : ''}, your payment is PAST DUE.`
-            : `[TEST] Hello${name ? ' ' + name : ''}, your account is OVERDUE.`;
+            ? `[TEST] Hello${decryptedName ? ' ' + decryptedName : ''}, your payment is PAST DUE.`
+            : `[TEST] Hello${decryptedName ? ' ' + decryptedName : ''}, your account is OVERDUE.`;
 
         try {
-          await sendSMS(phoneNumber, message);
+          await sendSMS(decryptedPhone, message);
           smsCount++;
           await collectionsCol.updateOne({ referenceNumber }, { $set: { lastSMSSent: now } });
-          console.log(`[TEST] Sent ${status} SMS to ${name || 'Unknown'} (${phoneNumber})`);
+          console.log(`[TEST] Sent ${status} SMS to ${decryptedName || 'Unknown'} (${decryptedPhone})`);
         } catch (smsErr) {
-          console.error(`[TEST] Failed SMS to ${phoneNumber}:`, smsErr.message);
+          console.error(`[TEST] Failed SMS to ${decryptedPhone}:`, smsErr.message);
         }
       }
     }
