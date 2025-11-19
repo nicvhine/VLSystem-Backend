@@ -4,9 +4,9 @@ const crypto = require("crypto");
 const { decrypt, encrypt } = require("../utils/crypt");
 const { generateBorrowerId } = require("../utils/generator");
 const { generateBorrowerUsername } = require("../utils/username");
-const otpStore = require("../Utils/otpStore");
+const otpStore = require("../utils/otpStore");
 const { BACKEND_URL } = require("../config");
-const borrowerRepository = require("../Repositories/borrowerRepository");
+const borrowerRepository = require("../repositories/borrowerRepository");
 const borrowerSchema = require("../schemas/borrowerSchema");
 
 function generateTempPassword(length = 12) {
