@@ -18,11 +18,27 @@ function loadRoutes(app, db) {
     const otpRoutes = require('./routes/otpEndpoint')(db);
     const sysadRoutes = require('./routes/sysadDashboard')(db);
 
-    require('./routes/ApplicationEndpoints/cleanup');
-    require('./routes/CollectionEndpoints/statusUpdate');
+    // TESTING CRONS
+
+    // const { startPendingApplicationCheckerTest } = require("./Crons/TestingCrons/pendingApplicationChecker");
+    // startPendingApplicationCheckerTest(db);
+    // require('./Crons/TestingCrons/unscheduleCleanup');
+    // require('./Crons/TestingCrons/collectionsDue');
+    // const { startBorrowerDueTest } = require("./Crons/TestingCrons/borrowerDueNotif");
+    // startBorrowerDueTest(db);
+
+
+    // PRODUCTION CRON
+
+    const { startPendingApplicationCheckerProd } = require("./Crons/ProductionCrons/pendingApplicationChecker");
+    startPendingApplicationCheckerProd(db);
+    require('./Crons/ProductionCrons/unscheduledCleanup');
+    require('./Crons/ProductionCrons/collectionsDue');
+    const { startBorrowerDueProd } = require("./Crons/ProductionCrons/borrowerDueNotif");
+    startBorrowerDueProd(db);
     
-    const { startNotificationCron } = require("./routes/NotificationEndpoints/triggerNotification");
-    startNotificationCron(db);
+    const { startCollectorNotificationCron } = require("./routes/CollectionEndpoints/collectorNotificationCron");
+    startCollectorNotificationCron(db);
     
     app.use('/users', userRoutes);
     app.use('/loan-applications', loanApplicationRoutes);
@@ -41,6 +57,12 @@ function loadRoutes(app, db) {
     app.use('/sysad', sysadRoutes);
 
     app.get("/ping", (req, res) => { res.json({ message: "pong from root" }); });
+
+    // 404 handler for debugging
+    app.use((req, res, next) => {
+        console.log(`❌ 404 - Route not found: ${req.method} ${req.url}`);
+        res.status(404).json({ error: 'Route not found', url: req.url, method: req.method });
+    });
 
     console.log('Routes loaded');
 

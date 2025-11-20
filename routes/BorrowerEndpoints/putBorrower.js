@@ -81,6 +81,8 @@ module.exports = (db) => {
       if (!borrower) {
         return res.status(404).json({ message: "Borrower not found." });
       }
+
+      const previousCollector = borrower.assignedCollector || "None";
   
       await borrowers.updateOne(
         { borrowersId: id },
@@ -93,7 +95,7 @@ module.exports = (db) => {
       );
   
       const collections = db.collection("collections");
-      await collections.updateMany(
+      const collectionsUpdated = await collections.updateMany(
         { borrowersId: id },
         {
           $set: {
@@ -102,6 +104,41 @@ module.exports = (db) => {
           },
         }
       );
+
+      // Notify the new collector
+      try {
+        const notificationRepository = require("../../repositories/notificationRepository");
+        const notifRepo = notificationRepository(db);
+        const { decrypt } = require("../../utils/crypt");
+        const borrowerName = borrower.name ? decrypt(borrower.name) : "Unknown";
+
+        await notifRepo.insertCollectorNotification({
+          type: "collector-assigned",
+          title: "New Account Assignment",
+          message: `You have been assigned as the collection officer for borrower ${borrowerName} (Account ID: ${id}). Total of ${collectionsUpdated.modifiedCount} collection record(s) have been transferred to your portfolio.`,
+          borrowersId: id,
+          actor: "Manager",
+          read: false,
+          viewed: false,
+          createdAt: new Date(),
+        });
+
+        // Notify loan officer if collector changed
+        if (previousCollector !== "None" && previousCollector !== assignedCollectorName) {
+          await notifRepo.insertLoanOfficerNotification({
+            type: "collector-changed",
+            title: "Collection Officer Reassignment",
+            message: `The collection officer for borrower ${borrowerName} (Account ID: ${id}) has been reassigned from ${previousCollector} to ${assignedCollectorName}.`,
+            borrowersId: id,
+            actor: "Manager",
+            read: false,
+            viewed: false,
+            createdAt: new Date(),
+          });
+        }
+      } catch (notifErr) {
+        console.error("Failed to send collector assignment notification:", notifErr);
+      }
   
       res.status(200).json({
         message: "Collector updated successfully",

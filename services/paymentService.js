@@ -7,6 +7,7 @@ const axios = require("axios");
 const { decrypt } = require("../utils/crypt");
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
 // Helper to generate unique payment reference
 const generatePaymentRef = (collectionRef) => {
@@ -204,6 +205,24 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
 
   if (updatedLoan.balance <= 0) {
     await repo.updateLoan(updatedLoan.loanId, { status: "Completed" });
+    
+    // Notify loan officer that loan is fully repaid
+    try {
+      const notifRepo = require("../repositories/notificationRepository")(db);
+      await notifRepo.insertLoanOfficerNotification({
+        type: "loan-fully-repaid",
+        title: "Loan Account Fully Repaid",
+        message: `Loan account ${updatedLoan.loanId} has been successfully paid in full. You may now proceed with account closure procedures.`,
+        loanId: updatedLoan.loanId,
+        borrowersId: collection.borrowersId,
+        actor: "System",
+        read: false,
+        viewed: false,
+        createdAt: new Date(),
+      });
+    } catch (notifErr) {
+      console.error("Failed to notify loan officer of full repayment:", notifErr);
+    }
   }
 
   return {
@@ -293,8 +312,10 @@ const createPaymongoGcash = async ({ amount, collectionNumber, referenceNumber, 
           amount: Math.round(amount * 100),
           currency: "PHP",
           redirect: {
-            success: `http://localhost:3000/userPage/borrowerPage/payMongoTools/payment-success/${referenceNumber}`,
-            failed: `http://localhost:3000/borrower/payment-failed/${referenceNumber}`,
+            success: `${FRONTEND_URL}/userPage/borrowerPage/payMongoTools/payment-success/${referenceNumber}`,
+            // success: `http://localhost:3000/userPage/borrowerPage/payMongoTools/payment-success/${referenceNumber}`,
+            // failed: `http://localhost:3000/borrower/payment-failed/${referenceNumber}`,
+            failed: `${FRONTEND_URL}/borrower/payment-failed/${referenceNumber}`,
           },
           payment_intent: paymentIntent.id,
           statement_descriptor: `Collection ${collectionNumber}`,
