@@ -7,6 +7,7 @@ const axios = require("axios");
 const { decrypt } = require("../utils/crypt");
 
 const PAYMONGO_SECRET_KEY = process.env.PAYMONGO_SECRET_KEY;
+const FRONTEND_URL = process.env.FRONTEND_URL;
 
 // Helper to generate unique payment reference
 const generatePaymentRef = (collectionRef) => {
