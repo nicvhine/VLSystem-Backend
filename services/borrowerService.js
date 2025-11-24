@@ -79,6 +79,7 @@ async function createBorrower(data, db) {
     email: encrypt(normalizedEmail),
     phoneNumber: encrypt(normalizedPhone),
     profilePic: profilePicUrl,
+    createdDate: new Date(),
   };
 
   // Save borrower to DB

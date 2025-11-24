@@ -1,11 +1,11 @@
 const express = require("express");
 const router = express.Router();
 
-const getCharts = require("./charts");
-const getCards = require("./cards");
+const getLO = require("./loanOfficer");
+const getManager = require("./managerHead");
 module.exports = (db) => {
-  router.use("/", getCharts(db));
-  router.use("/", getCards(db));
+  router.use("/", getLO(db));
+  router.use("/", getManager(db));
 
   return router;
 };
