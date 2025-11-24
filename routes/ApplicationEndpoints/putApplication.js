@@ -167,9 +167,9 @@
             }
 
             const actorRole = normalizeRole(req.user?.role || "");
-            const prevStatus = String(existingApp.status || "");
-            const nextStatus = String(updatedDoc.status || updateData.status || "");
-            const changed = nextStatus.trim().toLowerCase() !== prevStatus.trim().toLowerCase();
+            const prevStatus = String(existingApp.status || "").trim().toLowerCase();
+            const nextStatus = String(updatedDoc.status || updateData.status || "").trim().toLowerCase();
+            const changed = nextStatus !== prevStatus;
 
             const roleToCollection = {
               manager: "loanOfficer_notifications",

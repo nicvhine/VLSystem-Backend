@@ -244,6 +244,17 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     console.error("Failed to create application notifications:", err?.message || err);
   }
 
+  // --- SMS to applicant ---
+  try {
+    const decryptedName = appName;
+    const decryptedContact = appContact;
+    const message = `Good day ${decryptedName}! Your loan application has been successfully submitted to Vistula Lending Corporation. Your Application ID is ${applicationId}. We will notify you once it has been reviewed. Thank you!`;
+
+    await sendSMS(decryptedContact, message);
+  } catch (err) {
+    console.error("Failed to send applicant SMS:", err?.message || err);
+  }  
+
   // --- SMS to references ---
   try {
     for (const ref of parsedReferences) {
