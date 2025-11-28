@@ -22,41 +22,48 @@ module.exports = (db) => {
       console.error("Logging failed:", err);
     }
   }
-
   router.put('/:id/change-password', authenticateToken, async (req, res) => {
     const { id } = req.params;
-    const { newPassword } = req.body;
+    const { currentPassword, newPassword } = req.body;  
     const { role, userId: jwtUserId } = req.user;
-
+  
     if (jwtUserId !== id && role !== 'head') {
       return res.status(403).json({ message: 'Unauthorized: can only change your own password' });
     }
-
-    const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
-    if (!newPassword || !passwordRegex.test(newPassword)) {
-      return res.status(400).json({
-        message:
-          'Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.',
-      });
+  
+    if (!currentPassword) {
+      return res.status(400).json({ message: 'Current password is required.' });
     }
-
+  
     try {
       const user = await users.findOne({ userId: id });
       if (!user) return res.status(404).json({ message: 'User not found' });
 
+      const isMatch = await bcrypt.compare(currentPassword, user.password);
+      if (!isMatch) {
+        return res.status(401).json({ message: 'Current password is incorrect.' });
+      }
+  
+      // Validate new password
+      const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[\W_]).{8,}$/;
+      if (!newPassword || !passwordRegex.test(newPassword)) {
+        return res.status(400).json({
+          message:
+            'Password must be at least 8 characters long and include uppercase, lowercase, number, and special character.',
+        });
+      }
+  
+      // Update password
       const hashedPassword = await bcrypt.hash(newPassword, 10);
       await users.updateOne({ userId: id }, { $set: { password: hashedPassword, isFirstLogin: false } });
-
-      // Log action
-      await logAction(req.user, "Change Password", `${req.user.name} changed password for ${user.name} (${user.userId})`);
-
+  
       res.status(200).json({ message: 'Password updated successfully' });
     } catch (err) {
       console.error('Password update error:', err);
       res.status(500).json({ message: 'Server error while updating password' });
     }
   });
-
+  
   router.put('/:userId/update-email', authenticateToken, async (req, res) => {
     const { userId } = req.params;
     const { email } = req.body;
