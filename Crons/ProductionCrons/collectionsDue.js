@@ -28,7 +28,8 @@ async function updateCollectionStatuses() {
       const daysLate = Math.floor((now - due) / (1000 * 60 * 60 * 24));
       let newStatus = status;
 
-      if (status === 'Unpaid' && daysLate > 30) newStatus = 'Overdue';
+      if ((status === 'Unpaid' || status === 'Partial') && daysLate > 1)
+      newStatus = 'Past Due';
       else if (status === 'Unpaid' && daysLate > 3) newStatus = 'Past Due';
       else if (status === 'Past Due' && daysLate > 30) newStatus = 'Overdue';
 
