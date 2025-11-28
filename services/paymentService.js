@@ -59,54 +59,48 @@ const generateNextOpenTermCollection = async (db, loan, lastCollection) => {
 };
 
 
-/**
- * applyPayment:
- * - For fixed-term: existing behavior (applies across collections in order).
- * - For open-term: interest-first, principal-only on excess, update loan.balance by principalPaid,
- *   generate next collection only when interest for current collection is fully paid.
- */
 const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db) => {
   if (!amount || isNaN(amount) || amount <= 0) throw new Error("Invalid payment amount");
 
   const repo = paymentRepository(db);
   const now = new Date();
 
-  // Fetch collection
+  // Fetch collection and previous status
   const collection = await repo.findCollection(referenceNumber);
   if (!collection) throw new Error("Collection not found");
+  const prevStatus = collection.status;
+  console.log("[DEBUG] Previous collection status:", prevStatus);
 
   // Fetch loan
   const loan = await repo.findLoan(collection.loanId);
   if (!loan) throw new Error("Loan not found");
+  console.log("[DEBUG] Loan fetched:", loan.loanId, "Current creditScore:", loan.creditScore);
 
   const paymentLogs = [];
   let remainingAmount = amount;
 
-  // If open-term -> handle interest-first + principal-excess
+  // --- OPEN-TERM LOAN ---
   if (loan.loanType === "Open-Term Loan") {
-    // Recompute interest due from collection record (safer) or compute from loan.balance
     const interestDue = Number(collection.periodInterestAmount || collection.periodBalance || 0);
     const principalOutstanding = Number(loan.balance || collection.loanBalance || collection.runningBalance || 0);
 
-    // Pay interest first
     const interestPaid = Math.min(remainingAmount, interestDue);
     remainingAmount -= interestPaid;
 
-    // Any leftover applies to principal
     const principalPaid = Math.min(remainingAmount, principalOutstanding);
     remainingAmount -= principalPaid;
 
-    // Update collection: interest portion recorded via periodBalance; we keep loanBalance in collection as snapshot
     const newPeriodBalance = Math.max(interestDue - interestPaid, 0);
     const newLoanBalanceSnapshot = Math.max(principalOutstanding - principalPaid, 0);
 
     collection.paidAmount = (collection.paidAmount || 0) + interestPaid + principalPaid;
     collection.periodBalance = newPeriodBalance;
-    // keep loanBalance in collection as snapshot of principal outstanding after this payment
     collection.loanBalance = newLoanBalanceSnapshot;
     collection.mode = mode;
     collection.paidAt = now;
     collection.status = newPeriodBalance <= 0 ? "Paid" : "Partial";
+
+    console.log("[DEBUG] Open-Term collection updated:", collection);
 
     await repo.updateCollection(collection.referenceNumber, {
       paidAmount: collection.paidAmount,
@@ -117,18 +111,13 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
       paidAt: collection.paidAt,
     });
 
-    // Log payment — record interest and principal parts in metadata
     const log = {
       loanId: loan.loanId,
       referenceNumber: generatePaymentRef(collection.referenceNumber),
       borrowersId: collection.borrowersId,
-      collector: collection.collector|| "Cash Collector",
+      collector: collection.collector || "Cash Collector",
       amount,
-      // store split so UI can display exact breakdown
-      meta: {
-        interestPaid,
-        principalPaid
-      },
+      meta: { interestPaid, principalPaid },
       interestPaid,
       principalPaid,
       balance: newPeriodBalance + newLoanBalanceSnapshot,
@@ -137,24 +126,17 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
       datePaid: now,
       createdAt: now,
     };
-
     paymentLogs.push(log);
     await repo.insertPayments([log]);
 
-    // Update loan: only deduct principalPaid from loan.balance; record total paidAmount for bookkeeping
-    // We still increment loan.paidAmount by full amount for totals, but only decrease balance by principalPaid
     await repo.incrementLoan(loan.loanId, { paidAmount: amount, balance: -principalPaid });
 
-    // Generate next collection if interest for this collection is fully paid (periodBalance === 0)
     if (collection.periodBalance <= 0 && newLoanBalanceSnapshot > 0) {
-      // fetch latest loan after increment
       const updatedLoan = await repo.findLoan(loan.loanId);
-      // pass updatedLoan so next interest uses updated balance
       await generateNextOpenTermCollection(db, updatedLoan, collection);
     }
-
   } else {
-    // Regular (fixed-term) behavior: distribute across collections in order
+    // --- FIXED-TERM LOAN ---
     const loanCollections = await repo.findLoanCollections(collection.loanId);
     for (let col of loanCollections) {
       if (remainingAmount <= 0) break;
@@ -167,6 +149,8 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
       const paymentToApply = Math.min(remainingAmount, periodRemaining);
       const newPaidAmount = alreadyPaid + paymentToApply;
 
+      const prevColStatus = col.status;
+
       await repo.updateCollection(col.referenceNumber, {
         paidAmount: newPaidAmount,
         periodBalance: Math.max(due - newPaidAmount, 0),
@@ -175,6 +159,8 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
         mode,
         paidAt: now,
       });
+
+      console.log("[DEBUG] Fixed-Term collection updated:", col.referenceNumber, "PrevStatus:", prevColStatus, "NewStatus:", newPaidAmount >= due ? "Paid" : "Partial");
 
       paymentLogs.push({
         loanId: col.loanId,
@@ -186,6 +172,7 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
         paidToCollection: col.collectionNumber,
         mode,
         datePaid: now,
+        prevStatus: prevColStatus,
         createdAt: now,
       });
 
@@ -197,33 +184,47 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
     if (paymentLogs.length > 0) await repo.insertPayments(paymentLogs);
   }
 
-  // Update loan status and collections status
-  const updatedLoan = await repo.findLoan(collection.loanId);
+  // --- UPDATE LOAN STATUS ---
   const updatedLoanCollections = await repo.findLoanCollections(collection.loanId);
   const loanStatus = determineLoanStatus(updatedLoanCollections);
   await repo.updateLoan(collection.loanId, { status: loanStatus });
 
-  if (updatedLoan.balance <= 0) {
-    await repo.updateLoan(updatedLoan.loanId, { status: "Completed" });
-    
-    // Notify loan officer that loan is fully repaid
-    try {
-      const notifRepo = require("../repositories/notificationRepository")(db);
-      await notifRepo.insertLoanOfficerNotification({
-        type: "loan-fully-repaid",
-        title: "Loan Account Fully Repaid",
-        message: `Loan account ${updatedLoan.loanId} has been successfully paid in full. You may now proceed with account closure procedures.`,
-        loanId: updatedLoan.loanId,
-        borrowersId: collection.borrowersId,
-        actor: "System",
-        read: false,
-        viewed: false,
-        createdAt: new Date(),
-      });
-    } catch (notifErr) {
-      console.error("Failed to notify loan officer of full repayment:", notifErr);
+  // --- ADJUST CREDIT SCORE BASED ON PREVIOUS STATUS ---
+  if (loan.loanId) {
+    let delta = 0;
+    console.log("[DEBUG] Previous collection status for creditScore adjustment:", prevStatus);
+
+    switch (prevStatus) {
+      case "Unpaid":
+        delta = 0.5;
+        break;
+      case "Past Due":
+        delta = -0.5;
+        break;
+      case "Overdue":
+        delta = -1.5;
+        break;
+      default:
+        delta = 0;
+    }
+
+    console.log("[DEBUG] Credit score delta calculated:", delta);
+
+    if (delta !== 0) {
+      const currentLoan = await db.collection("loans").findOne({ loanId: loan.loanId });
+      console.log("[DEBUG] Current loan creditScore before update:", currentLoan.creditScore);
+
+      const newCreditScore = Math.min(Math.max((currentLoan.creditScore || 0) + delta, 0), 10);
+
+      console.log("[DEBUG] New creditScore to set:", newCreditScore);
+
+      await db.collection("loans").updateOne(
+        { loanId: loan.loanId },
+        { $set: { creditScore: newCreditScore } }
+      );
     }
   }
+
 
   return {
     message: `${mode} payment applied successfully`,
@@ -234,6 +235,7 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
     remainingUnapplied: remainingAmount,
   };
 };
+
 
 // Cash payment
 const handleCashPayment = async (payload, db) => applyPayment({ ...payload, mode: "Cash" }, db);
