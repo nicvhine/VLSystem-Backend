@@ -126,7 +126,7 @@ const createOpenTermLoan = async (applicationId, db) => {
     borrowersId: borrower.borrowersId,
     profilePic: application.profilePic || "",
     paidAmount: 0,
-    balance: Number(application.appLoanAmount), // principal outstanding
+    balance: Number(application.appLoanAmount),
     status: "Active",
     loanType: "Open-Term Loan",
     dateDisbursed: application.dateDisbursed || new Date(),

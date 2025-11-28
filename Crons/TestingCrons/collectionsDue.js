@@ -26,11 +26,12 @@ async function updateCollectionStatusesTest() {
       if (!dueDate || status === 'Paid') continue;
 
       const due = new Date(dueDate);
-      const daysLate = Math.floor((now - due) / (1000 * 60)); // minutes for test
+      const daysLate = Math.floor((now - due) / (1000 * 60)); 
       let newStatus = status;
 
-      if (status === 'Unpaid' && daysLate > 1) newStatus = 'Past Due'; // quick test
-      if (newStatus !== status) {
+      if ((status === 'Unpaid' || status === 'Partial') && daysLate > 1)
+      newStatus = 'Past Due';
+          if (newStatus !== status) {
         await collectionsCol.updateOne({ referenceNumber }, { $set: { status: newStatus, lastStatusUpdated: now } });
         updatedCount++;
         console.log(`[TEST] Collection ${referenceNumber} status updated to "${newStatus}"`);

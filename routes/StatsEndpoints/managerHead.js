@@ -50,9 +50,9 @@ module.exports = (db) => {
             { $match: { status: "Active" } },
             { $group: { _id: null, total: { $sum: { $toDouble: "$appTotalPayable" } } } }
           ]).toArray(),
-          loanPayments.countDocuments({ }),
+          loanPayments.countDocuments({}),
           loans.countDocuments({ status: "Closed" }),
-          loans.countDocuments({ }),
+          loans.countDocuments({}),
           loans.countDocuments({ status: { $in: ["Applied", "Pending", "Cleared", "Approved"] } }),
           loans.countDocuments({ status: { $in: ["Disbursed", "Active", "Closed"] } }),
           loans.countDocuments({ status: { $in: ["Denied by LO", "Denied"] } })
@@ -104,16 +104,56 @@ module.exports = (db) => {
           { $project: { type: "$_id", count: 1, _id: 0 } }
         ]).toArray();
 
-        // Top borrowers
+        //top borrowers
         const topBorrowersRaw = await loanPayments.aggregate([
           { $match: { status: { $in: ["Active", "Closed"] } } },
+        
+          // Join with loan_applications to get appTotalPayable and appLoanAmount
+          {
+            $lookup: {
+              from: "loan_applications",
+              localField: "borrowersId",
+              foreignField: "borrowersId",
+              as: "loanDetails"
+            }
+          },
+          { $unwind: "$loanDetails" },
+        
+          // Calculate loan amount for percentage based on type
+          {
+            $addFields: {
+              loanAmountForPercentage: {
+                $cond: [
+                  { $eq: ["$loanDetails.loanType", "Open-Term Loan"] },
+                  { $toDouble: "$loanDetails.appLoanAmount" }, // convert string to number
+                  { $toDouble: "$loanDetails.appTotalPayable" } 
+                ]
+              },
+              paidForPercentage: {
+                $cond: [
+                  { $eq: ["$loanDetails.loanType", "Open-Term Loan"] },
+                  {  $subtract: [
+                    { $toDouble: "$loanDetails.appLoanAmount" }, // convert string
+                    { $toDouble: "$balance" } // ensure number
+                  ]}, // appLoanAmount - balance
+                  { $toDouble: "$paidAmount" }                 ]
+              }
+            }
+          },
+        
+          // Group by borrower
           {
             $group: {
               _id: "$borrowersId",
+              totalPaidForPercentage: { $sum: "$paidForPercentage" },
+              totalLoanForPercentage: { $sum: "$loanAmountForPercentage" },
               totalPaid: { $sum: "$paidAmount" },
-              totalBalance: { $sum: "$balance" }
+              totalBalance: { $sum: "$balance" },
+              loans: { $push: "$$ROOT" }
             }
           },
+        
+          // Join with borrowers_account
           {
             $lookup: {
               from: "borrowers_account",
@@ -123,47 +163,44 @@ module.exports = (db) => {
             }
           },
           { $unwind: "$borrower" },
+        
+          // Calculate percentagePaid
           {
             $addFields: {
-              totalLoan: { $add: ["$totalPaid", "$totalBalance"] },
               percentagePaid: {
                 $cond: [
-                  { $eq: [{ $add: ["$totalPaid", "$totalBalance"] }, 0] },
+                  { $eq: ["$totalLoanForPercentage", 0] },
                   0,
-                  { $multiply: [{ $divide: ["$totalPaid", { $add: ["$totalPaid", "$totalBalance"] }] }, 100] }
+                  { $multiply: [{ $divide: ["$totalPaidForPercentage", "$totalLoanForPercentage"] }, 100] }
                 ]
               }
             }
           },
+        
           { $sort: { percentagePaid: -1 } },
           { $limit: 5 }
         ]).toArray();
-
+        
+        // Map to response
         const topBorrowers = topBorrowersRaw.map(b => ({
           borrowerName: decrypt(b.borrower.name),
           totalPaid: b.totalPaid,
           totalBalance: b.totalBalance,
-          totalLoan: b.totalLoan,
+          totalLoan: b.totalLoanForPercentage,
           percentagePaid: b.percentagePaid
         }));
+                
 
         // Top collectors
         const collectors = await db.collection("users").find({ role: "collector" }).toArray();
         const topCollectors = await Promise.all(
           collectors.map(async (c) => {
             const collectionsForCollector = await collections.find({ collectorId: c.userId }).toArray();
-
             const totalAssigned = collectionsForCollector.reduce((sum, col) => sum + (col.periodAmount || 0), 0);
             const collectedByCollector = collectionsForCollector
               .filter(col => col.mode === "Cash" || col.mode === "POS")
               .reduce((sum, col) => sum + (col.paidAmount || 0), 0);
-
-            return {
-              collectorId: c.userId,
-              name: c.name,
-              totalAssigned,
-              collectedByCollector
-            };
+            return { collectorId: c.userId, name: c.name, totalAssigned, collectedByCollector };
           })
         );
         topCollectors.sort((a, b) => b.collectedByCollector - a.collectedByCollector);
@@ -171,11 +208,7 @@ module.exports = (db) => {
         // Top agents
         const agents = await agentsCollection.find({}).toArray();
         const topAgents = agents
-          .map(a => ({
-            agentId: a._id.toString(),
-            name: a.name,
-            totalProcessedLoans: a.totalLoanAmount || 0
-          }))
+          .map(a => ({ agentId: a._id.toString(), name: a.name, totalProcessedLoans: a.totalLoanAmount || 0 }))
           .sort((a, b) => b.totalProcessedLoans - a.totalProcessedLoans)
           .slice(0, 5);
 
@@ -183,7 +216,7 @@ module.exports = (db) => {
           totalBorrowers,
           activeBorrowers,
           totalDisbursed: totalDisbursedResult[0]?.total || 0,
-          totalCollected: totalCollectedResult[0]?.total || 0, 
+          totalCollected: totalCollectedResult[0]?.total || 0,
           collectables: collectablesResult[0]?.total || 0,
           totalLoans,
           closedLoans,
