@@ -10,7 +10,6 @@ module.exports = (repo, db) => {
 
       const newEndorsement = {
         referenceNumber: collection.referenceNumber,
-        collectionId: collection.collectionId,
         loanId: collection.loanId,
         paidAmount: collection.paidAmount,
         borrowerName: collection.name,
@@ -71,26 +70,26 @@ module.exports = (repo, db) => {
         }
       );
     
-      if (loanId) {
-        const loan = await db.collection("loans").findOne({ loanId });
-        if (loan) {
-          let delta = 0;
-          switch (updatedStatus) {
-            case "Paid": delta = 0.5; break;
-            case "Past Due": delta = -0.5; break;
-            case "Overdue": delta = -1.5; break;
-            default: delta = 0; break;
-          }
+      // if (loanId) {
+      //   const loan = await db.collection("loans").findOne({ loanId });
+      //   if (loan) {
+      //     let delta = 0;
+      //     switch (updatedStatus) {
+      //       case "Paid": delta = 0.5; break;
+      //       case "Past Due": delta = -0.5; break;
+      //       case "Overdue": delta = -1.5; break;
+      //       default: delta = 0; break;
+      //     }
     
-          let newCreditScore = (loan.creditScore || 0) + delta;
-          newCreditScore = Math.min(Math.max(newCreditScore, 0), 10);
+      //     let newCreditScore = (loan.creditScore || 0) + delta;
+      //     newCreditScore = Math.min(Math.max(newCreditScore, 0), 10);
     
-          await db.collection("loans").updateOne(
-            { loanId },
-            { $set: { creditScore: newCreditScore } }
-          );
-        }
-      }
+      //     await db.collection("loans").updateOne(
+      //       { loanId },
+      //       { $set: { creditScore: newCreditScore } }
+      //     );
+      //   }
+      // }
     
       const updateData = {
         status: "Approved",

@@ -107,8 +107,8 @@ module.exports = (db) => {
         //top borrowers
         const topBorrowersRaw = await loanPayments.aggregate([
           { $match: { status: { $in: ["Active", "Closed"] } } },
-        
-          // Join with loan_applications to get appTotalPayable and appLoanAmount
+
+          // Join with loan_applications to get loan amounts
           {
             $lookup: {
               from: "loan_applications",
@@ -118,42 +118,39 @@ module.exports = (db) => {
             }
           },
           { $unwind: "$loanDetails" },
-        
-          // Calculate loan amount for percentage based on type
+
+          // Calculate paid and total amounts per loan
           {
             $addFields: {
               loanAmountForPercentage: {
                 $cond: [
                   { $eq: ["$loanDetails.loanType", "Open-Term Loan"] },
-                  { $toDouble: "$loanDetails.appLoanAmount" }, // convert string to number
-                  { $toDouble: "$loanDetails.appTotalPayable" } 
+                  { $toDouble: "$loanDetails.appLoanAmount" },
+                  { $toDouble: "$loanDetails.appTotalPayable" }
                 ]
               },
               paidForPercentage: {
                 $cond: [
                   { $eq: ["$loanDetails.loanType", "Open-Term Loan"] },
-                  {  $subtract: [
-                    { $toDouble: "$loanDetails.appLoanAmount" }, // convert string
-                    { $toDouble: "$balance" } // ensure number
-                  ]}, // appLoanAmount - balance
-                  { $toDouble: "$paidAmount" }                 ]
+                  { $subtract: [{ $toDouble: "$loanDetails.appLoanAmount" }, { $toDouble: "$balance" }] },
+                  { $toDouble: "$paidAmount" }
+                ]
               }
             }
           },
-        
+
           // Group by borrower
           {
             $group: {
               _id: "$borrowersId",
-              totalPaidForPercentage: { $sum: "$paidForPercentage" },
               totalLoanForPercentage: { $sum: "$loanAmountForPercentage" },
+              totalPaidForPercentage: { $sum: "$paidForPercentage" },
               totalPaid: { $sum: "$paidAmount" },
-              totalBalance: { $sum: "$balance" },
-              loans: { $push: "$$ROOT" }
+              totalBalance: { $sum: "$balance" }
             }
           },
-        
-          // Join with borrowers_account
+
+          // Join with borrower account to get name
           {
             $lookup: {
               from: "borrowers_account",
@@ -163,8 +160,8 @@ module.exports = (db) => {
             }
           },
           { $unwind: "$borrower" },
-        
-          // Calculate percentagePaid
+
+          // Calculate percentage paid
           {
             $addFields: {
               percentagePaid: {
@@ -176,20 +173,19 @@ module.exports = (db) => {
               }
             }
           },
-        
+
           { $sort: { percentagePaid: -1 } },
           { $limit: 5 }
         ]).toArray();
-        
-        // Map to response
+
+        // Map to response safely
         const topBorrowers = topBorrowersRaw.map(b => ({
           borrowerName: decrypt(b.borrower.name),
           totalPaid: b.totalPaid,
           totalBalance: b.totalBalance,
           totalLoan: b.totalLoanForPercentage,
           percentagePaid: b.percentagePaid
-        }));
-                
+        }));                
 
         // Top collectors
         const collectors = await db.collection("users").find({ role: "collector" }).toArray();
