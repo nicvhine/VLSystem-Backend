@@ -7,7 +7,7 @@ const userSchema = z.object({
     phoneNumber: z.string(),
     role: z.string(),
     username: z.string(),
-    password: z.string() // already hashed
+    password: z.string() 
 });
 
 module.exports = userSchema;
