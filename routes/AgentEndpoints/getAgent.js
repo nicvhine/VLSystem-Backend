@@ -35,22 +35,39 @@ module.exports = (db) => {
   // Get one agent by ID
   router.get("/:agentId/loans", authenticateToken, authorizeRole("head", "manager", "loan officer"), async (req, res) => {
     const { agentId } = req.params;
+  
     try {
       const repo = agentRepository(db);
-      const loans = await repo.getAssignedApplications(agentId);
-
-      // Decrypt each loan's appName
-      const decryptedLoans = loans.map(loan => ({
-        ...loan,
-        appName: decrypt(loan.appName)
-      }));
-
-      res.json({ loans: decryptedLoans }); 
+  
+      // 1. Fetch applications assigned to this agent
+      const applications = await repo.getAssignedApplications(agentId);
+  
+      const mergedLoans = [];
+  
+      for (const app of applications) {
+        const applicationId = app.applicationId || app.appId || app.id;
+  
+        // 2. Fetch matching loan record using applicationId
+        const loanRecord = await repo.getLoanByApplicationId(applicationId); 
+  
+        mergedLoans.push({
+          ...app,
+          appName: decrypt(app.appName),
+  
+          // 3. Merge data from the loans table
+          loanId: loanRecord?.loanId || null,
+          dateDisbursed: loanRecord?.dateDisbursed || null,
+          loanStatus: loanRecord?.status || app.status
+        });
+      }
+  
+      res.json({ loans: mergedLoans });
+  
     } catch (err) {
       console.error("Failed to fetch agent loans", err);
       res.status(500).json({ loans: [] });
     }
   });
-
+  
   return router;
 };

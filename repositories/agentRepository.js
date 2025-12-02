@@ -61,5 +61,20 @@ module.exports = (db) => {
     async insertAgent(agent) {
       return await agents.insertOne(agent);
     },
+
+    async getLoanByApplicationId(applicationId) {
+      try {
+        const loan = await db
+          .collection("loans")
+          .findOne({ applicationId });
+    
+        return loan || null;
+      } catch (err) {
+        console.error("Error fetching loan by applicationId:", err);
+        return null;
+      }
+    }
+    
+    
   };
 };
