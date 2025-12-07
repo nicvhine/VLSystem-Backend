@@ -70,8 +70,11 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
 
   // --- Validate agent ---
   if (!appAgent) throw new Error("Agent must be selected for this application.");
-  const assignedAgent = await repo.findAgentById(appAgent);
-  if (!assignedAgent) throw new Error("Selected agent does not exist.");
+  let assignedAgent = null;
+  if (appAgent !== "no agent") {
+    assignedAgent = await repo.findAgentById(appAgent);
+    if (!assignedAgent) throw new Error("Selected agent does not exist.");
+  }
 
   // --- Validate references ---
   let parsedReferences = [];
@@ -172,7 +175,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
       contact: encrypt(r.contact),
       relation: r.relation,
     })),
-    appAgent: { id: assignedAgent.agentId, name: assignedAgent.name },
+    appAgent: assignedAgent ? { id: assignedAgent.agentId, name: assignedAgent.name } : "no agent",
     hasCollateral: loanType !== "without",
     collateralType,
     collateralValue: collateralValue?.toString(),
