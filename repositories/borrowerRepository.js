@@ -31,5 +31,9 @@ module.exports = (db) => {
     findBorrowerById: (borrowersId) => borrowers.findOne({ borrowersId }),
     findActiveLoanByBorrowerId: (borrowersId) =>
       loans.findOne({ borrowersId, status: "Active" }),
+
+    // Profile picture update
+    updateBorrowerProfilePic: (borrowersId, profilePic) =>
+      borrowers.updateOne({ borrowersId }, { $set: { profilePic } }),
   };
 };
