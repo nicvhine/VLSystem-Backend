@@ -195,6 +195,7 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
         }
       : null,
     documents,
+    hasServiceFee: "false",
   };
 
   if (sourceOfIncome === "business") {

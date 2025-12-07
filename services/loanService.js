@@ -35,7 +35,7 @@ const createLoan = async (applicationId, db) => {
     borrowersId: borrower.borrowersId,
     profilePic: application.profilePic || "",
     paidAmount: 0,
-    balance: Number(application.appLoanAmount),
+    balance: Number(application.appTotalPayable),
     status: "Active",
     loanType: application.loanType,
     dateDisbursed: application.dateDisbursed || new Date(),
@@ -65,8 +65,6 @@ const createLoan = async (applicationId, db) => {
     const dueDate = new Date(disbursedDate);
     dueDate.setMonth(dueDate.getMonth() + (i + 1));
 
-    runningBalance -= monthlyDue;
-
     collections.push({
       referenceNumber: `${loanId}-C${i + 1}`,
       loanId,
@@ -77,7 +75,6 @@ const createLoan = async (applicationId, db) => {
       periodAmount: monthlyDue,
       paidAmount: 0,
       periodBalance: monthlyDue,
-      loanBalance: runningBalance > 0 ? runningBalance : 0,
       status: "Unpaid",
       collector: borrower.assignedCollector || "",
       collectorId: borrower.assignedCollectorId,
@@ -152,13 +149,12 @@ const createOpenTermLoan = async (applicationId, db) => {
     name: borrower.name,
     collectionNumber: 1,
     dueDate: firstDueDate,
-    periodAmount: interestAmount,     // Amount due = interest only
+    periodAmount: interestAmount,     
     periodInterestRate: interestRate,
     periodInterestAmount: interestAmount,
     runningBalance: balance,
     paidAmount: 0,
     periodBalance: interestAmount,
-    loanBalance: balance,
     status: "Unpaid",
     collector: borrower.assignedCollector || "",
     collectorId: borrower.assignedCollectorId,

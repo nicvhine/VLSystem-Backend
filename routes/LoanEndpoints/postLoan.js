@@ -19,7 +19,7 @@ module.exports = (db) => {
       if (application.loanType === "Open-Term Loan") {
         loan = await createOpenTermLoan(applicationId, db);
       } else {
-        loan = await createLoan(applicationId, db); // fixed-term loan
+        loan = await createLoan(applicationId, db); 
       }
 
       res.status(201).json({ message: "Loan and collections created successfully", loan });

@@ -13,11 +13,11 @@ module.exports = (db) => {
     authenticateToken,
     async (req, res) => {
       try {
-        const { role, borrowersId, collectorId, userId } = req.user;
+        const { role, borrowersId, userId } = req.user;
         const collectorQuery = req.query.collector;
-
+  
         let query = {};
-
+  
         if (role === 'head' || role === 'manager') {
           query = collectorQuery ? { collector: collectorQuery } : {};
         } else if (role === 'collector') {
@@ -27,21 +27,28 @@ module.exports = (db) => {
         } else {
           return res.status(403).json({ error: 'Unauthorized role' });
         }
-
+  
         let result = await collections.find(query).sort({ collectionNumber: 1 }).toArray();
-
-        result = result.map(item => ({
-          ...item,
-          name: item.name ? decrypt(item.name) : item.name,
+  
+        // Fetch loan balances for each collection
+        const loansCollection = db.collection('loans');
+        const resultWithBalance = await Promise.all(result.map(async (item) => {
+          const loan = await loansCollection.findOne({ loanId: item.loanId });
+          return {
+            ...item,
+            name: item.name ? decrypt(item.name) : item.name,
+            loanBalance: loan?.balance ?? 0, // add loan balance
+          };
         }));
-
-        res.json(result);
+  
+        res.json(resultWithBalance);
       } catch (err) {
         console.error("Error loading collections:", err);
         res.status(500).json({ error: 'Internal server error' });
       }
     }
   );
+  
 
   // Get payment schedule by borrower and loan
   router.get(

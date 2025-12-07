@@ -54,8 +54,8 @@ module.exports = (repo, db) => {
       if (newPeriodBalance <= 0) updatedStatus = "Paid";
       else if (oldStatus === "Past Due") updatedStatus = "Past Due";
       else if (oldStatus === "Overdue") updatedStatus = "Overdue";
-      else updatedStatus = "Unpaid";
     
+      // Update collection with penalty info
       await db.collection("collections").updateOne(
         { collectionId: collection.collectionId },
         {
@@ -70,27 +70,12 @@ module.exports = (repo, db) => {
         }
       );
     
-      // if (loanId) {
-      //   const loan = await db.collection("loans").findOne({ loanId });
-      //   if (loan) {
-      //     let delta = 0;
-      //     switch (updatedStatus) {
-      //       case "Paid": delta = 0.5; break;
-      //       case "Past Due": delta = -0.5; break;
-      //       case "Overdue": delta = -1.5; break;
-      //       default: delta = 0; break;
-      //     }
+      await db.collection("loans").updateOne(
+        { loanId },
+        { $inc: { balance: penaltyAmount } } 
+      );
     
-      //     let newCreditScore = (loan.creditScore || 0) + delta;
-      //     newCreditScore = Math.min(Math.max(newCreditScore, 0), 10);
-    
-      //     await db.collection("loans").updateOne(
-      //       { loanId },
-      //       { $set: { creditScore: newCreditScore } }
-      //     );
-      //   }
-      // }
-    
+      // Update endorsement status
       const updateData = {
         status: "Approved",
         approvedBy: approverId,
@@ -108,7 +93,6 @@ module.exports = (repo, db) => {
         updatedStatus,
       };
     },
-    
 
     async rejectEndorsement(id, approverId, remarks = null) {
       const endorsement = await repo.getById(id);
