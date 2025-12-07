@@ -111,7 +111,7 @@ module.exports = (db) => {
       await users.updateOne({ userId }, { $set: { phoneNumber } });
 
       // Log action
-      await logAction(req.user, "Update Phone", `${req.user.name} updated phone number to ${phoneNumber}`);
+      await logAction(req.user, "Update Phone", `${req.user.name} updated phone number`);
 
       res.status(200).json({ message: 'Phone number updated successfully' });
     } catch (err) {
@@ -125,9 +125,9 @@ module.exports = (db) => {
     const { name, email, phoneNumber, role, status} = req.body;
     const { role: jwtRole, userId: jwtUserId } = req.user;
 
-    if (userId !== jwtUserId && jwtRole !== 'head') {
-      return res.status(403).json({ message: 'Unauthorized: can only edit your own details unless head' });
-    }
+    if (userId !== jwtUserId && jwtRole !== 'head' && jwtRole !== 'sysad') {
+      return res.status(403).json({ message: 'Unauthorized: can only edit your own details unless head or sysad' });
+    }    
 
     if (!name && !email && !phoneNumber && !role && !status) {
       return res.status(400).json({ message: 'At least one field must be provided for update.' });

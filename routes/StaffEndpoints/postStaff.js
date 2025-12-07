@@ -107,14 +107,22 @@ module.exports = (db) => {
   
     try {
       const result = await loginUser(username, password, repo);
+      const user = result.user;
+  
+      // Prevent inactive login
+      if ((user.status || "").toLowerCase() === "inactive") {
+        return res.status(403).json({
+          error: "Your account is inactive. Please contact the administrator.",
+        });
+      }
   
       res.json({ message: "Login successful", ...result });
     } catch (err) {
       console.error("Login error:", err.message);
-  
+      // If username/password is wrong, throw 401
       res.status(401).json({ error: err.message });
     }
-  });
+  });  
 
   // Check if staff email is available
   router.post("/check-email", async (req, res) => {
@@ -170,16 +178,25 @@ module.exports = (db) => {
         const user = await repo.findById(userId);
         if (!user) return res.status(404).json({ message: "User not found" });
   
-        // Construct default password: lastName + userId
-        const lastName = user.name.trim().split(" ").slice(-1)[0].toLowerCase();
-        const defaultPassword = `${lastName}${userId}`;
+        // Generate a secure random password
+        const generateRandomPassword = (length = 12) => {
+          const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*()_+";
+          let password = "";
+          for (let i = 0; i < length; i++) {
+            password += chars.charAt(Math.floor(Math.random() * chars.length));
+          }
+          return password;
+        };
+  
+        const defaultPassword = generateRandomPassword();
   
         // Hash the password
         const hashedPassword = await bcrypt.hash(defaultPassword, 10);
   
-        // Update user password in the database
+        // Update user password in the database and mark first login
         await repo.updateUserPassword(userId, hashedPassword, { isFirstLogin: true });
   
+        // Log the action
         await logRepo.insertActivityLog({
           userId: req.user.userId,
           name: req.user.name,
@@ -187,7 +204,8 @@ module.exports = (db) => {
           action: "RESET_PASSWORD",
           description: `Reset password for userId: ${userId} (${user.name})`,
         });
-        
+  
+        // Return the generated password to be sent via email
         return res.json({ message: "Password reset successfully", defaultPassword });
       } catch (err) {
         console.error("Error resetting password:", err);
@@ -195,6 +213,7 @@ module.exports = (db) => {
       }
     }
   );
+  
 
   return router;
 };

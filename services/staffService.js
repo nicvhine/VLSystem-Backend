@@ -89,6 +89,7 @@ async function loginUser(username, password, repo) {
       role: user.role,
       profilePic: user.profilePic || null,
       isFirstLogin: user.isFirstLogin !== false,
+      status: user.status,
     },
   };
 }
