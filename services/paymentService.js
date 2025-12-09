@@ -226,6 +226,9 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
   }
 
 
+  // Fetch updated collection to return
+  const updatedCollection = await repo.findCollection(referenceNumber);
+
   return {
     message: `${mode} payment applied successfully`,
     borrowersId: collection.borrowersId,
@@ -233,6 +236,7 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
     referenceNumber,
     paymentLogs,
     remainingUnapplied: remainingAmount,
+    ...updatedCollection, // Include all updated collection fields
   };
 };
 
