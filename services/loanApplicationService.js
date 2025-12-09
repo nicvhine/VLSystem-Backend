@@ -148,9 +148,6 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
 
   const {
     interestAmount,
-    totalInterestAmount,
-    totalPayable,
-    appMonthlyDue,
   } = computeApplicationAmounts(principal, interestRate, terms, loanType);
 
   // --- Build new application object ---
@@ -207,14 +204,6 @@ async function createLoanApplication(req, loanType, repo, db, uploadedFiles) {
     newApplication = { ...newApplication, sourceOfIncome, appOccupation, appEmploymentStatus, appCompanyName };
   }
 
-
-  // --- Conditionally add fields based on loan type ---
-  if (loanType !== "open-term") {
-    newApplication.appLoanTerms = terms;
-    newApplication.appTotalInterestAmount = totalInterestAmount;
-    newApplication.appTotalPayable = totalPayable;
-    newApplication.appMonthlyDue = appMonthlyDue;
-  }
 
   // --- Persist application ---
   await repo.insertLoanApplication(newApplication);
@@ -283,15 +272,21 @@ function computeLoanFields(principal, months = 12, interestRate = 0, loanType = 
   const totalPayable = principal + totalInterestAmount;
   const monthlyDue = totalPayable / months;
 
-  // For open-term, return only minimal fields
+  // --- Open-Term Loan rules ---
   if (loanType === "open-term") {
     return {
       appLoanAmount: principal,
       appInterestRate: interestRate,
       appInterestAmount: interestAmount,
+
+      // FORCE these TO ZERO for open-term
+      appTotalInterestAmount: 0,
+      appTotalPayable: 0,
+      appMonthlyDue: 0,
     };
   }
 
+  // --- Regular or With/Without collateral loan ---
   return {
     appLoanAmount: principal,
     appLoanTerms: months,
@@ -302,6 +297,7 @@ function computeLoanFields(principal, months = 12, interestRate = 0, loanType = 
     appMonthlyDue: monthlyDue,
   };
 }
+
 
 module.exports = {
   getAllApplications,
