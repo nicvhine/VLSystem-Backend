@@ -1,15 +1,9 @@
 'use strict';
 
-const { decrypt, encrypt } = require("../utils/crypt");
+const { encrypt } = require("../utils/crypt");
 const { generateApplicationId } = require("../utils/generator");
+const notificationRepository = require("../repositories/notificationRepository");
 
-/**
- * Computes loan amounts including interest, service fee, monthly dues, and net proceeds.
- * @param {number} principal 
- * @param {number} interestRate - in %
- * @param {number} terms - months, use 1 if open-term
- * @param {"with"|"without"|"open-term"} loanType 
- */
 function computeApplicationAmounts(principal, interestRate, terms, loanType) {
   const appInterestAmount = principal * (interestRate / 100);
   const appTotalInterestAmount = appInterestAmount * (terms || 1);
@@ -26,14 +20,6 @@ function computeApplicationAmounts(principal, interestRate, terms, loanType) {
   return { appInterestAmount, appTotalInterestAmount, appTotalPayable, appMonthlyDue, appServiceFee, appNetReleased };
 }
 
-/**
- * Creates a re-loan application
- * @param {object} req - Express request object
- * @param {"with"|"without"|"open-term"} loanType
- * @param {object} repo - repository with DB access
- * @param {object} db
- * @param {Array} uploadedFiles - files uploaded
- */
 async function createReloanApplication(req, loanType, repo, db, uploadedFiles) {
   const {
     borrowersId,
@@ -168,6 +154,55 @@ async function createReloanApplication(req, loanType, repo, db, uploadedFiles) {
   // --- Insert into repository ---
   await repo.insertLoanApplication(newApplication);
 
+  // --- Notifications ---
+  try {
+    const notifRepo = notificationRepository(db);
+    // Notify Loan Officer
+    await notifRepo.insertLoanOfficerNotification({
+      type: "new-application",
+      title: "New Loan Application Received",
+      message: `A new reloan application has been submitted by ${appName}. Please review and process at your earliest convenience.`,
+      applicationId,
+      actor: "System",
+      read: false,
+      viewed: false,
+      createdAt: new Date(),
+    });
+    // Notify Manager
+    await notifRepo.insertManagerNotification({
+      type: "new-application",
+      title: "New Loan Application for Review",
+      message: `A new reloan application (${applicationId}) from ${appName} has been submitted and requires managerial review.`,
+      applicationId,
+      actor: "System",
+      read: false,
+      viewed: false,
+      createdAt: new Date(),
+    });
+  } catch (err) {
+    console.error("Failed to create application notifications:", err?.message || err);
+  }
+
+  // --- SMS to applicant ---
+  try {
+    const decryptedName = appName;
+    const decryptedContact = appContact;
+    const message = `Good day ${decryptedName}! Your reloan application has been successfully submitted to Vistula Lending Corporation. Your Application ID is ${applicationId}. We will notify you once it has been reviewed. Thank you!`;
+
+    await sendSMS(decryptedContact, message);
+  } catch (err) {
+    console.error("Failed to send applicant SMS:", err?.message || err);
+  }  
+
+  // --- SMS to references ---
+  try {
+    for (const ref of parsedReferences) {
+      const message = `Good day ${ref.name}, ${appName} has listed you as a reference for their loan application at Vistula Lending Corporation. You may be contacted for verification. Thank you!`;
+      await sendSMS(ref.contact, message);
+    }
+  } catch (err) {
+    console.error("Failed to send reference notifications:", err?.message || err);
+  }
   if (newApplication.borrowersId) {
     const notification = {
       borrowersId: newApplication.borrowersId,
