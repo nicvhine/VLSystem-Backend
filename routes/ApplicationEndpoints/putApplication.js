@@ -309,7 +309,7 @@
 
       await loanApplications.updateOne(
         { applicationId },
-        { $set: { appServiceFee: Number(serviceFee), appNetReleased: Number(netReleased) } }
+        { $set: { appServiceFee: Number(serviceFee), appNetReleased: Number(netReleased), hasServiceFee: "true" } }
       );
 
       const updatedApp = await loanApplications.findOne({ applicationId });
