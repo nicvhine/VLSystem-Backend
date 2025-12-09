@@ -77,5 +77,25 @@ async function generateClosureEndorsementId(endorsementsCollection) {
   return `CE${padId(nextNumber)}`;
 }
 
+async function generatePenaltyEndorsementId(endorsementsCollection) {
+  const lastEndorsement = await endorsementsCollection
+    .find({})
+    .sort({ endorsementId: -1 })
+    .limit(1)
+    .toArray();
 
-module.exports = { padId, generateAgentId, generateApplicationId, generateBorrowerId, generateClosureEndorsementId };
+  let nextNumber = 1;
+  if (lastEndorsement.length > 0) {
+    const lastId = lastEndorsement[0].endorsementId;
+    if (lastId && typeof lastId === "string") {
+      const numPart = parseInt(lastId.replace("PE", ""), 10);
+      if (!isNaN(numPart)) nextNumber = numPart + 1;
+    }
+  }
+
+  return `CE${padId(nextNumber)}`;
+}
+
+
+
+module.exports = { padId, generateAgentId, generateApplicationId, generateBorrowerId, generateClosureEndorsementId, generatePenaltyEndorsementId };
