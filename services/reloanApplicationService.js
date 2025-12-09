@@ -150,6 +150,7 @@ async function createReloanApplication(req, loanType, repo, db, uploadedFiles) {
       : null,
     documents,
     sourceOfIncome,
+    hasServiceFee: "false",
   };
 
   // --- Add income details ---
