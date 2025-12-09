@@ -9,59 +9,32 @@ module.exports = (db) => {
   router.get("/:borrowersId", async (req, res) => {
     try {
       const { borrowersId } = req.params;
-      if (!borrowersId) {
-        return res.status(400).json({ error: "borrowersId is required." });
-      }
-
-      const notificationsCollection = db.collection("borrower_notifications");
+      if (!borrowersId) return res.status(400).json({ error: "borrowersId is required" });
+  
       const now = new Date();
-
-      // Fetch all notifications
-      const allNotifications = await notificationsCollection
-        .find({ borrowersId })
-        .sort({ createdAt: -1 })
-        .toArray();
-
-      // Fetch scheduled notifications that are due
-      const scheduledNotifications = await notificationsCollection
-        .find({ borrowersId, notifyAt: { $lte: now } })
-        .sort({ createdAt: -1 })
-        .toArray();
-
-      // Combine, remove duplicates by _id
-      const combined = [...allNotifications, ...scheduledNotifications].filter(
-        (v, i, a) => a.findIndex((n) => n._id.toString() === v._id.toString()) === i
-      );
-
-      res.status(200).json({ notifications: combined });
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-      res.status(500).json({ error: "Failed to fetch notifications." });
-    }
-  });
-
-  // Borrower notifications
-  router.get("/:borrowersId", async (req, res) => {
-    try {
-      const { borrowersId } = req.params;
-
-      if (!borrowersId) {
-        return res.status(400).json({ error: "borrowersId is required." });
-      }
-
       const notificationsCollection = db.collection("borrower_notifications");
-
+  
+      // Show:
+      // - notifications with NO schedule (instant)
+      // - notifications where notifyAt <= now (due)
       const notifications = await notificationsCollection
-        .find({ borrowersId })
+        .find({
+          borrowersId,
+          $or: [
+            { notifyAt: { $exists: false } },
+            { notifyAt: { $lte: now } }
+          ]
+        })
         .sort({ createdAt: -1 })
         .toArray();
-
-      res.status(200).json({ notifications });
-    } catch (error) {
-      console.error("Error fetching notifications:", error);
-      res.status(500).json({ error: "Failed to fetch notifications." });
+  
+      res.json({ notifications });
+    } catch (err) {
+      console.error("Error fetching notifications:", err);
+      res.status(500).json({ error: "Failed to fetch notifications" });
     }
   });
+  
 
   // Staff notifications by role
   router.get(

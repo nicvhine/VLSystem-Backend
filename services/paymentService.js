@@ -81,7 +81,7 @@ const applyPayment = async ({ referenceNumber, amount, collectorName, mode }, db
 
   // --- OPEN-TERM LOAN ---
   if (loan.loanType === "Open-Term Loan") {
-    const interestDue = Number(collection.periodInterestAmount || collection.periodBalance || 0);
+    const interestDue = Number(collection.periodBalance);
     const principalOutstanding = Number(loan.balance || collection.loanBalance || collection.runningBalance || 0);
 
     const interestPaid = Math.min(remainingAmount, interestDue);

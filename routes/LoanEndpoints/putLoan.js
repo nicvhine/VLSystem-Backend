@@ -41,12 +41,12 @@ module.exports = (db) => {
         // 4. Deactivate old loans AND update their loan applications
         for (const loan of loansToDeactivate) {
           // Deactivate loan
-          await repo.updateLoanStatus(loan.loanId, "Inactive");
+          await repo.updateLoanStatus(loan.loanId, "Closed");
 
           // Also mark their loan application as Inactive
           await db.collection("loan_applications").updateOne(
             { applicationId: loan.applicationId },
-            { $set: { status: "Inactive" } }
+            { $set: { status: "Closed" } }
           );
 
           // Fetch collections under this loan
