@@ -1,3 +1,5 @@
+const { generatePenaltyEndorsementId } = require("../utils/generator");
+
 module.exports = (repo, db) => {
   return {
     async endorsePenalty(collection, formData, collectorId) {
@@ -8,7 +10,10 @@ module.exports = (repo, db) => {
       const penaltyAmount = collection.periodAmount * penaltyRate;
       const finalAmount = collection.periodAmount + penaltyAmount;
 
+      const endorsementId = await generatePenaltyEndorsementId(db.collection("penalty_endorsements"));
+
       const newEndorsement = {
+        endorsementId,
         referenceNumber: collection.referenceNumber,
         loanId: collection.loanId,
         paidAmount: collection.paidAmount,
