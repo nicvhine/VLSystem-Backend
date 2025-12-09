@@ -41,6 +41,8 @@ module.exports = (db) => {
           );
           
           if (borrower?.assignedCollectorId) {
+            const assignedCollectorId = borrower.assignedCollectorId; 
+
             const { decrypt } = require("../../utils/crypt");
             const borrowerName = borrower.name ? decrypt(borrower.name) : "Unknown";
             
@@ -50,6 +52,7 @@ module.exports = (db) => {
               message: `Cash payment of ₱${result.amount.toLocaleString()} has been received from ${borrowerName} for collection reference ${referenceNumber}. Payment successfully posted to account.`,
               referenceNumber,
               borrowersId: result.borrowersId,
+              collectorId: assignedCollectorId,
               amount: result.amount,
               actor: borrowerName,
               read: false,
@@ -115,21 +118,24 @@ module.exports = (db) => {
           );
   
           if (borrower?.assignedCollectorId) {
+            const assignedCollectorId = borrower.assignedCollectorId; 
+
             const { decrypt } = require("../../utils/crypt");
             const borrowerName = borrower.name ? decrypt(borrower.name) : "Unknown";
   
-            await notifRepo.insertCollectorNotification({
-              type: "paymongo-payment-received",
-              title: "Payment Collected",
-              message: `PayMongo payment of ₱${result.amount.toLocaleString()} has been received from ${borrowerName} for collection reference ${referenceNumber}. Payment successfully posted to account.`,
-              referenceNumber,
-              borrowersId: result.borrowersId,
-              amount: result.amount,
-              actor: borrowerName,
-              read: false,
-              viewed: false,
-              createdAt: new Date(),
-            });
+            // await notifRepo.insertCollectorNotification({
+            //   type: "paymongo-payment-received",
+            //   title: "Payment Collected",
+            //   message: `PayMongo payment of ₱${result.amount.toLocaleString()} has been received from ${borrowerName} for collection reference ${referenceNumber}. Payment successfully posted to account.`,
+            //   referenceNumber,
+            //   borrowersId: result.borrowersId,
+            //   collectorId: assignedCollectorId,
+            //   amount: result.amount,
+            //   actor: borrowerName,
+            //   read: false,
+            //   viewed: false,
+            //   createdAt: new Date(),
+            // });
           }
         }
   

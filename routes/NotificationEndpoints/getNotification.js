@@ -71,7 +71,18 @@ module.exports = (db) => {
         } else if (role === "manager") {
           notifications = await notificationService.getManagerNotifications(db);
         } else if (role === "collector") {
-          notifications = await notificationService.getCollectorNotifications(db);
+
+          const loggedInCollectorId = req.user?.userId;
+        
+          if (!loggedInCollectorId) {
+            return res.status(400).json({ error: "Collector ID missing from token" });
+          }
+        
+          const allCollectorNotifs = await notificationService.getCollectorNotifications(db);
+        
+          notifications = allCollectorNotifs.filter(
+            notif => notif.collectorId === loggedInCollectorId
+          );
         } else {
           return res.status(400).json({ error: "Invalid role" });
         }
