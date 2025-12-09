@@ -18,7 +18,9 @@ module.exports = (db) => {
     authorizeRole("manager", "head", "loan officer"),
     async (req, res) => {
       try {
-        // Basic borrower stats
+        // -----------------------------
+        // Borrower stats
+        // -----------------------------
         const totalBorrowers = await borrowers.countDocuments({});
         const activeBorrowersAgg = await loanPayments.aggregate([
           { $match: { status: "Active" } },
@@ -27,7 +29,9 @@ module.exports = (db) => {
         ]).toArray();
         const activeBorrowers = activeBorrowersAgg[0]?.activeBorrowers || 0;
 
+        // -----------------------------
         // Loan / collection aggregates
+        // -----------------------------
         const [
           totalDisbursedResult,
           totalCollectedResult,
@@ -58,7 +62,9 @@ module.exports = (db) => {
           loans.countDocuments({ status: { $in: ["Denied by LO", "Denied"] } })
         ]);
 
+        // -----------------------------
         // Borrowers over time
+        // -----------------------------
         const borrowersOverTime = await loanPayments.aggregate([
           { $match: { status: { $in: ["Active", "Closed"] } } },
           {
@@ -79,7 +85,9 @@ module.exports = (db) => {
           }
         ]).toArray();
 
+        // -----------------------------
         // Loan disbursement over time
+        // -----------------------------
         const loanDisbursementOverTime = await loans.aggregate([
           { $match: { status: { $in: ["Active", "Closed"] } } },
           {
@@ -98,17 +106,19 @@ module.exports = (db) => {
           }
         ]).toArray();
 
+        // -----------------------------
         // Applications by type
+        // -----------------------------
         const applicationsByType = await loans.aggregate([
           { $group: { _id: "$loanType", count: { $sum: 1 } } },
           { $project: { type: "$_id", count: 1, _id: 0 } }
         ]).toArray();
 
-        //top borrowers
+        // -----------------------------
+        // Top borrowers
+        // -----------------------------
         const topBorrowersRaw = await loanPayments.aggregate([
           { $match: { status: { $in: ["Active", "Closed"] } } },
-
-          // Join with loan_applications to get loan amounts
           {
             $lookup: {
               from: "loan_applications",
@@ -118,8 +128,6 @@ module.exports = (db) => {
             }
           },
           { $unwind: "$loanDetails" },
-
-          // Calculate paid and total amounts per loan
           {
             $addFields: {
               loanAmountForPercentage: {
@@ -138,8 +146,6 @@ module.exports = (db) => {
               }
             }
           },
-
-          // Group by borrower
           {
             $group: {
               _id: "$borrowersId",
@@ -149,8 +155,6 @@ module.exports = (db) => {
               totalBalance: { $sum: "$balance" }
             }
           },
-
-          // Join with borrower account to get name
           {
             $lookup: {
               from: "borrowers_account",
@@ -160,8 +164,6 @@ module.exports = (db) => {
             }
           },
           { $unwind: "$borrower" },
-
-          // Calculate percentage paid
           {
             $addFields: {
               percentagePaid: {
@@ -173,12 +175,10 @@ module.exports = (db) => {
               }
             }
           },
-
           { $sort: { percentagePaid: -1 } },
           { $limit: 5 }
         ]).toArray();
 
-        // Map to response safely
         const topBorrowers = topBorrowersRaw.map(b => ({
           borrowerName: decrypt(b.borrower.name),
           totalPaid: b.totalPaid,
@@ -187,27 +187,33 @@ module.exports = (db) => {
           percentagePaid: b.percentagePaid
         }));                
 
-        // Top collectors
+        // -----------------------------
+        // Top collectors (updated)
+        // -----------------------------
         const collectors = await db.collection("users").find({ role: "collector" }).toArray();
         const topCollectors = await Promise.all(
           collectors.map(async (c) => {
             const collectionsForCollector = await collections.find({ collectorId: c.userId }).toArray();
-            const totalAssigned = collectionsForCollector.reduce((sum, col) => sum + (col.periodAmount || 0), 0);
-            const collectedByCollector = collectionsForCollector
-              .filter(col => col.mode === "Cash" || col.mode === "POS")
-              .reduce((sum, col) => sum + (col.paidAmount || 0), 0);
-            return { collectorId: c.userId, name: c.name, totalAssigned, collectedByCollector };
+            const totalAssigned = collectionsForCollector.length; // total collections assigned
+            const paidCollections = collectionsForCollector.filter(col => col.status === "Paid").length; // only paid
+            return { collectorId: c.userId, name: c.name, totalAssigned, paidCollections };
           })
         );
-        topCollectors.sort((a, b) => b.collectedByCollector - a.collectedByCollector);
 
+        topCollectors.sort((a, b) => (b.paidCollections / b.totalAssigned) - (a.paidCollections / a.totalAssigned));
+        
+        // -----------------------------
         // Top agents
+        // -----------------------------
         const agents = await agentsCollection.find({}).toArray();
         const topAgents = agents
           .map(a => ({ agentId: a._id.toString(), name: a.name, totalProcessedLoans: a.totalLoanAmount || 0 }))
           .sort((a, b) => b.totalProcessedLoans - a.totalProcessedLoans)
           .slice(0, 5);
 
+        // -----------------------------
+        // Response
+        // -----------------------------
         res.json({
           totalBorrowers,
           activeBorrowers,
