@@ -2,6 +2,7 @@ import dotenv from 'dotenv';
 import cron from 'node-cron';
 import { MongoClient } from 'mongodb';
 import { sendSMS } from '../../services/smsService.js';
+import { decrypt } from '../../utils/crypt.js';
 
 dotenv.config({ path: '../../.env' });
 
@@ -28,10 +29,13 @@ async function updateCollectionStatuses() {
       const daysLate = Math.floor((now - due) / (1000 * 60 * 60 * 24));
       let newStatus = status;
 
-      if ((status === 'Unpaid' || status === 'Partial') && daysLate > 1)
-      newStatus = 'Past Due';
-      else if (status === 'Unpaid' && daysLate > 3) newStatus = 'Past Due';
-      else if (status === 'Past Due' && daysLate > 30) newStatus = 'Overdue';
+      // Status logic with 3-day grace period
+      if ((status === 'Unpaid' || status === 'Partial') && daysLate > 3 && daysLate < 30) {
+        newStatus = 'Past Due';
+      } else if ((status === 'Unpaid' || status === 'Partial' || status === 'Past Due') && daysLate >= 30) {
+        newStatus = 'Overdue';
+      }
+      // Within 3-day grace period: status remains 'Unpaid' or 'Partial'
 
       if (newStatus !== status) {
         await collectionsCol.updateOne({ referenceNumber }, { $set: { status: newStatus, lastStatusUpdated: now } });
@@ -91,7 +95,7 @@ async function sendDailySMSReminders() {
           await sendSMS(decryptedPhone, message);
           smsCount++;
           await collectionsCol.updateOne({ referenceNumber }, { $set: { lastSMSSent: now } });
-          console.log(`Sent ${status} SMS to ${name || 'Unknown'} (${phoneNumber})`);
+          console.log(`Sent ${status} SMS to ${decryptedName || 'Unknown'} (${decryptedPhone})`);
         } catch (smsErr) {
           console.error(`Failed to send SMS to ${decryptedPhone}:`, smsErr.message);
         }
