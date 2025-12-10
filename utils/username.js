@@ -19,7 +19,7 @@ async function generateBorrowerUsername(name, borrowersCollection) {
 // Generate a unique staff username based on role and first name
 async function generateStaffUsername(name, role, usersRepo) {
   const firstName = name.trim().split(" ")[0].toLowerCase();  
-  const base = `${role.toLowerCase()}${firstName}`;
+  const base = `${role.toLowerCase().replace(/\s+/g, '')}${firstName}`;
   
   let username = base;
   let count = 1;
