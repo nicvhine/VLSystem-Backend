@@ -96,7 +96,7 @@ module.exports = (db) => {
     
   
 
-  // Get borrower details + latest loan application + total borrowed
+  // Get borrower details + ACTIVE loan application + total borrowed
   router.get(
     "/:borrowersId",
     authenticateToken,
@@ -110,15 +110,26 @@ module.exports = (db) => {
           return res.status(404).json({ error: "Borrower not found" });
         }
   
-        const latestApplicationArr = await db
+        // First, try to get the ACTIVE application
+        let activeApplicationArr = await db
           .collection("loan_applications")
-          .find({ borrowersId })
-          .sort({ createdAt: -1 })
+          .find({ borrowersId, status: "Active" })
+          .sort({ dateApplied: -1 })
           .limit(1)
           .toArray();
   
-        const latestApplication = latestApplicationArr[0]
-          ? decryptApplication(latestApplicationArr[0])
+        // If no active application, get the latest one by date
+        if (activeApplicationArr.length === 0) {
+          activeApplicationArr = await db
+            .collection("loan_applications")
+            .find({ borrowersId })
+            .sort({ dateApplied: -1 })
+            .limit(1)
+            .toArray();
+        }
+  
+        const latestApplication = activeApplicationArr[0]
+          ? decryptApplication(activeApplicationArr[0])
           : null;
   
         const totalLoans = await db
