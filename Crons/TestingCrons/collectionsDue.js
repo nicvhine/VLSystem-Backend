@@ -29,9 +29,15 @@ async function updateCollectionStatusesTest() {
       const daysLate = Math.floor((now - due) / (1000 * 60)); 
       let newStatus = status;
 
-      if ((status === 'Unpaid' || status === 'Partial') && daysLate > 1)
-      newStatus = 'Past Due';
-          if (newStatus !== status) {
+      // Status logic with grace period (simulating 3 days)
+      if ((status === 'Unpaid' || status === 'Partial') && daysLate > 3 && daysLate < 30) {
+        newStatus = 'Past Due';
+      } else if ((status === 'Unpaid' || status === 'Partial' || status === 'Past Due') && daysLate >= 30) {
+        newStatus = 'Overdue';
+      }
+      // Within 3-minute grace period: status remains 'Unpaid' or 'Partial'
+
+      if (newStatus !== status) {
         await collectionsCol.updateOne({ referenceNumber }, { $set: { status: newStatus, lastStatusUpdated: now } });
         updatedCount++;
         console.log(`[TEST] Collection ${referenceNumber} status updated to "${newStatus}"`);
