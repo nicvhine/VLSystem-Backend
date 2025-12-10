@@ -153,7 +153,7 @@ module.exports = (db) => {
       if (name) updateFields.name = name;
       if (email) updateFields.email = email?.trim().toLowerCase();
       if (phoneNumber) updateFields.phoneNumber = phoneNumber;
-      if (role && jwtRole === 'head') updateFields.role = role;
+      if (role && (jwtRole === 'head' || jwtRole === 'sysad')) updateFields.role = role;
       if (status) updateFields.status = status;
 
       const updateResult = await users.updateOne({ userId }, { $set: updateFields });
