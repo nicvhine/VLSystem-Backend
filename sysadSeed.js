@@ -22,7 +22,7 @@ async function seedSysAd() {
       password: hashedPassword,
       role: 'sysad',
       isFirstLogin: true,
-      active: true,
+      status: "Active",
       createdAt: new Date(),
       updatedAt: new Date(),
     };
