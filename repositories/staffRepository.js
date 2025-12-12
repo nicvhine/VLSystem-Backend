@@ -1,11 +1,13 @@
+const { encrypt } = require('../utils/crypt');
+
 module.exports = (db) => {
     const users = db.collection("users");
     const logs = db.collection("logs");
   
     return {
       findById: (userId) => users.findOne({ userId }),
-      findByEmail: (email) => users.findOne({ email: email.toLowerCase() }),
-      findByPhoneNumber: (phoneNumber) => users.findOne({ phoneNumber }),
+      findByEmail: (email) => users.findOne({ email: encrypt(email.toLowerCase()) }),
+      findByPhoneNumber: (phoneNumber) => users.findOne({ phoneNumber: encrypt(phoneNumber) }),
       findByName: (name) =>
         users.findOne({
           name: { $regex: `^${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, $options: 'i' },

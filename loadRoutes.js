@@ -30,12 +30,12 @@ function loadRoutes(app, db) {
 
     // PRODUCTION CRON
 
-    const { startPendingApplicationCheckerProd } = require("./Crons/ProductionCrons/pendingApplicationChecker");
-    startPendingApplicationCheckerProd(db);
-    require('./Crons/ProductionCrons/unscheduledCleanup');
-    require('./Crons/ProductionCrons/collectionsDue');
-    const { startBorrowerDueProd } = require("./Crons/ProductionCrons/borrowerDueNotif");
-    startBorrowerDueProd(db);
+    // const { startPendingApplicationCheckerProd } = require("./Crons/ProductionCrons/pendingApplicationChecker");
+    // startPendingApplicationCheckerProd(db);
+    // require('./Crons/ProductionCrons/unscheduledCleanup');
+    // require('./Crons/ProductionCrons/collectionsDue');
+    // const { startBorrowerDueProd } = require("./Crons/ProductionCrons/borrowerDueNotif");
+    // startBorrowerDueProd(db);
     
     const { startCollectorNotificationCron } = require("./routes/CollectionEndpoints/collectorNotificationCron");
     startCollectorNotificationCron(db);
