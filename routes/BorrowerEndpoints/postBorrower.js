@@ -14,6 +14,8 @@ const {
   forgotPassword,
   sendOtp,
   verifyOtp,
+  sendLoginOtp,
+  verifyLoginOtp,
   findBorrowerAccount,
 } = require('../../services/borrowerService');
 const authenticateToken = require('../../middleware/auth');
@@ -76,6 +78,28 @@ module.exports = (db) => {
     } catch (err) {
       console.error("Login error:", err.message);
       res.status(401).json({ error: err.message });
+    }
+  });
+
+  router.post("/send-login-otp", async (req, res) => {
+    try {
+      const { borrowersId } = req.body;
+      const result = await sendLoginOtp(borrowersId, db);
+      res.json(result);
+    } catch (err) {
+      console.error("Send OTP error:", err.message);
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  router.post("/verify-login-otp", async (req, res) => {
+    try {
+      const { borrowersId, otp } = req.body;
+      const result = await verifyLoginOtp(borrowersId, otp);
+      res.json(result);
+    } catch (err) {
+      console.error("Verify login OTP error:", err.message);
+      res.status(400).json({ error: err.message });
     }
   });
 
