@@ -140,6 +140,68 @@ async function forgotPassword(username, email, db) {
   };
 }
 
+//Send Login OTP
+async function sendLoginOtp(borrowersId, db) {
+  if (!borrowersId) throw new Error("borrowersId is required");
+
+  const repo = require("../repositories/borrowerRepository")(db);
+  const borrower = await repo.findByBorrowersId(borrowersId);
+  if (!borrower) throw new Error("Borrower not found");
+
+  const otp = Math.floor(100000 + Math.random() * 900000).toString();
+  otpStore[borrowersId] = { otp, expires: Date.now() + 5 * 60 * 1000 };
+
+  const phoneNumber = decrypt(borrower.phoneNumber); 
+  const formattedPhone = phoneNumber.startsWith("+") ? phoneNumber : `+63${phoneNumber.slice(-10)}`;
+
+  const message = `Your Vistula System login OTP is ${otp}. It will expire in 5 minutes.`;
+
+  try {
+    const response = await fetch("https://api.semaphore.co/api/v4/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        apikey: process.env.SEMAPHORE_API_KEY,
+        number: formattedPhone,
+        message,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      console.error("Semaphore error:", data);
+      throw new Error("Failed to send OTP via SMS");
+    }
+
+    console.log(`OTP sent via Semaphore to ${formattedPhone}: ${otp}`);
+    return { message: "OTP sent to your phone number" };
+  } catch (err) {
+    console.error("Failed to send OTP:", err);
+    throw new Error("Failed to send OTP. Please try again.");
+  }
+}
+
+async function verifyLoginOtp(borrowersId, otp) {
+  if (!borrowersId || !otp) throw new Error("borrowersId and OTP are required");
+
+  const record = otpStore[borrowersId];
+  if (!record) throw new Error("No OTP found for this borrower");
+
+  if (Date.now() > record.expires) {
+    delete otpStore[borrowersId];
+    throw new Error("OTP has expired");
+  }
+
+  if (record.otp !== otp) throw new Error("Invalid OTP");
+
+  // OTP is valid — remove it from store
+  delete otpStore[borrowersId];
+
+  return { message: "OTP verified successfully" };
+}
+
 // Send OTP
 async function sendOtp(borrowersId, db) {
   if (!borrowersId) throw new Error("borrowersId is required");
@@ -220,6 +282,8 @@ module.exports = {
   loginBorrower,
   forgotPassword,
   sendOtp,
+  sendLoginOtp,
+  verifyLoginOtp,
   verifyOtp,
   getBorrowerById,
   findBorrowerAccount,

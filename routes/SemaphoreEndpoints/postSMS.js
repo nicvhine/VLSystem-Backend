@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const { formatPhoneNumber, sendSMS } = require('../../services/smsService');
+const { formatPhoneNumber } = require('../../services/smsService');
 require('dotenv').config();
 
 const SEMAPHORE_API_KEY = process.env.SEMAPHORE_API_KEY;
